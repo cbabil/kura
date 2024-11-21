@@ -1,6 +1,6 @@
-# straturaOS
+# StraturaOS
 
-straturaOS is a custom operating system designed for the Raspberry Pi 5, built on the Yocto Project. It offers robust container support, over-the-air (OTA) updates, and advanced device management capabilities, making it ideal for IoT and edge computing applications.
+StraturaOS is a custom operating system designed for the Raspberry Pi 5, built on the Yocto Project. It offers robust container support, over-the-air (OTA) updates, and advanced device management capabilities, making it ideal for IoT and edge computing applications.
 
 ## Features
 
@@ -13,7 +13,7 @@ straturaOS is a custom operating system designed for the Raspberry Pi 5, built o
 
 ## Getting Started
 
-To get started with straturaOS, please refer to the [Getting Started Guide](docs/getting-started.md).
+To get started with StraturaOS, please refer to the [Getting Started Guide](docs/getting-started.md).
 
 ## Documentation
 
@@ -30,9 +30,9 @@ We welcome contributions to straturaOS! Please see our [Contributing Guide](docs
 
 ## License
 
-straturaOS is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+StraturaOS is licensed under the GNU License. See the [LICENSE](LICENSE) file for more details.
 
 ## Contact
 
-For questions or support, please contact our team at support@straturaos.com.
+For questions or support, please contact our team.
 
