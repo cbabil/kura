@@ -1,0 +1,18 @@
+[Unit]
+Description=straturaOS High Availability Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/stratura-ha
+Restart=always
+RestartSec=10
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target 

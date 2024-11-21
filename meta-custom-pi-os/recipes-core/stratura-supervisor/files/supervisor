@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import sys
+import time
+import docker
+import requests
+import logging
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('stratura-supervisor')
+
+class StraturaSupervisor:
+    def __init__(self):
+        self.config_path = '/etc/stratura-supervisor/config.json'
+        self.state_path = '/var/lib/stratura-supervisor/state.json'
+        self.docker_client = docker.from_env()
+        self.load_config()
+        
+    def load_config(self):
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+            
+    def manage_containers(self):
+        for app in self.config['applications']:
+            try:
+                container = self.docker_client.containers.get(app['name'])
+                if container.status != 'running':
+                    logger.info(f"Starting container {app['name']}")
+                    container.start()
+            except docker.errors.NotFound:
+                logger.info(f"Creating container {app['name']}")
+                self.docker_client.containers.run(
+                    app['image'],
+                    name=app['name'],
+                    detach=True,
+                    restart_policy={"Name": "always"}
+                )
+
+    def check_updates(self):
+        try:
+            response = requests.get(f"{self.config['api_endpoint']}/updates")
+            if response.status_code == 200:
+                updates = response.json()
+                if updates['available']:
+                    self.trigger_update(updates['version'])
+        except Exception as e:
+            logger.error(f"Update check failed: {e}")
+
+    def run(self):
+        while True:
+            try:
+                self.manage_containers()
+                self.check_updates()
+                time.sleep(self.config.get('poll_interval', 60))
+            except Exception as e:
+                logger.error(f"Supervisor error: {e}")
+                time.sleep(10)
+
+if __name__ == "__main__":
+    supervisor = StraturaSupervisor()
+    supervisor.run() 

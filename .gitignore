@@ -1,0 +1,51 @@
+# Build directories
+build/
+tmp/
+sstate-cache/
+cache/
+
+# Yocto build output
+*.wic
+*.wic.bmap
+*.ext4
+*.tar.bz2
+*.tar.gz
+*.tar.xz
+*.tar.zst
+*.rpm
+*.deb
+*.ipk
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+*.old
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.~lock.*
+*.~*
+
+# Git and GitHub
+.git/
+.github/
+
+# Docker
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+
+# Custom directories
+/var/lib/straturaOS/

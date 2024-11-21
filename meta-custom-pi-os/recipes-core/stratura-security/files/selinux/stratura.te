@@ -1,0 +1,25 @@
+policy_module(stratura, 1.0)
+
+require {
+    type docker_t;
+    type stratura_supervisor_t;
+    type stratura_data_t;
+    type stratura_config_t;
+    class file { read write getattr open };
+    class dir { search };
+}
+
+# Define stratura domains
+type stratura_supervisor_t;
+type stratura_container_t;
+type stratura_update_t;
+
+# Define stratura file types
+type stratura_config_t;
+type stratura_data_t;
+type stratura_cert_t;
+
+# Supervisor policy
+allow stratura_supervisor_t docker_t:unix_stream_socket { create connect write read };
+allow stratura_supervisor_t stratura_data_t:dir { add_name remove_name write };
+allow stratura_supervisor_t stratura_data_t:file { create open write }; 

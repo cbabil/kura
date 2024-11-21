@@ -1,0 +1,17 @@
+[Unit]
+Description=straturaOS Configuration Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/stratura-config
+Restart=always
+RestartSec=10
+
+# Security
+ProtectSystem=strict
+ReadOnlyPaths=/etc
+ReadWritePaths=/var/lib/stratura-config
+
+[Install]
+WantedBy=multi-user.target 

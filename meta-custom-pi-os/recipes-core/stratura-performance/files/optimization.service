@@ -1,0 +1,20 @@
+[Unit]
+Description=straturaOS System Optimization Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/stratura-optimize
+Restart=always
+RestartSec=60
+
+# Security
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadOnlyPaths=/etc
+ReadWritePaths=/var/lib/stratura/optimization
+
+[Install]
+WantedBy=multi-user.target 

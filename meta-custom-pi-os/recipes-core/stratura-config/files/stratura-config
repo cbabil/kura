@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import subprocess
+import sys
+import time
+import logging
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('stratura-config')
+
+class StraturaConfig:
+    def __init__(self):
+        self.config_path = '/etc/stratura/config.json'
+        self.network_path = '/etc/NetworkManager/system-connections/'
+        self.load_config()
+        
+    def load_config(self):
+        with open(self.config_path, 'r') as f:
+            self.config = json.load(f)
+            
+    def apply_network_config(self):
+        if self.config['networkConfig']['wifi']['enable']:
+            self.setup_wifi()
+        if self.config['networkConfig']['ethernet']['enable']:
+            self.setup_ethernet()
+
+    def setup_wifi(self):
+        interface = self.config['networkConfig']['wifi']['defaultInterface']
+        networks = self.config['networkConfig']['wifi'].get('networks', [])
+        
+        for network in networks:
+            connection_file = f"{self.network_path}/{network['ssid']}.nmconnection"
+            with open(connection_file, 'w') as f:
+                f.write(self.generate_wifi_config(network))
+            os.chmod(connection_file, 0o600)
+
+    def generate_wifi_config(self, network):
+        return f"""[connection]
+id={network['ssid']}
+type=wifi
+interface-name={self.config['networkConfig']['wifi']['defaultInterface']}
+
+[wifi]
+mode=infrastructure
+ssid={network['ssid']}
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk={network['psk']}
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
+"""
+
+    def run(self):
+        while True:
+            try:
+                self.apply_network_config()
+                self.apply_hostname()
+                time.sleep(300)
+            except Exception as e:
+                logger.error(f"Configuration error: {e}")
+                time.sleep(10)
+
+if __name__ == "__main__":
+    config = StraturaConfig()
+    config.run() 

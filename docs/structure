@@ -1,0 +1,14 @@
+docs/
+├── getting-started.md
+├── architecture/
+│   ├── overview.md
+│   ├── components.md
+│   └── security.md
+├── development/
+│   ├── building.md
+│   ├── customization.md
+│   └── debugging.md
+└── reference/
+    ├── configuration.md
+    ├── api.md
+    └── troubleshooting.md 

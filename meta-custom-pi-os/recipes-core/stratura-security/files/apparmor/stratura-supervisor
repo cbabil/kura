@@ -1,0 +1,26 @@
+#include <tunables/global>
+
+profile stratura-supervisor flags=(attach_disconnected) {
+    #include <abstractions/base>
+    #include <abstractions/nameservice>
+
+    # Docker socket access
+    /var/run/docker.sock rw,
+
+    # Config access
+    /etc/stratura/** r,
+    /etc/stratura/certs/* r,
+
+    # Data directory access
+    /var/lib/stratura/ r,
+    /var/lib/stratura/** rwk,
+
+    # Network access
+    network inet stream,
+    network inet dgram,
+
+    # System information access
+    /proc/sys/kernel/random/boot_id r,
+    /sys/devices/system/cpu/ r,
+    /sys/devices/system/cpu/** r,
+} 
