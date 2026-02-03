@@ -167,7 +167,30 @@ run_menuconfig() {
     make BR2_EXTERNAL="${EXTERNAL_DIR}" menuconfig
 }
 
+build_single_target() {
+    local TARGET=$1
+    print_status "Building StraturaOS for ${TARGET}..."
+
+    if [ ! -d "${BUILDROOT_DIR}" ]; then
+        print_error "Buildroot not found. Run './build.sh setup' first."
+        exit 1
+    fi
+
+    # Configure for target
+    configure_build "${TARGET}"
+
+    cd "${BUILDROOT_DIR}"
+
+    # Build with all available cores
+    make BR2_EXTERNAL="${EXTERNAL_DIR}" -j$(nproc)
+
+    # Export artifacts with timestamp
+    export_artifacts
+}
+
 build_image() {
+    local TARGET=${1:-all}
+
     print_status "Building StraturaOS..."
 
     if [ ! -d "${BUILDROOT_DIR}" ]; then
@@ -175,21 +198,38 @@ build_image() {
         exit 1
     fi
 
-    if [ ! -f "${BUILDROOT_DIR}/.config" ]; then
-        print_status "No config found, loading defconfig..."
-        configure_build
-    fi
-
     # Run cleanup before build to free disk space
     cleanup_old_artifacts 0
 
-    cd "${BUILDROOT_DIR}"
+    if [ "${TARGET}" = "all" ]; then
+        # Build all targets
+        print_status "Building all targets (rpi5 + cloud)..."
 
-    # Build with all available cores
-    make BR2_EXTERNAL="${EXTERNAL_DIR}" -j$(nproc)
+        # Build RPi5 first
+        build_single_target "rpi5"
 
-    # Auto-export artifacts with timestamp
-    export_artifacts
+        # Clean build directory for next target (keep downloads)
+        print_status "Cleaning build for next target..."
+        cd "${BUILDROOT_DIR}"
+        make clean
+        rm -rf "${BUILDROOT_DIR}/output/target"
+        rm -rf "${BUILDROOT_DIR}/output/images"
+
+        # Build cloud
+        build_single_target "cloud"
+
+        print_status "All targets built successfully!"
+    else
+        # Build single target
+        if [ ! -f "${BUILDROOT_DIR}/.config" ]; then
+            print_status "No config found, loading defconfig..."
+            configure_build "${TARGET}"
+        fi
+
+        cd "${BUILDROOT_DIR}"
+        make BR2_EXTERNAL="${EXTERNAL_DIR}" -j$(nproc)
+        export_artifacts
+    fi
 }
 
 clean_build() {
@@ -725,7 +765,7 @@ show_help() {
     echo "  setup            Clone Buildroot and setup environment"
     echo "  config [target]  Load defconfig (targets: rpi5, cloud)"
     echo "  menuconfig       Interactive configuration menu"
-    echo "  build            Build the image"
+    echo "  build [target]   Build images (all, rpi5, cloud). Default: all"
     echo "  package          Create dated images and rootfs.tar"
     echo "  docker           Create Docker image from rootfs"
     echo "  iso              Create bootable ISO (cloud/x86_64 only)"
@@ -759,7 +799,7 @@ case "${1:-help}" in
         run_menuconfig
         ;;
     build)
-        build_image
+        build_image "${2:-all}"
         ;;
     package)
         package_images
