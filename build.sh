@@ -201,12 +201,14 @@ clean_build() {
 }
 
 cleanup_old_artifacts() {
-    local KEEP_COUNT=${1:-2}
+    local KEEP_COUNT=${1:-1}
     print_status "Cleaning up old artifacts (keeping last ${KEEP_COUNT})..."
 
-    # Cleanup old releases in each arch directory
+    # Cleanup old releases in each version/arch directory
     if [ -d "${RELEASE_DIR}" ]; then
-        for arch_dir in "${RELEASE_DIR}"/*/; do
+        for version_dir in "${RELEASE_DIR}"/*/; do
+            if [ ! -d "$version_dir" ]; then continue; fi
+            for arch_dir in "${version_dir}"/*/; do
             if [ -d "$arch_dir" ]; then
                 local ARCH=$(basename "$arch_dir")
 
@@ -250,6 +252,7 @@ cleanup_old_artifacts() {
                     done
                 fi
             fi
+            done
         done
     fi
 
@@ -337,7 +340,8 @@ uninstall_global() {
 package_images() {
     local ARCH=$(detect_arch)
     local VARIANT=$(detect_variant)
-    local RELEASE_ARCH_DIR="${RELEASE_DIR}/${ARCH}"
+    local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
+    local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
     local NAME_PREFIX="straturaos-${VERSION}-${VARIANT}-${ARCH}-${BUILD_DATE}-${BUILD_TIME}"
 
     print_status "Packaging images..."
@@ -425,7 +429,8 @@ create_docker() {
     print_status "Creating Docker image..."
 
     local ARCH=$(detect_arch)
-    local RELEASE_ARCH_DIR="${RELEASE_DIR}/${ARCH}"
+    local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
+    local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
 
     # Find the Docker tarball
     local DOCKER_TAR=""
@@ -456,7 +461,8 @@ create_docker() {
 create_iso() {
     local ARCH=$(detect_arch)
     local VARIANT=$(detect_variant)
-    local RELEASE_ARCH_DIR="${RELEASE_DIR}/${ARCH}"
+    local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
+    local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
     local NAME_PREFIX="straturaos-${VERSION}-${VARIANT}-${ARCH}-${BUILD_DATE}-${BUILD_TIME}"
     local ISO_NAME="${NAME_PREFIX}.iso"
 
@@ -582,7 +588,8 @@ export_artifacts() {
 
     # Show all output files
     local ARCH=$(detect_arch)
-    local RELEASE_ARCH_DIR="${RELEASE_DIR}/${ARCH}"
+    local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
+    local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
 
     echo ""
     echo "=========================================="
@@ -593,9 +600,10 @@ export_artifacts() {
     if command -v tree &> /dev/null; then
         tree -h "${RELEASE_DIR}" 2>/dev/null || ls -lahR "${RELEASE_DIR}"
     else
-        echo "${ARCH}/"
+        echo "${VERSION}/"
+        echo "  ${ARCH}/"
         ls -lh "${RELEASE_ARCH_DIR}"/ 2>/dev/null | tail -n +2 | while read line; do
-            echo "  $line"
+            echo "    $line"
         done
     fi
 

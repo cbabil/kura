@@ -84,26 +84,27 @@ cd StraturaOS
 
 ### Output Files
 
-Release files are organized by architecture in `release/{arch}/`:
+Release files are organized by version and architecture in `release/{version}/{arch}/`:
 
 ```
 release/
-├── arm64/
-│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img
-│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img.sign
-│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar
-│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar.sign
-│   ├── SHA512SUMS
-│   └── SHA512SUMS.sign
-└── amd64/
-    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2
-    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2.sign
-    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso
-    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso.sign
-    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar
-    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar.sign
-    ├── SHA512SUMS
-    └── SHA512SUMS.sign
+└── 1.0/
+    ├── arm64/
+    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img
+    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img.sign
+    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar
+    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar.sign
+    │   ├── SHA512SUMS
+    │   └── SHA512SUMS.sign
+    └── amd64/
+        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2
+        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2.sign
+        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso
+        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso.sign
+        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar
+        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar.sign
+        ├── SHA512SUMS
+        └── SHA512SUMS.sign
 ```
 
 **Naming convention:** `straturaos-{version}-{variant}-{arch}-{date}-{time}.{format}`
@@ -120,7 +121,7 @@ release/
 
 ```bash
 # Verify checksum
-cd release/arm64/
+cd release/1.0/arm64/
 sha512sum -c SHA512SUMS
 
 # Verify GPG signature (if signed)
@@ -130,7 +131,7 @@ gpg --verify SHA512SUMS.sign SHA512SUMS
 ### Flashing to SD Card (RPi 5)
 
 ```bash
-sudo dd if=release/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img of=/dev/sdX bs=4M status=progress
+sudo dd if=release/1.0/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img of=/dev/sdX bs=4M status=progress
 sync
 ```
 
@@ -138,7 +139,7 @@ sync
 
 1. Upload the QCOW2 image to Proxmox:
    ```bash
-   scp release/amd64/straturaos-1.0-genericcloud-amd64-*.qcow2 root@proxmox:/var/lib/vz/images/
+   scp release/1.0/amd64/straturaos-1.0-genericcloud-amd64-*.qcow2 root@proxmox:/var/lib/vz/images/
    ```
 
 2. Create a VM and import the disk:
@@ -159,7 +160,7 @@ Boot from the ISO for quick testing:
 
 ```bash
 # QEMU
-qemu-system-x86_64 -cdrom release/amd64/straturaos-1.0-genericcloud-amd64-*.iso \
+qemu-system-x86_64 -cdrom release/1.0/amd64/straturaos-1.0-genericcloud-amd64-*.iso \
     -m 2048 -enable-kvm -serial stdio
 
 # VirtualBox - Create new VM and attach ISO as optical drive
@@ -171,7 +172,7 @@ qemu-system-x86_64 -cdrom release/amd64/straturaos-1.0-genericcloud-amd64-*.iso 
 If built on another machine, import the tarball first:
 
 ```bash
-docker import release/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar straturaos:1.0
+docker import release/1.0/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar straturaos:1.0
 docker tag straturaos:1.0 straturaos:latest
 ```
 
