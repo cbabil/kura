@@ -84,6 +84,15 @@ sync
 
 ### Running in Docker
 
+If built on another machine, import the tarball first:
+
+```bash
+docker import straturaos-docker-YYYYMMDD.tar straturaos:YYYYMMDD
+docker tag straturaos:YYYYMMDD straturaos:latest
+```
+
+Then run:
+
 ```bash
 docker run -it straturaos:latest /bin/bash
 ```
