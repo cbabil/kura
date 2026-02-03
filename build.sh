@@ -180,9 +180,6 @@ build_image() {
         configure_build
     fi
 
-    # Cleanup old artifacts before building (keep only latest)
-    cleanup_old_artifacts 1
-
     cd "${BUILDROOT_DIR}"
 
     # Build with all available cores
@@ -356,6 +353,18 @@ package_images() {
 
     # Create release directory
     mkdir -p "${RELEASE_ARCH_DIR}"
+
+    # Remove all old release files before creating new ones
+    print_status "Removing old release files..."
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.img 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.img.sign 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.qcow2 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.qcow2.sign 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.iso 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.iso.sign 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.tar 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.tar.sign 2>/dev/null || true
+    rm -f "${RELEASE_ARCH_DIR}"/SHA512SUMS* 2>/dev/null || true
 
     # Process SD card image (RPi builds)
     if [ -f "${IMAGES_DIR}/sdcard.img" ]; then
@@ -577,15 +586,19 @@ export_artifacts() {
 
     echo ""
     echo "=========================================="
-    echo "Release directory: ${RELEASE_ARCH_DIR}"
+    echo "Release directory: ${RELEASE_DIR}/"
     echo ""
-    echo "Files:"
-    ls -lh "${RELEASE_ARCH_DIR}"/straturaos-* 2>/dev/null | while read line; do
-        echo "  $line"
-    done
-    ls -lh "${RELEASE_ARCH_DIR}"/SHA512SUMS* 2>/dev/null | while read line; do
-        echo "  $line"
-    done
+
+    # Show directory tree
+    if command -v tree &> /dev/null; then
+        tree -h "${RELEASE_DIR}" 2>/dev/null || ls -lahR "${RELEASE_DIR}"
+    else
+        echo "${ARCH}/"
+        ls -lh "${RELEASE_ARCH_DIR}"/ 2>/dev/null | tail -n +2 | while read line; do
+            echo "  $line"
+        done
+    fi
+
     if command -v docker &> /dev/null; then
         echo ""
         echo "Docker images:"
