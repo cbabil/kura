@@ -180,8 +180,8 @@ build_image() {
         configure_build
     fi
 
-    # Cleanup old artifacts before building
-    cleanup_old_artifacts 2
+    # Cleanup old artifacts before building (keep only latest)
+    cleanup_old_artifacts 1
 
     cd "${BUILDROOT_DIR}"
 
@@ -604,7 +604,7 @@ show_help() {
     echo "  export           Package + docker + iso (no rebuild)"
     echo "  release          Build + package + docker + iso (full release)"
     echo "  clean            Clean build directory"
-    echo "  cleanup          Remove old artifacts (keeps last 2)"
+    echo "  cleanup          Remove old artifacts (keeps only latest)"
     echo "  distclean        Full clean (reset everything)"
     echo "  install          Install 'straturaos' command globally"
     echo "  uninstall        Remove global 'straturaos' command"
@@ -652,7 +652,7 @@ case "${1:-help}" in
         clean_build
         ;;
     cleanup)
-        cleanup_old_artifacts 2
+        cleanup_old_artifacts 1
         ;;
     distclean)
         distclean_build

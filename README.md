@@ -63,7 +63,7 @@ cd StraturaOS
 | `export` | Package + docker + iso (no rebuild) |
 | `release` | Build + package + docker + iso (full release) |
 | `clean` | Clean build directory |
-| `cleanup` | Remove old artifacts (keeps last 2 builds) |
+| `cleanup` | Remove old artifacts (keeps only latest) |
 | `distclean` | Full clean (reset everything) |
 | `install` | Install 'straturaos' command globally |
 | `uninstall` | Remove global 'straturaos' command |
