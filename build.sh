@@ -15,6 +15,14 @@
 
 set -e
 
+# Use /home for temp files if root partition is low on space
+if [ -d "/home" ] && [ "$(df / | tail -1 | awk '{print $4}')" -lt 5000000 ]; then
+    export TMPDIR="/home/tmp"
+    export GOTMPDIR="/home/tmp"
+    export GOCACHE="/home/.cache/go-build"
+    mkdir -p /home/tmp /home/.cache/go-build 2>/dev/null || true
+fi
+
 # Resolve symlinks to get the real script location
 SOURCE="${BASH_SOURCE[0]}"
 while [ -L "$SOURCE" ]; do
