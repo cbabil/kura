@@ -84,25 +84,29 @@ cd StraturaOS
 
 ### Output Files
 
-Release files are organized by version and architecture in `release/{version}/{arch}/`:
+Release files are organized by version in `release/{version}/`:
 
 ```
 release/
 └── 1.0/
-    ├── arm64/
+    ├── arm64/                    # SD card images for Raspberry Pi
     │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img
     │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img.sign
-    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar
-    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar.sign
     │   ├── SHA512SUMS
     │   └── SHA512SUMS.sign
-    └── amd64/
-        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2
-        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2.sign
+    ├── amd64/                    # Cloud images for Proxmox/KVM
+    │   ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2
+    │   ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2.sign
+    │   ├── SHA512SUMS
+    │   └── SHA512SUMS.sign
+    ├── docker/                   # Docker tarballs
+    │   ├── straturaos-1.0-*-YYYYMMDD-HHMM.tar
+    │   ├── straturaos-1.0-*-YYYYMMDD-HHMM.tar.sign
+    │   ├── SHA512SUMS
+    │   └── SHA512SUMS.sign
+    └── iso/                      # Bootable ISOs for testing
         ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso
         ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso.sign
-        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar
-        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar.sign
         ├── SHA512SUMS
         └── SHA512SUMS.sign
 ```
@@ -160,7 +164,7 @@ Boot from the ISO for quick testing:
 
 ```bash
 # QEMU
-qemu-system-x86_64 -cdrom release/1.0/amd64/straturaos-1.0-genericcloud-amd64-*.iso \
+qemu-system-x86_64 -cdrom release/1.0/iso/straturaos-1.0-genericcloud-amd64-*.iso \
     -m 2048 -enable-kvm -serial stdio
 
 # VirtualBox - Create new VM and attach ISO as optical drive
@@ -172,7 +176,7 @@ qemu-system-x86_64 -cdrom release/1.0/amd64/straturaos-1.0-genericcloud-amd64-*.
 If built on another machine, import the tarball first:
 
 ```bash
-docker import release/1.0/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar straturaos:1.0
+docker import release/1.0/docker/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar straturaos:1.0
 docker tag straturaos:1.0 straturaos:latest
 ```
 

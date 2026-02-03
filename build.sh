@@ -342,6 +342,8 @@ package_images() {
     local VARIANT=$(detect_variant)
     local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
     local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
+    local RELEASE_ISO_DIR="${RELEASE_VERSION_DIR}/iso"
+    local RELEASE_DOCKER_DIR="${RELEASE_VERSION_DIR}/docker"
     local NAME_PREFIX="straturaos-${VERSION}-${VARIANT}-${ARCH}-${BUILD_DATE}-${BUILD_TIME}"
 
     print_status "Packaging images..."
@@ -355,8 +357,10 @@ package_images() {
         exit 1
     fi
 
-    # Create release directory
+    # Create release directories
     mkdir -p "${RELEASE_ARCH_DIR}"
+    mkdir -p "${RELEASE_ISO_DIR}"
+    mkdir -p "${RELEASE_DOCKER_DIR}"
 
     # Remove all old release files before creating new ones
     print_status "Removing old release files..."
@@ -364,62 +368,73 @@ package_images() {
     rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.img.sign 2>/dev/null || true
     rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.qcow2 2>/dev/null || true
     rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.qcow2.sign 2>/dev/null || true
-    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.iso 2>/dev/null || true
-    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.iso.sign 2>/dev/null || true
-    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.tar 2>/dev/null || true
-    rm -f "${RELEASE_ARCH_DIR}"/straturaos-*.tar.sign 2>/dev/null || true
     rm -f "${RELEASE_ARCH_DIR}"/SHA512SUMS* 2>/dev/null || true
+    rm -f "${RELEASE_ISO_DIR}"/straturaos-*.iso 2>/dev/null || true
+    rm -f "${RELEASE_ISO_DIR}"/straturaos-*.iso.sign 2>/dev/null || true
+    rm -f "${RELEASE_ISO_DIR}"/SHA512SUMS* 2>/dev/null || true
+    rm -f "${RELEASE_DOCKER_DIR}"/straturaos-*.tar 2>/dev/null || true
+    rm -f "${RELEASE_DOCKER_DIR}"/straturaos-*.tar.sign 2>/dev/null || true
+    rm -f "${RELEASE_DOCKER_DIR}"/SHA512SUMS* 2>/dev/null || true
 
     # Process SD card image (RPi builds)
     if [ -f "${IMAGES_DIR}/sdcard.img" ]; then
         local IMG_NAME="${NAME_PREFIX}.img"
         mv "${IMAGES_DIR}/sdcard.img" "${RELEASE_ARCH_DIR}/${IMG_NAME}"
         rm -f "${IMAGES_DIR}/sdcard.img.sha256" 2>/dev/null
-        print_status "Created: ${IMG_NAME}"
+        print_status "Created: ${ARCH}/${IMG_NAME}"
     fi
 
     # Process QCOW2 image (Cloud builds)
     if [ -f "${IMAGES_DIR}/straturaos-cloud.qcow2" ]; then
         local QCOW_NAME="${NAME_PREFIX}.qcow2"
         mv "${IMAGES_DIR}/straturaos-cloud.qcow2" "${RELEASE_ARCH_DIR}/${QCOW_NAME}"
-        print_status "Created: ${QCOW_NAME}"
+        print_status "Created: ${ARCH}/${QCOW_NAME}"
     fi
 
-    # Create Docker tarball
+    # Create Docker tarball in docker/ directory
     local TAR_NAME="${NAME_PREFIX}.tar"
     if [ -f "${IMAGES_DIR}/rootfs.tar" ]; then
-        mv "${IMAGES_DIR}/rootfs.tar" "${RELEASE_ARCH_DIR}/${TAR_NAME}"
-        print_status "Created: ${TAR_NAME}"
+        mv "${IMAGES_DIR}/rootfs.tar" "${RELEASE_DOCKER_DIR}/${TAR_NAME}"
+        print_status "Created: docker/${TAR_NAME}"
     elif [ -f "${IMAGES_DIR}/rootfs.ext4" ]; then
         local MOUNT_DIR="/tmp/straturaos-rootfs-$$"
         mkdir -p "${MOUNT_DIR}"
         print_status "Extracting rootfs to tar..."
         mount -o loop,ro "${IMAGES_DIR}/rootfs.ext4" "${MOUNT_DIR}"
-        tar -C "${MOUNT_DIR}" -cf "${RELEASE_ARCH_DIR}/${TAR_NAME}" .
+        tar -C "${MOUNT_DIR}" -cf "${RELEASE_DOCKER_DIR}/${TAR_NAME}" .
         umount "${MOUNT_DIR}"
         rmdir "${MOUNT_DIR}"
-        print_status "Created: ${TAR_NAME}"
+        print_status "Created: docker/${TAR_NAME}"
     fi
 
-    # Generate SHA512SUMS
-    print_status "Generating checksums..."
-    cd "${RELEASE_ARCH_DIR}"
-    sha512sum straturaos-${VERSION}-* > SHA512SUMS 2>/dev/null || true
-    print_status "Created: SHA512SUMS"
+    # Generate SHA512SUMS for arch directory
+    if ls "${RELEASE_ARCH_DIR}"/straturaos-* 1>/dev/null 2>&1; then
+        print_status "Generating checksums for ${ARCH}/..."
+        cd "${RELEASE_ARCH_DIR}"
+        sha512sum straturaos-${VERSION}-* > SHA512SUMS 2>/dev/null || true
+        if command -v gpg &> /dev/null && gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
+            for file in straturaos-${VERSION}-*; do
+                if [ -f "$file" ] && [[ ! "$file" =~ \.sign$ ]]; then
+                    gpg --yes --detach-sign -o "${file}.sign" "$file" 2>/dev/null || true
+                fi
+            done
+            gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null || true
+        fi
+    fi
 
-    # Generate GPG signatures if key is available
-    if command -v gpg &> /dev/null && gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
-        print_status "Signing files..."
-        for file in straturaos-${VERSION}-*; do
-            if [ -f "$file" ] && [[ ! "$file" =~ \.sign$ ]]; then
-                gpg --yes --detach-sign -o "${file}.sign" "$file" 2>/dev/null && \
-                    print_status "Created: ${file}.sign" || true
-            fi
-        done
-        gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null && \
-            print_status "Created: SHA512SUMS.sign" || true
-    else
-        print_warning "GPG key not found, skipping signatures"
+    # Generate SHA512SUMS for docker directory
+    if ls "${RELEASE_DOCKER_DIR}"/straturaos-* 1>/dev/null 2>&1; then
+        print_status "Generating checksums for docker/..."
+        cd "${RELEASE_DOCKER_DIR}"
+        sha512sum straturaos-${VERSION}-* > SHA512SUMS 2>/dev/null || true
+        if command -v gpg &> /dev/null && gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
+            for file in straturaos-${VERSION}-*; do
+                if [ -f "$file" ] && [[ ! "$file" =~ \.sign$ ]]; then
+                    gpg --yes --detach-sign -o "${file}.sign" "$file" 2>/dev/null || true
+                fi
+            done
+            gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null || true
+        fi
     fi
 
     print_status "Package complete!"
@@ -430,12 +445,12 @@ create_docker() {
 
     local ARCH=$(detect_arch)
     local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
-    local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
+    local RELEASE_DOCKER_DIR="${RELEASE_VERSION_DIR}/docker"
 
     # Find the Docker tarball
     local DOCKER_TAR=""
-    if ls "${RELEASE_ARCH_DIR}"/straturaos-*.tar 1>/dev/null 2>&1; then
-        DOCKER_TAR=$(ls -t "${RELEASE_ARCH_DIR}"/straturaos-*.tar | head -1)
+    if ls "${RELEASE_DOCKER_DIR}"/straturaos-*.tar 1>/dev/null 2>&1; then
+        DOCKER_TAR=$(ls -t "${RELEASE_DOCKER_DIR}"/straturaos-*.tar | head -1)
     elif [ -f "${IMAGES_DIR}/rootfs.tar" ]; then
         DOCKER_TAR="${IMAGES_DIR}/rootfs.tar"
     fi
@@ -462,7 +477,7 @@ create_iso() {
     local ARCH=$(detect_arch)
     local VARIANT=$(detect_variant)
     local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
-    local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
+    local RELEASE_ISO_DIR="${RELEASE_VERSION_DIR}/iso"
     local NAME_PREFIX="straturaos-${VERSION}-${VARIANT}-${ARCH}-${BUILD_DATE}-${BUILD_TIME}"
     local ISO_NAME="${NAME_PREFIX}.iso"
 
@@ -538,10 +553,10 @@ GRUBCFG
             "boot/grub/grub.cfg=${ISO_DIR}/boot/grub/grub.cfg" 2>/dev/null || true
     fi
 
-    # Create the ISO
-    mkdir -p "${RELEASE_ARCH_DIR}"
+    # Create the ISO in iso/ directory
+    mkdir -p "${RELEASE_ISO_DIR}"
     xorriso -as mkisofs \
-        -o "${RELEASE_ARCH_DIR}/${ISO_NAME}" \
+        -o "${RELEASE_ISO_DIR}/${ISO_NAME}" \
         -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin 2>/dev/null || true \
         -c isolinux/boot.cat \
         -b boot/grub/grub.cfg \
@@ -555,16 +570,23 @@ GRUBCFG
         -V "STRATURAOS" \
         "${ISO_DIR}" 2>/dev/null || \
     xorriso -as mkisofs \
-        -o "${RELEASE_ARCH_DIR}/${ISO_NAME}" \
+        -o "${RELEASE_ISO_DIR}/${ISO_NAME}" \
         -V "STRATURAOS" \
         -J -R \
         "${ISO_DIR}"
 
-    # Cleanup
+    # Cleanup staging
     rm -rf "${ISO_DIR}"
 
-    if [ -f "${RELEASE_ARCH_DIR}/${ISO_NAME}" ]; then
-        print_status "Created: ${ISO_NAME}"
+    if [ -f "${RELEASE_ISO_DIR}/${ISO_NAME}" ]; then
+        print_status "Created: iso/${ISO_NAME}"
+        # Generate checksums and signatures for ISO
+        cd "${RELEASE_ISO_DIR}"
+        sha512sum straturaos-${VERSION}-* > SHA512SUMS 2>/dev/null || true
+        if command -v gpg &> /dev/null && gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
+            gpg --yes --detach-sign -o "${ISO_NAME}.sign" "${ISO_NAME}" 2>/dev/null || true
+            gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null || true
+        fi
     else
         print_warning "ISO creation failed"
     fi
@@ -590,6 +612,8 @@ export_artifacts() {
     local ARCH=$(detect_arch)
     local RELEASE_VERSION_DIR="${RELEASE_DIR}/${VERSION}"
     local RELEASE_ARCH_DIR="${RELEASE_VERSION_DIR}/${ARCH}"
+    local RELEASE_ISO_DIR="${RELEASE_VERSION_DIR}/iso"
+    local RELEASE_DOCKER_DIR="${RELEASE_VERSION_DIR}/docker"
 
     echo ""
     echo "=========================================="
@@ -601,10 +625,30 @@ export_artifacts() {
         tree -h "${RELEASE_DIR}" 2>/dev/null || ls -lahR "${RELEASE_DIR}"
     else
         echo "${VERSION}/"
-        echo "  ${ARCH}/"
-        ls -lh "${RELEASE_ARCH_DIR}"/ 2>/dev/null | tail -n +2 | while read line; do
-            echo "    $line"
-        done
+
+        # Show arch directory
+        if [ -d "${RELEASE_ARCH_DIR}" ] && ls "${RELEASE_ARCH_DIR}"/* 1>/dev/null 2>&1; then
+            echo "  ${ARCH}/"
+            ls -lh "${RELEASE_ARCH_DIR}"/ 2>/dev/null | tail -n +2 | while read line; do
+                echo "    $line"
+            done
+        fi
+
+        # Show docker directory
+        if [ -d "${RELEASE_DOCKER_DIR}" ] && ls "${RELEASE_DOCKER_DIR}"/* 1>/dev/null 2>&1; then
+            echo "  docker/"
+            ls -lh "${RELEASE_DOCKER_DIR}"/ 2>/dev/null | tail -n +2 | while read line; do
+                echo "    $line"
+            done
+        fi
+
+        # Show iso directory
+        if [ -d "${RELEASE_ISO_DIR}" ] && ls "${RELEASE_ISO_DIR}"/* 1>/dev/null 2>&1; then
+            echo "  iso/"
+            ls -lh "${RELEASE_ISO_DIR}"/ 2>/dev/null | tail -n +2 | while read line; do
+                echo "    $line"
+            done
+        fi
     fi
 
     if command -v docker &> /dev/null; then
