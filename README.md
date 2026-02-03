@@ -59,27 +59,111 @@ cd StraturaOS
 | `build` | Build the SD card image |
 | `package` | Create dated sdcard.img and rootfs.tar |
 | `docker` | Create Docker image from rootfs |
-| `export` | Package + docker (no rebuild) |
-| `release` | Build + package + docker (full release) |
+| `iso` | Create bootable ISO (cloud/x86_64 only) |
+| `export` | Package + docker + iso (no rebuild) |
+| `release` | Build + package + docker + iso (full release) |
 | `clean` | Clean build directory |
 | `cleanup` | Remove old artifacts (keeps last 2 builds) |
 | `distclean` | Full clean (reset everything) |
 | `install` | Install 'straturaos' command globally |
 | `uninstall` | Remove global 'straturaos' command |
 
+### Build Targets
+
+**Raspberry Pi 5 (default):**
+```bash
+./build.sh config rpi5
+./build.sh build
+```
+
+**Cloud/VM (Proxmox, KVM, QEMU):**
+```bash
+./build.sh config cloud
+./build.sh build
+```
+
 ### Output Files
 
-After a successful build:
+Release files are organized by architecture in `release/{arch}/`:
 
-- `straturaos-sdcard-YYYYMMDD.img` - SD card image (flash to hardware)
-- `straturaos-docker-YYYYMMDD.tar` - Docker tarball (for `docker import`)
-- Docker image: `straturaos:YYYYMMDD` / `straturaos:latest`
+```
+release/
+├── arm64/
+│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img
+│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img.sign
+│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar
+│   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar.sign
+│   ├── SHA512SUMS
+│   └── SHA512SUMS.sign
+└── amd64/
+    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2
+    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2.sign
+    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso
+    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso.sign
+    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar
+    ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.tar.sign
+    ├── SHA512SUMS
+    └── SHA512SUMS.sign
+```
 
-### Flashing to SD Card
+**Naming convention:** `straturaos-{version}-{variant}-{arch}-{date}-{time}.{format}`
+
+**File types:**
+- `.img` - Raw disk image (for SD card flashing)
+- `.qcow2` - QEMU/Proxmox disk image
+- `.iso` - Bootable ISO image (for VM testing)
+- `.tar` - Root filesystem tarball (for Docker import)
+- `.sign` - GPG signature
+- `SHA512SUMS` - Checksums for all files
+
+### Verify Downloads
 
 ```bash
-sudo dd if=output/images/straturaos-sdcard-YYYYMMDD.img of=/dev/sdX bs=4M status=progress
+# Verify checksum
+cd release/arm64/
+sha512sum -c SHA512SUMS
+
+# Verify GPG signature (if signed)
+gpg --verify SHA512SUMS.sign SHA512SUMS
+```
+
+### Flashing to SD Card (RPi 5)
+
+```bash
+sudo dd if=release/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img of=/dev/sdX bs=4M status=progress
 sync
+```
+
+### Deploy to Proxmox (Cloud Image)
+
+1. Upload the QCOW2 image to Proxmox:
+   ```bash
+   scp release/amd64/straturaos-1.0-genericcloud-amd64-*.qcow2 root@proxmox:/var/lib/vz/images/
+   ```
+
+2. Create a VM and import the disk:
+   ```bash
+   qm create 100 --name straturaos --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
+   qm importdisk 100 /var/lib/vz/images/straturaos-1.0-genericcloud-amd64-*.qcow2 local-lvm
+   qm set 100 --scsi0 local-lvm:vm-100-disk-0
+   qm set 100 --boot c --bootdisk scsi0
+   qm set 100 --serial0 socket --vga serial0
+   qm start 100
+   ```
+
+3. Or use the Proxmox web UI to create VM and attach the disk.
+
+### Testing with ISO (VirtualBox, VMware, QEMU)
+
+Boot from the ISO for quick testing:
+
+```bash
+# QEMU
+qemu-system-x86_64 -cdrom release/amd64/straturaos-1.0-genericcloud-amd64-*.iso \
+    -m 2048 -enable-kvm -serial stdio
+
+# VirtualBox - Create new VM and attach ISO as optical drive
+# VMware - Create new VM and attach ISO as CD/DVD
 ```
 
 ### Running in Docker
@@ -87,8 +171,8 @@ sync
 If built on another machine, import the tarball first:
 
 ```bash
-docker import straturaos-docker-YYYYMMDD.tar straturaos:YYYYMMDD
-docker tag straturaos:YYYYMMDD straturaos:latest
+docker import release/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar straturaos:1.0
+docker tag straturaos:1.0 straturaos:latest
 ```
 
 Then run:
