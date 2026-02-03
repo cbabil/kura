@@ -214,12 +214,16 @@ build_image() {
         # Clean build directory for next target (keep downloads)
         print_status "Cleaning build for next target..."
         cd "${BUILDROOT_DIR}"
-        make clean
         rm -rf "${BUILDROOT_DIR}/output/target"
         rm -rf "${BUILDROOT_DIR}/output/images"
         rm -rf "${BUILDROOT_DIR}/output/build"
+        rm -rf "${BUILDROOT_DIR}/output/host"
+        rm -rf "${BUILDROOT_DIR}/output/staging"
+        rm -rf "${BUILDROOT_DIR}/output/graphs"
         rm -f "${BUILDROOT_DIR}/.config"
         rm -f "${BUILDROOT_DIR}/.config.old"
+        rm -rf /root/.cache/go-build 2>/dev/null || true
+        rm -rf /tmp/* 2>/dev/null || true
 
         # Build cloud
         build_single_target "cloud"
@@ -372,6 +376,33 @@ cleanup_old_artifacts() {
     if command -v apt-get &> /dev/null; then
         print_status "Cleaning apt cache..."
         apt-get clean 2>/dev/null || true
+    fi
+
+    # Clean Go cache (used by Docker build)
+    if [ -d "${HOME}/.cache/go-build" ]; then
+        print_status "Cleaning Go build cache..."
+        rm -rf "${HOME}/.cache/go-build"
+    fi
+    if [ -d "/root/.cache/go-build" ]; then
+        rm -rf "/root/.cache/go-build"
+    fi
+
+    # Clean ccache
+    if [ -d "${HOME}/.ccache" ]; then
+        print_status "Cleaning ccache..."
+        rm -rf "${HOME}/.ccache"
+    fi
+    if [ -d "/root/.ccache" ]; then
+        rm -rf "/root/.ccache"
+    fi
+
+    # Clean buildroot host directory (large, can be rebuilt)
+    if [ -d "${BUILDROOT_DIR}/output/host" ]; then
+        local HOST_SIZE=$(du -sm "${BUILDROOT_DIR}/output/host" 2>/dev/null | cut -f1)
+        if [ "${HOST_SIZE:-0}" -gt 2000 ]; then
+            print_status "Cleaning buildroot host directory (${HOST_SIZE}MB)..."
+            rm -rf "${BUILDROOT_DIR}/output/host"
+        fi
     fi
 
     # Show disk usage after
