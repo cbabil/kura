@@ -180,6 +180,9 @@ build_image() {
         configure_build
     fi
 
+    # Run cleanup before build to free disk space
+    cleanup_old_artifacts 0
+
     cd "${BUILDROOT_DIR}"
 
     # Build with all available cores
