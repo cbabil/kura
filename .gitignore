@@ -49,3 +49,6 @@ docker-compose.local.yml
 
 # Custom directories
 /var/lib/straturaOS/
+
+# Internal documentation (local only)
+docs/

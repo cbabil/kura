@@ -1,0 +1,20 @@
+[Unit]
+Description=StraturaOS Update Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=60
+ExecStart=/usr/bin/stratura-updater
+Environment=PYTHONPATH=/usr/lib/stratura
+
+# Security hardening
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
