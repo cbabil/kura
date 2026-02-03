@@ -1,0 +1,28 @@
+# StraturaOS Raspberry Pi 5 Configuration
+
+# Enable 64-bit mode
+arm_64bit=1
+
+# Kernel settings
+kernel=Image
+
+# Device tree
+device_tree=bcm2712-rpi-5-b.dtb
+
+# Memory split (min for GPU, max for CPU)
+gpu_mem=16
+
+# Enable USB boot
+usb_max_current_enable=1
+
+# Disable overscan
+disable_overscan=1
+
+# Enable UART for serial console
+enable_uart=1
+
+# HDMI settings
+hdmi_force_hotplug=1
+
+# Boot delay
+boot_delay=1

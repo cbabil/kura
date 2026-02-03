@@ -1,0 +1,6 @@
+source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-supervisor/Config.in"
+source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-api/Config.in"
+source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-updater/Config.in"
+source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-config/Config.in"
+source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-monitor/Config.in"
+source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-security/Config.in"

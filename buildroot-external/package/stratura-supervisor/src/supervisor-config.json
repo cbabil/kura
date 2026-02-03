@@ -1,0 +1,28 @@
+{
+    "api_endpoint": "https://api.stratura.io",
+    "poll_interval": 60,
+    "applications": [
+        {
+            "name": "app1",
+            "image": "stratura/app1:latest",
+            "restart_policy": "always"
+        }
+    ],
+    "logging": {
+        "level": "INFO",
+        "file": "/var/log/stratura-supervisor.log"
+    },
+    "storage": {
+        "docker_root": "/var/lib/docker",
+        "data_root": "/var/lib/stratura-supervisor"
+    },
+    "network": {
+        "api_port": 48484,
+        "metrics_port": 9999
+    },
+    "security": {
+        "tls_enabled": true,
+        "cert_path": "/etc/stratura/certs",
+        "verify_images": true
+    }
+} 
