@@ -382,11 +382,11 @@ package_images() {
         print_status "Signing files..."
         for file in straturaos-${VERSION}-*; do
             if [ -f "$file" ] && [[ ! "$file" =~ \.sign$ ]]; then
-                gpg --detach-sign -o "${file}.sign" "$file" 2>/dev/null && \
+                gpg --yes --detach-sign -o "${file}.sign" "$file" 2>/dev/null && \
                     print_status "Created: ${file}.sign" || true
             fi
         done
-        gpg --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null && \
+        gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null && \
             print_status "Created: SHA512SUMS.sign" || true
     else
         print_warning "GPG key not found, skipping signatures"
