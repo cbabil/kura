@@ -271,7 +271,7 @@ cleanup_old_artifacts() {
                 local ARCH=$(basename "$arch_dir")
 
                 # Cleanup old .img files
-                local IMG_COUNT=$(ls -1 "${arch_dir}"straturaos-*.img 2>/dev/null | wc -l)
+                local IMG_COUNT=$(ls -1 "${arch_dir}"straturaos-*.img 2>/dev/null | wc -l | tr -d ' ')
                 if [ "${IMG_COUNT}" -gt "${KEEP_COUNT}" ]; then
                     print_status "Removing old images in ${ARCH}..."
                     ls -1t "${arch_dir}"straturaos-*.img 2>/dev/null | tail -n +$((KEEP_COUNT + 1)) | while read img; do
@@ -281,7 +281,7 @@ cleanup_old_artifacts() {
                 fi
 
                 # Cleanup old .qcow2 files
-                local QCOW_COUNT=$(ls -1 "${arch_dir}"straturaos-*.qcow2 2>/dev/null | wc -l)
+                local QCOW_COUNT=$(ls -1 "${arch_dir}"straturaos-*.qcow2 2>/dev/null | wc -l | tr -d ' ')
                 if [ "${QCOW_COUNT}" -gt "${KEEP_COUNT}" ]; then
                     print_status "Removing old qcow2 images in ${ARCH}..."
                     ls -1t "${arch_dir}"straturaos-*.qcow2 2>/dev/null | tail -n +$((KEEP_COUNT + 1)) | while read img; do
@@ -291,7 +291,7 @@ cleanup_old_artifacts() {
                 fi
 
                 # Cleanup old .tar files
-                local TAR_COUNT=$(ls -1 "${arch_dir}"straturaos-*.tar 2>/dev/null | wc -l)
+                local TAR_COUNT=$(ls -1 "${arch_dir}"straturaos-*.tar 2>/dev/null | wc -l | tr -d ' ')
                 if [ "${TAR_COUNT}" -gt "${KEEP_COUNT}" ]; then
                     print_status "Removing old tarballs in ${ARCH}..."
                     ls -1t "${arch_dir}"straturaos-*.tar 2>/dev/null | tail -n +$((KEEP_COUNT + 1)) | while read tar; do
@@ -301,7 +301,7 @@ cleanup_old_artifacts() {
                 fi
 
                 # Cleanup old .iso files
-                local ISO_COUNT=$(ls -1 "${arch_dir}"straturaos-*.iso 2>/dev/null | wc -l)
+                local ISO_COUNT=$(ls -1 "${arch_dir}"straturaos-*.iso 2>/dev/null | wc -l | tr -d ' ')
                 if [ "${ISO_COUNT}" -gt "${KEEP_COUNT}" ]; then
                     print_status "Removing old ISOs in ${ARCH}..."
                     ls -1t "${arch_dir}"straturaos-*.iso 2>/dev/null | tail -n +$((KEEP_COUNT + 1)) | while read iso; do
@@ -317,14 +317,19 @@ cleanup_old_artifacts() {
     # Cleanup Docker if available
     if command -v docker &> /dev/null; then
         # Remove old straturaos images
-        local DOCKER_IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep '^straturaos:' | grep -v ':latest' | sort -r)
-        local DOCKER_COUNT=$(echo "${DOCKER_IMAGES}" | grep -c '^straturaos:' 2>/dev/null || echo 0)
+        local DOCKER_IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep '^straturaos:' | grep -v ':latest' | sort -r || true)
+        local DOCKER_COUNT=0
+        if [ -n "${DOCKER_IMAGES}" ]; then
+            DOCKER_COUNT=$(echo "${DOCKER_IMAGES}" | wc -l | tr -d ' ')
+        fi
 
-        if [ "${DOCKER_COUNT}" -gt "${KEEP_COUNT}" ]; then
+        if [ "${DOCKER_COUNT:-0}" -gt "${KEEP_COUNT}" ]; then
             print_status "Removing old Docker images..."
             echo "${DOCKER_IMAGES}" | tail -n +$((KEEP_COUNT + 1)) | while read img; do
-                echo "  Removing: ${img}"
-                docker rmi "${img}" 2>/dev/null || true
+                if [ -n "${img}" ]; then
+                    echo "  Removing: ${img}"
+                    docker rmi "${img}" 2>/dev/null || true
+                fi
             done
         fi
 
