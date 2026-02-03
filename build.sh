@@ -209,6 +209,10 @@ build_image() {
         exit 1
     fi
 
+    # Remove old config files to prevent legacy config errors
+    print_status "Removing old buildroot config..."
+    rm -f "${BUILDROOT_DIR}/.config" "${BUILDROOT_DIR}/.config.old" 2>/dev/null || true
+
     # Run cleanup before build to free disk space
     cleanup_old_artifacts 0
 
