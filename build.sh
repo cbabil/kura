@@ -268,6 +268,23 @@ cleanup_old_artifacts() {
                 docker rmi "${img}" 2>/dev/null || true
             done
         fi
+
+        # Clean unused Docker resources (dangling images, stopped containers, unused networks)
+        print_status "Cleaning unused Docker resources..."
+        docker system prune -f 2>/dev/null || true
+    fi
+
+    # Clean temporary build files
+    print_status "Cleaning temporary files..."
+    rm -rf /tmp/straturaos-* 2>/dev/null || true
+
+    # Clean old buildroot download cache if over 5GB
+    if [ -d "${BUILDROOT_DIR}/dl" ]; then
+        local DL_SIZE=$(du -sm "${BUILDROOT_DIR}/dl" 2>/dev/null | cut -f1)
+        if [ "${DL_SIZE:-0}" -gt 5000 ]; then
+            print_status "Cleaning buildroot download cache (${DL_SIZE}MB)..."
+            rm -rf "${BUILDROOT_DIR}/dl"/*
+        fi
     fi
 
     print_status "Cleanup complete!"
