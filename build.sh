@@ -176,6 +176,9 @@ build_single_target() {
         exit 1
     fi
 
+    # Remove old config to prevent legacy config errors
+    rm -f "${BUILDROOT_DIR}/.config" "${BUILDROOT_DIR}/.config.old" 2>/dev/null
+
     # Configure for target
     configure_build "${TARGET}"
 
@@ -214,6 +217,9 @@ build_image() {
         make clean
         rm -rf "${BUILDROOT_DIR}/output/target"
         rm -rf "${BUILDROOT_DIR}/output/images"
+        rm -rf "${BUILDROOT_DIR}/output/build"
+        rm -f "${BUILDROOT_DIR}/.config"
+        rm -f "${BUILDROOT_DIR}/.config.old"
 
         # Build cloud
         build_single_target "cloud"
