@@ -296,6 +296,18 @@ cleanup_old_artifacts() {
         fi
     fi
 
+    # Clean buildroot target directory (prevents symlink conflicts)
+    if [ -d "${BUILDROOT_DIR}/output/target" ]; then
+        print_status "Cleaning buildroot target directory..."
+        rm -rf "${BUILDROOT_DIR}/output/target"
+    fi
+
+    # Clean buildroot images directory
+    if [ -d "${BUILDROOT_DIR}/output/images" ]; then
+        print_status "Cleaning buildroot images directory..."
+        rm -rf "${BUILDROOT_DIR}/output/images"/*
+    fi
+
     # Clean buildroot download cache if over 5GB
     if [ -d "${BUILDROOT_DIR}/dl" ]; then
         local DL_SIZE=$(du -sm "${BUILDROOT_DIR}/dl" 2>/dev/null | cut -f1)
