@@ -204,6 +204,11 @@ cleanup_old_artifacts() {
     local KEEP_COUNT=${1:-1}
     print_status "Cleaning up old artifacts (keeping last ${KEEP_COUNT})..."
 
+    # Show disk usage before
+    echo ""
+    df -h / 2>/dev/null | head -2
+    echo ""
+
     # Cleanup old releases in each version/arch directory
     if [ -d "${RELEASE_DIR}" ]; then
         for version_dir in "${RELEASE_DIR}"/*/; do
@@ -256,10 +261,11 @@ cleanup_old_artifacts() {
         done
     fi
 
-    # Cleanup old Docker images if Docker is available
+    # Cleanup Docker if available
     if command -v docker &> /dev/null; then
-        local DOCKER_IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^straturaos:' | grep -v ':latest' | sort -r)
-        local DOCKER_COUNT=$(echo "${DOCKER_IMAGES}" | grep -c '^straturaos:' || echo 0)
+        # Remove old straturaos images
+        local DOCKER_IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep '^straturaos:' | grep -v ':latest' | sort -r)
+        local DOCKER_COUNT=$(echo "${DOCKER_IMAGES}" | grep -c '^straturaos:' 2>/dev/null || echo 0)
 
         if [ "${DOCKER_COUNT}" -gt "${KEEP_COUNT}" ]; then
             print_status "Removing old Docker images..."
@@ -269,16 +275,25 @@ cleanup_old_artifacts() {
             done
         fi
 
-        # Clean unused Docker resources (dangling images, stopped containers, unused networks)
+        # Clean all unused Docker resources
         print_status "Cleaning unused Docker resources..."
-        docker system prune -f 2>/dev/null || true
+        docker system prune -af 2>/dev/null || true
     fi
 
     # Clean temporary build files
     print_status "Cleaning temporary files..."
     rm -rf /tmp/straturaos-* 2>/dev/null || true
 
-    # Clean old buildroot download cache if over 5GB
+    # Clean buildroot build cache
+    if [ -d "${BUILDROOT_DIR}/output/build" ]; then
+        local BUILD_SIZE=$(du -sm "${BUILDROOT_DIR}/output/build" 2>/dev/null | cut -f1)
+        if [ "${BUILD_SIZE:-0}" -gt 1000 ]; then
+            print_status "Cleaning buildroot build cache (${BUILD_SIZE}MB)..."
+            rm -rf "${BUILDROOT_DIR}/output/build"/*
+        fi
+    fi
+
+    # Clean buildroot download cache if over 5GB
     if [ -d "${BUILDROOT_DIR}/dl" ]; then
         local DL_SIZE=$(du -sm "${BUILDROOT_DIR}/dl" 2>/dev/null | cut -f1)
         if [ "${DL_SIZE:-0}" -gt 5000 ]; then
@@ -286,6 +301,22 @@ cleanup_old_artifacts() {
             rm -rf "${BUILDROOT_DIR}/dl"/*
         fi
     fi
+
+    # Clean system logs
+    print_status "Cleaning old logs..."
+    journalctl --vacuum-time=1d 2>/dev/null || true
+    rm -f /var/log/*.gz /var/log/*.old 2>/dev/null || true
+
+    # Clean apt cache
+    if command -v apt-get &> /dev/null; then
+        print_status "Cleaning apt cache..."
+        apt-get clean 2>/dev/null || true
+    fi
+
+    # Show disk usage after
+    echo ""
+    print_status "Disk usage after cleanup:"
+    df -h / 2>/dev/null | head -2
 
     print_status "Cleanup complete!"
 }
