@@ -159,6 +159,9 @@ configure_build() {
             ;;
     esac
 
+    # Update any deprecated config options
+    make olddefconfig
+
     print_status "Configuration loaded!"
     echo ""
     echo "Run 'make menuconfig' in ${BUILDROOT_DIR} to customize"
