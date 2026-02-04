@@ -184,8 +184,10 @@ build_single_target() {
         exit 1
     fi
 
-    # Remove old config to prevent legacy config errors
-    rm -f "${BUILDROOT_DIR}/.config" "${BUILDROOT_DIR}/.config.old" 2>/dev/null
+    # Full clean to prevent legacy config errors
+    cd "${BUILDROOT_DIR}"
+    print_status "Cleaning buildroot (distclean)..."
+    make distclean 2>/dev/null || true
 
     # Configure for target
     configure_build "${TARGET}"
