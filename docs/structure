@@ -1,14 +1,17 @@
 docs/
-├── getting-started.md
+├── getting-started.md           # Quick start guide
+├── decisions.md                 # Architecture decision records
 ├── architecture/
-│   ├── overview.md
-│   ├── components.md
-│   └── security.md
+│   ├── overview.md              # System architecture overview
+│   ├── components.md            # Detailed component documentation
+│   └── security.md              # Security architecture
 ├── development/
-│   ├── building.md
-│   ├── customization.md
-│   └── debugging.md
+│   ├── building.md              # Build instructions (Yocto)
+│   ├── buildroot.md             # Build instructions (Buildroot)
+│   ├── customization.md         # Customization guide
+│   ├── distribution.md          # Distribution and release guide
+│   └── debugging.md             # Debugging guide
 └── reference/
-    ├── configuration.md
-    ├── api.md
-    └── troubleshooting.md 
+    ├── configuration.md         # Configuration reference
+    ├── api.md                   # API documentation
+    └── troubleshooting.md       # Troubleshooting guide

@@ -52,3 +52,4 @@ docker-compose.local.yml
 
 # Internal documentation (local only)
 docs/
+straturaos-release.gpg
