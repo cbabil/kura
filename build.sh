@@ -125,6 +125,22 @@ setup_buildroot() {
         git checkout 2024.02.1
     else
         print_status "Buildroot already exists at ${BUILDROOT_DIR}"
+        cd "${BUILDROOT_DIR}"
+
+        # Verify it's at the correct version
+        local CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "unknown")
+        if [ "${CURRENT_TAG}" != "2024.02.1" ]; then
+            print_warning "Buildroot is at ${CURRENT_TAG}, expected 2024.02.1"
+            print_status "Resetting to 2024.02.1..."
+            git fetch --tags
+            git checkout 2024.02.1
+            git clean -fd
+        fi
+
+        # Clean any stale config files
+        print_status "Cleaning stale config files..."
+        rm -f "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+        rm -f "${BUILDROOT_DIR}/.config.old" 2>/dev/null || true
     fi
 
     print_status "Setup complete!"
@@ -145,13 +161,58 @@ configure_build() {
 
     cd "${BUILDROOT_DIR}"
 
+    # CRITICAL: Remove ALL old config files BEFORE loading defconfig
+    # This prevents legacy config errors from stale configs
+    print_status "Removing all old config files..."
+    rm -f "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+    rm -f "${BUILDROOT_DIR}/.config.old" 2>/dev/null || true
+    rm -f "${BUILDROOT_DIR}/.auto.deps" 2>/dev/null || true
+    rm -rf "${BUILDROOT_DIR}/output/.config" 2>/dev/null || true
+
+    # Ensure Buildroot is at correct version and clean state
+    print_status "Verifying Buildroot version..."
+    cd "${BUILDROOT_DIR}"
+    local CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "unknown")
+    if [ "${CURRENT_TAG}" != "2024.02.1" ]; then
+        print_warning "Buildroot not at expected version (found: ${CURRENT_TAG})"
+        print_status "Resetting to 2024.02.1..."
+        git fetch --tags 2>/dev/null || true
+        git checkout 2024.02.1 2>/dev/null || git checkout -f 2024.02.1
+        git clean -fd 2>/dev/null || true
+    fi
+
     # Load appropriate defconfig
+    print_status "Loading defconfig for ${TARGET}..."
     case "${TARGET}" in
         rpi5|rpi)
-            make BR2_EXTERNAL="${EXTERNAL_DIR}" straturaos_defconfig
+            make BR2_EXTERNAL="${EXTERNAL_DIR}" straturaos_defconfig 2>&1 || {
+                print_error "Failed to load defconfig"
+                # Show what caused the failure
+                if [ -f "${BUILDROOT_DIR}/.config" ]; then
+                    print_status "Checking .config for BR2_LEGACY..."
+                    grep -i "BR2_LEGACY" "${BUILDROOT_DIR}/.config" || echo "BR2_LEGACY not found"
+                    print_status "Checking for legacy options in .config..."
+                    grep -E "^BR2_KERNEL_HEADERS_[0-9]|^BR2_GCC_VERSION_[0-9]|^BR2_BINUTILS_VERSION_[0-9]" "${BUILDROOT_DIR}/.config" || echo "No obvious legacy options found"
+
+                    # Check Config.in.legacy to see what options trigger BR2_LEGACY
+                    if [ -f "${BUILDROOT_DIR}/Config.in.legacy" ]; then
+                        print_status "Checking Config.in.legacy for triggers..."
+                        # Find what's selecting BR2_LEGACY
+                        grep -B5 "select BR2_LEGACY" "${BUILDROOT_DIR}/Config.in.legacy" | head -30
+                    fi
+                fi
+                exit 1
+            }
             ;;
         cloud|x86_64|vm)
-            make BR2_EXTERNAL="${EXTERNAL_DIR}" straturaos_x86_64_cloud_defconfig
+            make BR2_EXTERNAL="${EXTERNAL_DIR}" straturaos_x86_64_cloud_defconfig 2>&1 || {
+                print_error "Failed to load defconfig"
+                if [ -f "${BUILDROOT_DIR}/.config" ]; then
+                    print_status "Checking .config for BR2_LEGACY..."
+                    grep -i "BR2_LEGACY" "${BUILDROOT_DIR}/.config" || echo "BR2_LEGACY not found"
+                fi
+                exit 1
+            }
             ;;
         *)
             print_error "Unknown target: ${TARGET}. Use 'rpi5' or 'cloud'"
@@ -159,15 +220,33 @@ configure_build() {
             ;;
     esac
 
-    # Remove deprecated/legacy config options that cause build failures
+    # After loading defconfig, check if BR2_LEGACY was set
     if [ -f "${BUILDROOT_DIR}/.config" ]; then
-        print_status "Removing deprecated config options..."
-        sed -i '/^BR2_SOURCEFORGE_MIRROR/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
-        sed -i '/^BR2_KERNEL_HEADERS_VERSION/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
-        sed -i '/^BR2_KERNEL_HEADERS_[0-9]/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
-        sed -i '/^BR2_PACKAGE_HOST_LINUX_HEADERS/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
-        # Update config to resolve any remaining issues
-        make olddefconfig 2>/dev/null || true
+        if grep -q "^BR2_LEGACY=y" "${BUILDROOT_DIR}/.config"; then
+            print_error "BR2_LEGACY=y detected! Finding the cause..."
+
+            # Show which deprecated option is enabled
+            print_status "Scanning for deprecated options..."
+            grep -E "^BR2_KERNEL_HEADERS_[0-9]|^BR2_GCC_VERSION_[0-9]|^BR2_BINUTILS_VERSION_[0-9]|^BR2_TOOLCHAIN_EXTERNAL_CODESOURCERY|^BR2_PACKAGE_PYTHON[^3]|^BR2_PACKAGE_ORACLE_MYSQL|^BR2_PACKAGE_OPENCV[^4]|^BR2_GDB_VERSION_[0-9]" "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+
+            # Try to find in Config.in.legacy what's selecting BR2_LEGACY
+            if [ -f "${BUILDROOT_DIR}/Config.in.legacy" ]; then
+                # Get all config options that select BR2_LEGACY
+                local LEGACY_TRIGGERS=$(grep -B3 "select BR2_LEGACY" "${BUILDROOT_DIR}/Config.in.legacy" | grep "^config " | sed 's/config //' || true)
+                if [ -n "${LEGACY_TRIGGERS}" ]; then
+                    print_status "Options that can trigger BR2_LEGACY:"
+                    for opt in ${LEGACY_TRIGGERS}; do
+                        if grep -q "^${opt}=y" "${BUILDROOT_DIR}/.config" 2>/dev/null; then
+                            print_error "FOUND: ${opt}=y is set and triggers BR2_LEGACY"
+                        fi
+                    done
+                fi
+            fi
+
+            exit 1
+        fi
+
+        print_status "No legacy options detected - configuration clean"
     fi
 
     print_status "Configuration loaded!"
@@ -195,13 +274,29 @@ build_single_target() {
         exit 1
     fi
 
-    # Full clean to prevent legacy config errors (preserve downloads)
     cd "${BUILDROOT_DIR}"
-    print_status "Cleaning buildroot..."
+
+    # Full clean to prevent legacy config errors (preserve downloads)
+    print_status "Cleaning buildroot completely..."
+
+    # Preserve downloads directory
     if [ -d "${BUILDROOT_DIR}/dl" ]; then
         mv "${BUILDROOT_DIR}/dl" /home/buildroot-dl-backup 2>/dev/null || true
     fi
+
+    # Remove ALL config and build artifacts
+    rm -f "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+    rm -f "${BUILDROOT_DIR}/.config.old" 2>/dev/null || true
+    rm -rf "${BUILDROOT_DIR}/output" 2>/dev/null || true
+
+    # Git clean to ensure pristine state (but preserve external tree)
+    git checkout -- . 2>/dev/null || true
+    git clean -fd 2>/dev/null || true
+
+    # Now run distclean for good measure
     make distclean 2>/dev/null || true
+
+    # Restore downloads
     if [ -d "/home/buildroot-dl-backup" ]; then
         mv /home/buildroot-dl-backup "${BUILDROOT_DIR}/dl" 2>/dev/null || true
     fi
@@ -212,6 +307,7 @@ build_single_target() {
     cd "${BUILDROOT_DIR}"
 
     # Build with all available cores
+    print_status "Starting build..."
     make BR2_EXTERNAL="${EXTERNAL_DIR}" -j$(nproc)
 
     # Export artifacts with timestamp
