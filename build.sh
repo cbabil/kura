@@ -184,10 +184,16 @@ build_single_target() {
         exit 1
     fi
 
-    # Full clean to prevent legacy config errors
+    # Full clean to prevent legacy config errors (preserve downloads)
     cd "${BUILDROOT_DIR}"
-    print_status "Cleaning buildroot (distclean)..."
+    print_status "Cleaning buildroot..."
+    if [ -d "${BUILDROOT_DIR}/dl" ]; then
+        mv "${BUILDROOT_DIR}/dl" /home/buildroot-dl-backup 2>/dev/null || true
+    fi
     make distclean 2>/dev/null || true
+    if [ -d "/home/buildroot-dl-backup" ]; then
+        mv /home/buildroot-dl-backup "${BUILDROOT_DIR}/dl" 2>/dev/null || true
+    fi
 
     # Configure for target
     configure_build "${TARGET}"
