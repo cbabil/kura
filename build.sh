@@ -159,8 +159,16 @@ configure_build() {
             ;;
     esac
 
-    # Update any deprecated config options
-    make olddefconfig
+    # Remove deprecated/legacy config options that cause build failures
+    if [ -f "${BUILDROOT_DIR}/.config" ]; then
+        print_status "Removing deprecated config options..."
+        sed -i '/^BR2_SOURCEFORGE_MIRROR/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+        sed -i '/^BR2_KERNEL_HEADERS_VERSION/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+        sed -i '/^BR2_KERNEL_HEADERS_[0-9]/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+        sed -i '/^BR2_PACKAGE_HOST_LINUX_HEADERS/d' "${BUILDROOT_DIR}/.config" 2>/dev/null || true
+        # Update config to resolve any remaining issues
+        make olddefconfig 2>/dev/null || true
+    fi
 
     print_status "Configuration loaded!"
     echo ""
