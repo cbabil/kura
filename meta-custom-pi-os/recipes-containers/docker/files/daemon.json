@@ -1,9 +1,0 @@
-{
-    "log-driver": "journald",
-    "storage-driver": "overlay2",
-    "data-root": "/var/lib/docker",
-    "exec-opts": ["native.cgroupdriver=systemd"],
-    "features": {
-        "buildkit": true
-    }
-} 

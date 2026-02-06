@@ -1,46 +1,96 @@
 #!/usr/bin/env python3
+"""
+StraturaOS Supervisor Pre-start Check
 
-import docker
+This script runs before the supervisor starts to verify:
+1. Docker daemon is accessible
+2. Required directories exist
+
+This is NOT a runtime healthcheck - it's a pre-flight check.
+"""
+
+import subprocess
 import sys
-import json
+import os
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('supervisor-healthcheck')
 
-def check_supervisor_health():
+
+def check_docker():
+    """Check if Docker daemon is running and accessible"""
     try:
-        client = docker.from_env()
-        
-        # Check Docker daemon
-        client.ping()
-        
-        # Check supervisor container
-        supervisor = client.containers.get('stratura-supervisor')
-        if supervisor.status != 'running':
+        result = subprocess.run(
+            ['docker', 'info'],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            logger.info("Docker daemon is running")
+            return True
+        else:
+            logger.error(f"Docker not ready: {result.stderr}")
             return False
-            
-        # Check managed containers
-        with open('/etc/stratura-supervisor/config.json', 'r') as f:
-            config = json.load(f)
-            
-        for app in config['applications']:
-            try:
-                container = client.containers.get(app['name'])
-                if container.status != 'running':
-                    logger.error(f"Container {app['name']} is not running")
-                    return False
-            except docker.errors.NotFound:
-                logger.error(f"Container {app['name']} not found")
-                return False
-                
-        return True
-        
+    except subprocess.TimeoutExpired:
+        logger.error("Docker check timed out")
+        return False
+    except FileNotFoundError:
+        logger.error("Docker CLI not found")
+        return False
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error(f"Docker check failed: {e}")
         return False
 
+
+def check_directories():
+    """Check if required directories exist"""
+    required_dirs = [
+        '/var/lib/stratura-supervisor',
+        '/etc/stratura'
+    ]
+
+    all_ok = True
+    for dir_path in required_dirs:
+        if os.path.isdir(dir_path):
+            logger.info(f"Directory exists: {dir_path}")
+        else:
+            logger.warning(f"Directory missing: {dir_path}")
+            # Try to create it
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+                logger.info(f"Created directory: {dir_path}")
+            except Exception as e:
+                logger.error(f"Failed to create {dir_path}: {e}")
+                all_ok = False
+
+    return all_ok
+
+
+def main():
+    """Run all pre-start checks"""
+    logger.info("Running supervisor pre-start checks...")
+
+    checks = [
+        ("Docker daemon", check_docker),
+        ("Required directories", check_directories),
+    ]
+
+    all_passed = True
+    for name, check_func in checks:
+        logger.info(f"Checking: {name}")
+        if not check_func():
+            logger.error(f"Check failed: {name}")
+            all_passed = False
+
+    if all_passed:
+        logger.info("All pre-start checks passed")
+        return 0
+    else:
+        logger.error("Some pre-start checks failed")
+        return 1
+
+
 if __name__ == "__main__":
-    if check_supervisor_health():
-        sys.exit(0)
-    sys.exit(1) 
+    sys.exit(main())

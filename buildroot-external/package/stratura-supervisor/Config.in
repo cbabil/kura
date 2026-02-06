@@ -1,9 +1,9 @@
 config BR2_PACKAGE_STRATURA_SUPERVISOR
 	bool "stratura-supervisor"
 	select BR2_PACKAGE_PYTHON3
-	select BR2_PACKAGE_PYTHON_DOCKER
+	select BR2_PACKAGE_PYTHON_REQUESTS
 	select BR2_PACKAGE_DOCKER_ENGINE
 	select BR2_PACKAGE_DOCKER_CLI
 	help
 	  StraturaOS Supervisor - Container and system orchestration service.
-	  Manages Docker containers, health checks, and system state.
+	  Manages Docker containers via CLI, health checks, and system state.

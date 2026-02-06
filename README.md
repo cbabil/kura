@@ -1,249 +1,134 @@
 # StraturaOS
 
-StraturaOS is a custom operating system designed for the Raspberry Pi 5, built on Buildroot. It offers robust container support, over-the-air (OTA) updates, and advanced device management capabilities, making it ideal for IoT and edge computing applications.
+StraturaOS is a custom operating system built on Buildroot for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
 
 ## Features
 
 - **Buildroot-based**: Lightweight and customizable Linux distribution
-- **Container Support**: Integrated Docker runtime for containerized applications
-- **OTA Updates**: Secure and reliable over-the-air update mechanism using RAUC
-- **Advanced Security**: Security hardening and monitoring tools
-- **Network Management**: Flexible network configuration with NetworkManager
-- **Device Management**: Comprehensive device monitoring and management tools
+- **Container Support**: Integrated Docker runtime
+- **Security**: Security hardening and monitoring tools
+- **Network Management**: NetworkManager for flexible configuration
 
 ## Quick Start
 
-### Prerequisites
+### 1. Set up Build VM
 
-- Linux build machine (Debian/Ubuntu recommended)
-- At least 8GB RAM, 50GB free disk space
-- Required packages:
-  ```bash
-  sudo apt-get install -y build-essential libncurses5-dev git wget \
-      cpio unzip rsync bc libssl-dev
-  ```
+Create a Debian/Ubuntu VM with:
+- 2+ CPU cores
+- 4GB+ RAM (8GB recommended)
 
-### Build Commands
+**Disk Partitioning:**
+
+| Mount | Minimal | Recommended | Purpose |
+|-------|---------|-------------|---------|
+| `/` | 10GB | 15GB | OS, tools, packages |
+| `/tmp` | 5GB | 10GB | Temporary build files |
+| `/home` | 30GB | 75GB | Buildroot, source, builds, releases |
+| `swap` | 4GB | 8GB | Swap (helps parallel builds) |
+| **Total** | **50GB** | **108GB** | |
+
+**Note:** Set `STRATURAOS_TMP` environment variable to use a different temp directory if needed (default: `/home/straturaos/tmp`).
+
+### 2. Install StraturaOS
 
 ```bash
-# Clone the repository
-git clone <repo-url> StraturaOS
-cd StraturaOS
+# Create project directory
+mkdir -p /home/straturaos
+cd /home/straturaos
 
-# Initial setup (clones Buildroot)
+# Clone repository (or copy via SCP)
+git clone <repo-url> .
+
+# Setup (installs dependencies + clones Buildroot)
 ./build.sh setup
 
-# Configure (optional - loads defconfig)
-./build.sh config
-
-# Build the image
-./build.sh build
-
-# Package with dated filename + create rootfs.tar
-./build.sh package
-
-# Create Docker image
-./build.sh docker
-
-# Full release (build + package + docker)
-./build.sh release
-```
-
-### Build Script Commands
-
-| Command | Description |
-|---------|-------------|
-| `setup` | Clone Buildroot and setup environment |
-| `config` | Load StraturaOS defconfig |
-| `menuconfig` | Interactive configuration menu |
-| `build` | Build the SD card image |
-| `package` | Create dated sdcard.img and rootfs.tar |
-| `docker` | Create Docker image from rootfs |
-| `iso` | Create bootable ISO (cloud/x86_64 only) |
-| `export` | Package + docker + iso (no rebuild) |
-| `release` | Build + package + docker + iso (full release) |
-| `clean` | Clean build directory |
-| `cleanup` | Remove old artifacts (keeps only latest) |
-| `distclean` | Full clean (reset everything) |
-| `install` | Install 'straturaos' command globally |
-| `uninstall` | Remove global 'straturaos' command |
-
-### Build Targets
-
-**Raspberry Pi 5 (default):**
-```bash
-./build.sh config rpi5
-./build.sh build
-```
-
-**Cloud/VM (Proxmox, KVM, QEMU):**
-```bash
-./build.sh config cloud
-./build.sh build
-```
-
-### Output Files
-
-Release files are organized by version in `release/{version}/`:
-
-```
-release/
-└── 1.0/
-    ├── arm64/                    # SD card images for Raspberry Pi
-    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img
-    │   ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img.sign
-    │   ├── SHA512SUMS
-    │   └── SHA512SUMS.sign
-    ├── amd64/                    # Cloud images for Proxmox/KVM
-    │   ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2
-    │   ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.qcow2.sign
-    │   ├── SHA512SUMS
-    │   └── SHA512SUMS.sign
-    ├── docker/                   # Docker tarballs
-    │   ├── straturaos-1.0-*-YYYYMMDD-HHMM.tar
-    │   ├── straturaos-1.0-*-YYYYMMDD-HHMM.tar.sign
-    │   ├── SHA512SUMS
-    │   └── SHA512SUMS.sign
-    └── iso/                      # Bootable ISOs for testing
-        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso
-        ├── straturaos-1.0-genericcloud-amd64-YYYYMMDD-HHMM.iso.sign
-        ├── SHA512SUMS
-        └── SHA512SUMS.sign
-```
-
-**Naming convention:** `straturaos-{version}-{variant}-{arch}-{date}-{time}.{format}`
-
-**File types:**
-- `.img` - Raw disk image (for SD card flashing)
-- `.qcow2` - QEMU/Proxmox disk image
-- `.iso` - Bootable ISO image (for VM testing)
-- `.tar` - Root filesystem tarball (for Docker import)
-- `.sign` - GPG signature
-- `SHA512SUMS` - Checksums for all files
-
-### Verify Downloads
-
-```bash
-# Verify checksum
-cd release/1.0/arm64/
-sha512sum -c SHA512SUMS
-
-# Verify GPG signature (if signed)
-gpg --verify SHA512SUMS.sign SHA512SUMS
-```
-
-### Flashing to SD Card (RPi 5)
-
-```bash
-sudo dd if=release/1.0/arm64/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img of=/dev/sdX bs=4M status=progress
-sync
-```
-
-### Deploy to Proxmox (Cloud Image)
-
-1. Upload the QCOW2 image to Proxmox:
-   ```bash
-   scp release/1.0/amd64/straturaos-1.0-genericcloud-amd64-*.qcow2 root@proxmox:/var/lib/vz/images/
-   ```
-
-2. Create a VM and import the disk:
-   ```bash
-   qm create 100 --name straturaos --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
-   qm importdisk 100 /var/lib/vz/images/straturaos-1.0-genericcloud-amd64-*.qcow2 local-lvm
-   qm set 100 --scsi0 local-lvm:vm-100-disk-0
-   qm set 100 --boot c --bootdisk scsi0
-   qm set 100 --serial0 socket --vga serial0
-   qm start 100
-   ```
-
-3. Or use the Proxmox web UI to create VM and attach the disk.
-
-### Testing with ISO (VirtualBox, VMware, QEMU)
-
-Boot from the ISO for quick testing:
-
-```bash
-# QEMU
-qemu-system-x86_64 -cdrom release/1.0/iso/straturaos-1.0-genericcloud-amd64-*.iso \
-    -m 2048 -enable-kvm -serial stdio
-
-# VirtualBox - Create new VM and attach ISO as optical drive
-# VMware - Create new VM and attach ISO as CD/DVD
-```
-
-### Running in Docker
-
-If built on another machine, import the tarball first:
-
-```bash
-docker import release/1.0/docker/straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar straturaos:1.0
-docker tag straturaos:1.0 straturaos:latest
-```
-
-Then run:
-
-```bash
-docker run -it straturaos:latest /bin/bash
-```
-
-### Global Installation
-
-Install the `straturaos` command to use it from anywhere:
-
-```bash
+# Install global command
 ./build.sh install
 ```
 
-Then run from any directory:
+### 3. Build
 
 ```bash
-straturaos build
-straturaos export
-straturaos release
+straturaos build           # Build all targets (clean build)
+straturaos build iso       # Build x86_64 only (incremental)
+straturaos build rpi5      # Build RPi5 only (incremental)
 ```
 
-To remove:
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `setup` | Install dependencies and clone Buildroot |
+| `build [target]` | Build StraturaOS (ISO, SD card, Docker) |
+| `clean` | Clean build directory |
+| `help` | Show help |
+
+**Build targets:**
+- `iso` - x86_64: creates ISO + Docker image (incremental)
+- `rpi5` - ARM64: creates SD card image + Docker image (incremental)
+- `all` - Build both targets (clean build, default)
+
+## Output Files
+
+```
+release/1.0/
+├── arm64/
+│   └── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.img
+├── iso/
+│   └── straturaos-1.0-x86_64-amd64-YYYYMMDD-HHMM.iso
+└── docker/
+    ├── straturaos-1.0-rpi5-arm64-YYYYMMDD-HHMM.tar
+    └── straturaos-1.0-x86_64-amd64-YYYYMMDD-HHMM.tar
+```
+
+**Docker images:**
+- `straturaos:latest-arm64` - RPi5 build
+- `straturaos:latest-amd64` - x86_64 build
+
+## Deploying
+
+### RPi5 - Flash SD Card
 
 ```bash
-straturaos uninstall
+sudo dd if=release/1.0/arm64/straturaos-*.img of=/dev/sdX bs=4M status=progress
+sync
+```
+
+### x86_64 - Boot ISO in VM
+
+```bash
+# QEMU
+qemu-system-x86_64 -cdrom release/1.0/iso/straturaos-*.iso -m 2048 -enable-kvm
+
+# Proxmox - Upload ISO and create VM via web UI
+scp release/1.0/iso/straturaos-*.iso root@proxmox:/var/lib/vz/template/iso/
+```
+
+### Docker
+
+```bash
+# Images are created automatically during build
+docker run -it straturaos:latest-amd64 /bin/bash   # x86_64
+docker run -it straturaos:latest-arm64 /bin/bash   # RPi5/ARM64
+
+# Or import from tarball
+docker import release/1.0/docker/straturaos-*-amd64-*.tar straturaos:latest-amd64
+docker import release/1.0/docker/straturaos-*-arm64-*.tar straturaos:latest-arm64
 ```
 
 ## Project Structure
 
 ```
-StraturaOS/
-├── build.sh                    # Main build script
-├── buildroot-external/         # Buildroot external tree
-│   ├── configs/                # Defconfig files
-│   │   └── straturaos_defconfig
-│   ├── package/                # Custom packages
-│   │   ├── stratura-api/
-│   │   ├── stratura-config/
-│   │   ├── stratura-monitor/
-│   │   ├── stratura-security/
-│   │   ├── stratura-supervisor/
-│   │   └── stratura-updater/
-│   └── board/straturaos/       # Board-specific files
-│       ├── overlay/            # Root filesystem overlay
-│       ├── post-build.sh
-│       ├── post-image.sh
-│       └── genimage.cfg
-└── docs/                       # Documentation
+/home/straturaos/
+├── build.sh              # Main build script
+├── buildroot/            # Buildroot (cloned by setup)
+├── buildroot-external/   # Custom packages and configs
+│   ├── configs/          # Defconfig files
+│   ├── package/          # Custom packages
+│   └── board/            # Board-specific files
+└── release/              # Output images
 ```
-
-## Documentation
-
-- **[Architecture Overview](docs/architecture/overview.md)**: Core components and architecture
-- **[Security Architecture](docs/architecture/security.md)**: Security features and configurations
-- **[Development Guide](docs/development/building.md)**: Development environment setup
-- **[Configuration Reference](docs/reference/configuration.md)**: Configuration options
-- **[API Documentation](docs/reference/api.md)**: API endpoints for device management
-- **[Troubleshooting Guide](docs/reference/troubleshooting.md)**: Common issues and solutions
-
-## Contributing
-
-We welcome contributions to StraturaOS! Please see our [Contributing Guide](docs/contributing.md) for more information.
 
 ## License
 
-StraturaOS is licensed under the GNU License. See the [LICENSE](LICENSE) file for details.
+StraturaOS is licensed under the GNU License. See [LICENSE](LICENSE) for details.

@@ -1,16 +1,22 @@
 [Unit]
-Description=straturaOS Supervisor
-After=docker.service dbus.socket
-Requires=docker.service
+Description=StraturaOS Supervisor
+After=docker.service network-online.target
+Wants=docker.service network-online.target
 
 [Service]
 Type=simple
 Restart=always
 RestartSec=10
 WorkingDirectory=/var/lib/stratura-supervisor
-ExecStartPre=/usr/bin/stratura-supervisor-healthcheck
+
+# Pre-flight check - ensure Docker is ready
+ExecStartPre=/usr/bin/stratura-healthcheck
+
+# Main supervisor process
 ExecStart=/usr/bin/stratura-supervisor
-Environment=DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+
+# Environment
+Environment=PYTHONPATH=/usr/lib/stratura
 Environment=DOCKER_HOST=unix:///var/run/docker.sock
 
 # Security hardening
@@ -18,8 +24,12 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=true
-ReadOnlyPaths=/etc
-ReadWritePaths=/var/lib/stratura-supervisor /var/lib/docker
+ReadWritePaths=/var/lib/stratura-supervisor /var/lib/stratura /var/run/docker.sock
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stratura-supervisor
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target

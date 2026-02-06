@@ -4,7 +4,7 @@ STRATURA_SUPERVISOR_SITE_METHOD = local
 STRATURA_SUPERVISOR_LICENSE = MIT
 STRATURA_SUPERVISOR_LICENSE_FILES = LICENSE
 
-STRATURA_SUPERVISOR_DEPENDENCIES = python3 python-docker docker-engine
+STRATURA_SUPERVISOR_DEPENDENCIES = python3 python-requests docker-engine docker-cli
 
 define STRATURA_SUPERVISOR_INSTALL_TARGET_CMDS
 	# Install main supervisor script
@@ -13,6 +13,7 @@ define STRATURA_SUPERVISOR_INSTALL_TARGET_CMDS
 
 	# Install Python modules
 	$(INSTALL) -d $(TARGET_DIR)/usr/lib/stratura
+	touch $(TARGET_DIR)/usr/lib/stratura/__init__.py
 	$(INSTALL) -D -m 0644 $(@D)/container_manager.py \
 		$(TARGET_DIR)/usr/lib/stratura/container_manager.py
 	$(INSTALL) -D -m 0644 $(@D)/security_manager.py \
