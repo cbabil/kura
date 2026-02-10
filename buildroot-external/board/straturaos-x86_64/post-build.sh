@@ -9,15 +9,9 @@ TARGET_DIR=$1
 echo "StraturaOS x86_64: Running post-build..."
 
 # Create required directories for stratura services
-mkdir -p "${TARGET_DIR}/var/lib/stratura-supervisor"
+mkdir -p "${TARGET_DIR}/var/lib/stratura"
 mkdir -p "${TARGET_DIR}/var/lib/stratura/volumes"
-mkdir -p "${TARGET_DIR}/var/lib/stratura-monitor"
 mkdir -p "${TARGET_DIR}/etc/stratura"
-
-# Create Python package __init__.py if stratura lib directory exists
-if [ -d "${TARGET_DIR}/usr/lib/stratura" ]; then
-    touch "${TARGET_DIR}/usr/lib/stratura/__init__.py"
-fi
 
 # Enable systemd services
 if [ -d "${TARGET_DIR}/usr/lib/systemd/system" ]; then

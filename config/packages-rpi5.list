@@ -1,0 +1,12 @@
+# Kernel (from RPi APT repo)
+linux-image-rpi-2712
+raspi-firmware
+
+# Container runtime (included in image, not deferred)
+docker.io
+containerd
+
+# Wireless
+wireless-tools
+wpasupplicant
+firmware-brcm80211

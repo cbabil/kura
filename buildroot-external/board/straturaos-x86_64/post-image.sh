@@ -75,7 +75,7 @@ echo "StraturaOS x86_64: Created GRUB configuration for ISO"
 cat > ${BINARIES_DIR}/version.txt << EOF
 StraturaOS Build Information
 ============================
-Version: 1.0.0
+Version: ${STRATURAOS_VERSION:-1.0}
 Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Build Host: $(hostname)
 Target: x86_64

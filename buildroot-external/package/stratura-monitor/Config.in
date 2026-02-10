@@ -1,5 +1,0 @@
-config BR2_PACKAGE_STRATURA_MONITOR
-	bool "stratura-monitor"
-	select BR2_PACKAGE_PYTHON3
-	help
-	  StraturaOS System Monitor - Resource monitoring and metrics collection.
