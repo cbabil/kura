@@ -28,6 +28,9 @@ cache/
 __pycache__/
 *.py[cod]
 
+# Node.js
+node_modules/
+
 # Editor and OS files
 .DS_Store
 Thumbs.db
@@ -46,6 +49,12 @@ docker-compose.local.yml
 *.pem
 *.key
 *.crt
+
+# Environment config (contains passwords; use .env.example as template)
+.env
+
+# Build number (auto-incremented per build)
+.build-number
 
 # Custom directories
 /var/lib/straturaOS/

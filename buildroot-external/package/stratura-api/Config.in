@@ -1,8 +1,0 @@
-config BR2_PACKAGE_STRATURA_API
-	bool "stratura-api"
-	select BR2_PACKAGE_PYTHON3
-	select BR2_PACKAGE_PYTHON_FASTAPI
-	select BR2_PACKAGE_PYTHON_UVICORN
-	help
-	  StraturaOS API Server - RESTful API for device management.
-	  Provides endpoints for status, updates, and container management.

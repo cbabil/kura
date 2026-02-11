@@ -1,0 +1,15 @@
+# Kernel
+linux-image-amd64
+
+# Bootloader
+grub-pc-bin
+grub-efi-amd64-bin
+
+# Live boot (mounts squashfs, handles boot=live toram)
+live-boot
+
+# Cloud/VM support
+cloud-guest-utils
+
+# Squashfs tools (host-side, for building the ISO)
+squashfs-tools

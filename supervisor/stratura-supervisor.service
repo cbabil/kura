@@ -1,0 +1,24 @@
+[Unit]
+Description=StraturaOS Supervisor
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f stratura-supervisor
+ExecStartPre=/usr/bin/docker load -i /var/lib/stratura/supervisor.tar
+ExecStart=/usr/bin/docker run --rm \
+    --name stratura-supervisor \
+    --privileged \
+    --network host \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /etc/stratura:/etc/stratura:ro \
+    -v /var/lib/stratura:/var/lib/stratura \
+    -v /var/log/stratura:/var/log/stratura \
+    stratura/supervisor:latest
+ExecStop=/usr/bin/docker stop stratura-supervisor
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

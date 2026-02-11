@@ -40,7 +40,7 @@ fi
 cat > ${BINARIES_DIR}/version.txt << EOF
 StraturaOS Build Information
 ============================
-Version: 1.0.0
+Version: ${STRATURAOS_VERSION:-1.0}
 Build Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 Build Host: $(hostname)
 Target: Raspberry Pi 5
