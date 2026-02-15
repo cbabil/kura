@@ -10,11 +10,18 @@ set -euo pipefail
 ROOTFS="${1:?Usage: $0 <rootfs-dir> <output-dir>}"
 OUTPUT_DIR="${2:?Usage: $0 <rootfs-dir> <output-dir>}"
 
-VERSION="${STRATURAOS_VERSION:-2.0}"
+# Single source of truth for default brand values
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/brand-defaults.sh"
+
+BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
+OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
+VERSION="${OS_VERSION:-2.0}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ISO_DIR="${STRATURAOS_TMP:-/tmp}/straturaos-iso-$$"
-BUILD_SEQ="${STRATURAOS_BUILD_SEQ:-0001}"
-ISO_NAME="straturaos-${VERSION}-x86_64-amd64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.iso"
+ISO_DIR="${OS_TMP:-/tmp}/${BRAND}os-iso-$$"
+BUILD_SEQ="${OS_BUILD_SEQ:-0001}"
+ISO_NAME="${BRAND}os-${VERSION}-x86_64-amd64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.iso"
+VOLID=$(echo "${BRAND}OS" | tr '[:lower:]' '[:upper:]')
 
 # GRUB module paths (system packages at known locations)
 GRUB_I386_DIR="/usr/lib/grub/i386-pc"
@@ -46,8 +53,9 @@ mksquashfs "${ROOTFS}" "${ISO_DIR}/live/filesystem.squashfs" \
 cp "${ROOTFS}"/boot/vmlinuz-* "${ISO_DIR}/boot/vmlinuz"
 cp "${ROOTFS}"/boot/initrd.img-* "${ISO_DIR}/boot/initrd.img"
 
-# ---- Copy GRUB config ----
+# ---- Copy GRUB config and patch OS name ----
 cp "${SCRIPT_DIR}/grub.cfg" "${ISO_DIR}/boot/grub/grub.cfg"
+sed -i "s/${DEFAULT_NAME}/${OS_NAME}/g" "${ISO_DIR}/boot/grub/grub.cfg"
 
 # ---- Create GRUB BIOS boot image ----
 echo "  Creating GRUB BIOS image..."
@@ -89,7 +97,7 @@ mkdir -p "${OUTPUT_DIR}"
 xorriso -as mkisofs \
     -iso-level 3 \
     -full-iso9660-filenames \
-    -volid "STRATURAOS" \
+    -volid "${VOLID}" \
     -eltorito-boot boot/grub/bios.img \
         -no-emul-boot \
         -boot-load-size 4 \

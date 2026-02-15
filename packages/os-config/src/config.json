@@ -1,0 +1,25 @@
+{
+    "hostname": "falken-device",
+    "networkConfig": {
+        "wifi": {
+            "enable": true,
+            "defaultInterface": "wlan0"
+        },
+        "ethernet": {
+            "enable": true,
+            "defaultInterface": "eth0"
+        }
+    },
+    "containerAPI": {
+        "port": 48484,
+        "enableTLS": true
+    },
+    "supervisor": {
+        "poll": 60,
+        "updatePoll": 300
+    },
+    "updates": {
+        "strategy": "download-then-update",
+        "schedule": "0 2 * * *"
+    }
+} 

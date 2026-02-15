@@ -1,0 +1,20 @@
+#!/bin/bash
+# 80-commands — Quick reference commands
+
+C=$'\033[1;36m'   # bold cyan    — headers, dividers
+w=$'\033[0;37m'   # dim white    — body text, dots
+W=$'\033[1;37m'   # bold white   — command names
+G=$'\033[0;32m'   # green        — WOPR text
+R=$'\033[0m'      # reset
+
+DIV="$(printf '\xe2\x94\x80%.0s' {1..67})"  # ─ repeated 67 times
+
+printf "  ${C}Commands${R}\n"
+printf "  ${w}${DIV}${R}\n"
+printf "  ${W}docker ps${w} ................... List containers${R}\n"
+printf "  ${W}systemctl status${w} ............ All services${R}\n"
+printf "  ${W}journalctl -u <service>${w} .... Service logs${R}\n"
+printf "  ${W}ip addr show${w} ............... Network interfaces${R}\n"
+printf "  ${W}df -h${w} ...................... Disk usage${R}\n"
+printf "  ${W}games${w} ...................... Shall we play a game?${R}\n"
+echo ""

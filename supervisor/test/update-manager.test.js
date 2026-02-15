@@ -1,19 +1,7 @@
 'use strict';
 
-jest.mock('proper-lockfile', () => ({
-  lock: jest.fn(),
-}));
-
-jest.mock('../src/services/container-manager', () => ({
-  pullImage: jest.fn().mockResolvedValue(),
-  inspectContainer: jest.fn().mockResolvedValue({
-    Config: { Image: 'myapp:1.0' },
-    Name: '/myapp',
-  }),
-  stopContainer: jest.fn().mockResolvedValue(),
-  removeContainer: jest.fn().mockResolvedValue(),
-  createContainer: jest.fn().mockResolvedValue('new-id'),
-}));
+const { dockerodeMockFactory } = require('./helpers/dockerode-mock');
+jest.mock('dockerode', dockerodeMockFactory);
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
@@ -28,19 +16,34 @@ const lockfile = require('proper-lockfile');
 const containerManager = require('../src/services/container-manager');
 const updateManager = require('../src/services/update-manager');
 
-jest.spyOn(fs, 'existsSync').mockReturnValue(true);
-jest.spyOn(fs, 'mkdirSync').mockReturnValue(undefined);
-jest.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
-
 describe('update-manager', () => {
   let mockRelease;
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Spy on fs methods (inside beforeEach so restoreAllMocks undoes them)
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'mkdirSync').mockReturnValue(undefined);
+    jest.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
+
+    // Spy on container-manager methods
+    jest.spyOn(containerManager, 'pullImage').mockResolvedValue();
+    jest.spyOn(containerManager, 'inspectContainer').mockResolvedValue({
+      Config: { Image: 'myapp:1.0' },
+      Name: '/myapp',
+    });
+    jest.spyOn(containerManager, 'stopContainer').mockResolvedValue();
+    jest.spyOn(containerManager, 'removeContainer').mockResolvedValue();
+    jest.spyOn(containerManager, 'createContainer').mockResolvedValue('new-id');
+
     mockRelease = jest.fn().mockResolvedValue();
-    lockfile.lock.mockResolvedValue(mockRelease);
-    fs.existsSync.mockReturnValue(true);
+    jest.spyOn(lockfile, 'lock').mockResolvedValue(mockRelease);
     updateManager.resetState();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('getUpdateStatus', () => {

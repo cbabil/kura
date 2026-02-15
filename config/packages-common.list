@@ -7,15 +7,10 @@ ca-certificates
 util-linux
 gnupg
 
-# Python runtime (for stratura-config and stratura-security host services)
+# Python runtime (for os-config and os-security host services)
 python3
 python3-jinja2
 python3-yaml
-python3-setuptools
-
-# Container runtime -- deferred to firstboot on ISO target
-# Docker is installed on first boot via straturaos-firstboot.service
-# RPi5 target installs Docker in-image via packages-rpi5.list
 
 # Networking
 network-manager
@@ -23,8 +18,10 @@ openssh-server
 iptables
 iproute2
 
-# Utilities
+# Utilities (unzip needed for Bun binary extraction)
+unzip
 htop
 nano
 curl
 less
+ncurses-term

@@ -1,0 +1,26 @@
+#!/bin/bash
+# 05-ssh-banner — FALKEN ASCII art banner (SSH sessions only)
+
+# SSH_CONNECTION is not set when pam_motd runs; detect via process ancestry
+_is_ssh() {
+    local p=$PPID
+    while [ "$p" -gt 1 ]; do
+        [ "$(cat /proc/$p/comm 2>/dev/null)" = "sshd" ] && return 0
+        p=$(awk '{print $4}' /proc/$p/stat 2>/dev/null) || return 1
+    done
+    return 1
+}
+_is_ssh || exit 0
+
+G=$'\033[1;32m'
+g=$'\033[0;32m'
+R=$'\033[0m'
+
+echo ""
+printf "${G}  ███████  █████  ██      ██   ██ ███████ ███    ██${R}\n"
+printf "${G}  ██      ██   ██ ██      ██  ██  ██      ████   ██${R}\n"
+printf "${G}  █████   ███████ ██      █████   █████   ██ ██  ██${R}\n"
+printf "${G}  ██      ██   ██ ██      ██  ██  ██      ██  ██ ██${R}\n"
+printf "${G}  ██      ██   ██ ███████ ██   ██ ███████ ██   ████${R}\n"
+echo ""
+printf "${g}  \"Greetings, Professor Falken. Shall we play a game?\"${R}\n"

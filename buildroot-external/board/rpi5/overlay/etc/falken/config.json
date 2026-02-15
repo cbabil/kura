@@ -1,0 +1,28 @@
+{
+    "version": "1.0.0",
+    "device": {
+        "hostname": "falkenos",
+        "type": "raspberrypi5"
+    },
+    "network": {
+        "interface": "eth0",
+        "dhcp": true
+    },
+    "supervisor": {
+        "poll_interval": 60,
+        "containers": []
+    },
+    "api": {
+        "port": 48484,
+        "tls_enabled": true
+    },
+    "update": {
+        "server": "",
+        "check_interval": 3600,
+        "auto_update": false
+    },
+    "logging": {
+        "level": "INFO",
+        "path": "/var/log/falken"
+    }
+}

@@ -1,6 +1,6 @@
 'use strict';
 
-const { LABELS } = require('../utils/constants');
+const { LABELS, ENV_PREFIX } = require('../utils/constants');
 
 function buildSecurityOpts(config) {
   const privileged = config.privileged || false;
@@ -50,9 +50,9 @@ function buildNetworkOpts(config) {
 
 function buildEnv(config) {
   const base = {
-    STRATURA_APP_NAME: config.name,
-    STRATURA_APP_VERSION: config.version || 'latest',
-    STRATURA_DEVICE_ID: process.env.STRATURA_DEVICE_ID || 'unknown',
+    [`${ENV_PREFIX}_APP_NAME`]: config.name,
+    [`${ENV_PREFIX}_APP_VERSION`]: config.version || 'latest',
+    [`${ENV_PREFIX}_DEVICE_ID`]: process.env[`${ENV_PREFIX}_DEVICE_ID`] || 'unknown',
   };
   const merged = { ...base, ...(config.environment || {}) };
   return Object.entries(merged).map(([k, v]) => `${k}=${v}`);

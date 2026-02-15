@@ -1,0 +1,134 @@
+#!/bin/bash
+# game-maze — Falken's Maze (navigate to the exit)
+
+G=$'\033[1;32m'; g=$'\033[0;32m'; Y=$'\033[1;33m'
+r=$'\033[1;31m'; W=$'\033[1;37m'; w=$'\033[0;37m'; R=$'\033[0m'
+
+# Maze: # = wall, . = path, P = player, E = exit
+# Simple hardcoded mazes (random pick)
+MAZES=(
+"###############
+#P..#.........#
+###.#.###.###.#
+#...#.#.....#.#
+#.###.#.###.#.#
+#.#...#...#...#
+#.#.#####.###.#
+#...#.....#...#
+###.#.#####.#.#
+#.#.#.......#.#
+#.#.#######.#.#
+#.............#
+#.###########.#
+#...........#E#
+###############"
+"###############
+#P#...........#
+#.#.#########.#
+#.#.#.......#.#
+#.#.#.#####.#.#
+#...#.#...#...#
+#.###.#.#.###.#
+#.#...#.#.....#
+#.#.###.#####.#
+#.#...#.......#
+#.###.#######.#
+#.....#.....#.#
+#####.#.###.#.#
+#.........#..E#
+###############"
+)
+
+MAZE="${MAZES[$((RANDOM % ${#MAZES[@]}))]}"
+IFS=$'\n' read -r -d '' -a GRID <<< "$MAZE" || true
+ROWS=${#GRID[@]}
+COLS=${#GRID[0]}
+
+# Find player start
+for ((y=0; y<ROWS; y++)); do
+    for ((x=0; x<COLS; x++)); do
+        [[ "${GRID[$y]:$x:1}" == "P" ]] && PX=$x PY=$y
+    done
+done
+
+MOVES=0
+
+draw() {
+    clear 2>/dev/null || printf "\033[H\033[J"
+    echo ""
+    echo "${G}  FALKEN'S MAZE${R}"
+    echo "${w}  Navigate to ${G}E${w} (exit). WASD or arrow keys. Q to quit.${R}"
+    echo "${w}  Moves: ${W}${MOVES}${R}"
+    echo ""
+    for ((y=0; y<ROWS; y++)); do
+        printf "  "
+        for ((x=0; x<COLS; x++)); do
+            local ch="${GRID[$y]:$x:1}"
+            if [ $x -eq $PX ] && [ $y -eq $PY ]; then
+                printf "${G}@${R}"
+            elif [ "$ch" == "E" ]; then
+                printf "${Y}E${R}"
+            elif [ "$ch" == "#" ]; then
+                printf "${w}█${R}"
+            else
+                printf " "
+            fi
+        done
+        echo ""
+    done
+    echo ""
+}
+
+move() {
+    local nx=$((PX + $1)) ny=$((PY + $2))
+    [ $nx -lt 0 ] || [ $nx -ge $COLS ] || [ $ny -lt 0 ] || [ $ny -ge $ROWS ] && return
+    local target="${GRID[$ny]:$nx:1}"
+    [[ "$target" == "#" ]] && return
+    PX=$nx; PY=$ny; ((MOVES++))
+    if [[ "$target" == "E" ]]; then
+        draw
+        echo "  ${G}MAZE COMPLETED IN ${MOVES} MOVES!${R}"
+        echo ""
+        echo "  ${g}A strange game. The exit was there all along.${R}"
+        echo ""
+        exit 0
+    fi
+}
+
+# Read single keypress (handle arrows)
+read_key() {
+    IFS= read -r -s -n1 key
+    case "$key" in
+        w|W) echo "up" ;;
+        s|S) echo "down" ;;
+        a|A) echo "left" ;;
+        d|D) echo "right" ;;
+        q|Q) echo "quit" ;;
+        $'\033')
+            read -r -s -n2 -t 0.1 seq
+            case "$seq" in
+                '[A') echo "up" ;;
+                '[B') echo "down" ;;
+                '[C') echo "right" ;;
+                '[D') echo "left" ;;
+            esac
+            ;;
+    esac
+}
+
+# Hide cursor
+printf "\033[?25l"
+trap 'printf "\033[?25h"' EXIT
+
+draw
+while true; do
+    action=$(read_key)
+    case "$action" in
+        up) move 0 -1 ;;
+        down) move 0 1 ;;
+        left) move -1 0 ;;
+        right) move 1 0 ;;
+        quit) echo "  ${g}GOODBYE PROFESSOR FALKEN${R}"; echo ""; break ;;
+    esac
+    draw
+done

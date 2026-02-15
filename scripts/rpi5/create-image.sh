@@ -11,11 +11,16 @@ set -euo pipefail
 ROOTFS="${1:?Usage: $0 <rootfs-dir> <output-dir>}"
 OUTPUT_DIR="${2:?Usage: $0 <rootfs-dir> <output-dir>}"
 
-VERSION="${STRATURAOS_VERSION:-2.0}"
-ROOTFS_SIZE="${STRATURAOS_ROOTFS_SIZE:-2G}"
+# Single source of truth for default brand values
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/brand-defaults.sh"
+
+BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
+VERSION="${OS_VERSION:-2.0}"
+ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_SEQ="${STRATURAOS_BUILD_SEQ:-0001}"
-IMG_NAME="straturaos-${VERSION}-rpi5-arm64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.img"
+BUILD_SEQ="${OS_BUILD_SEQ:-0001}"
+IMG_NAME="${BRAND}os-${VERSION}-rpi5-arm64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.img"
 
 # Calculate total image size
 BOOT_BYTES=$((256 * 1024 * 1024))

@@ -9,6 +9,7 @@ jest.mock('../src/utils/logger', () => ({
 }));
 
 const containerOpts = require('../src/services/container-opts');
+const { ENV_PREFIX, LABELS } = require('../src/utils/constants');
 
 describe('container-opts', () => {
   describe('buildSecurityOpts', () => {
@@ -60,10 +61,10 @@ describe('container-opts', () => {
   });
 
   describe('buildEnv', () => {
-    it('includes STRATURA base env vars', () => {
+    it('includes branded base env vars', () => {
       const env = containerOpts.buildEnv({ name: 'app1' });
-      expect(env).toContain('STRATURA_APP_NAME=app1');
-      expect(env).toContain('STRATURA_APP_VERSION=latest');
+      expect(env).toContain(`${ENV_PREFIX}_APP_NAME=app1`);
+      expect(env).toContain(`${ENV_PREFIX}_APP_VERSION=latest`);
     });
   });
 
@@ -84,7 +85,7 @@ describe('container-opts', () => {
   describe('buildLabels', () => {
     it('defaults version to latest', () => {
       const labels = containerOpts.buildLabels({ name: 'app' });
-      expect(labels['io.stratura.version']).toBe('latest');
+      expect(labels[LABELS.APP_VERSION]).toBe('latest');
     });
   });
 

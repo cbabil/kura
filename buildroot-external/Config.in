@@ -1,2 +1,2 @@
-source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-config/Config.in"
-source "$BR2_EXTERNAL_STRATURAOS_PATH/package/stratura-security/Config.in"
+source "$BR2_EXTERNAL_OS_PATH/package/os-config/Config.in"
+source "$BR2_EXTERNAL_OS_PATH/package/os-security/Config.in"

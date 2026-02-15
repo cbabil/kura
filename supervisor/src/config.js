@@ -2,15 +2,22 @@
 
 const fs = require('fs');
 const logger = require('./utils/logger');
+const brand = require('./utils/brand');
 const { PATHS, DEFAULTS } = require('./utils/constants');
+
+const prefix = brand.BRAND_PREFIX;
 
 const DEFAULT_CONFIG = Object.freeze({
   api_endpoint: DEFAULTS.API_ENDPOINT,
   poll_interval: DEFAULTS.POLL_INTERVAL,
   applications: [],
   logging: { level: DEFAULTS.LOG_LEVEL, file: `${PATHS.LOG_DIR}/supervisor.log` },
-  storage: { docker_root: '/var/lib/docker', data_root: '/var/lib/stratura' },
-  network: { api_port: DEFAULTS.PORT, metrics_port: 9999 },
+  storage: { docker_root: '/var/lib/docker', data_root: `/var/lib/${prefix}` },
+  ws: {
+    endpoint: DEFAULTS.WS_ENDPOINT,
+    heartbeat_interval: DEFAULTS.WS_HEARTBEAT_INTERVAL,
+    reconnect_max: DEFAULTS.WS_RECONNECT_MAX,
+  },
   security: { tls_enabled: false, cert_path: PATHS.CERT_DIR, verify_images: true },
 });
 
@@ -36,7 +43,7 @@ function loadSecurityConfig(configPath = PATHS.SECURITY_CONFIG) {
   const defaults = {
     container_security: {
       verify_signatures: true,
-      allowed_registries: ['registry.stratura.io', 'docker.io'],
+      allowed_registries: [brand.BRAND_REGISTRY, 'docker.io'],
       seccomp_profile: 'default',
     },
     update_security: {

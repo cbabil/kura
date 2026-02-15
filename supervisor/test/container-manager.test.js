@@ -1,42 +1,12 @@
 'use strict';
 
-const mockStart = jest.fn().mockResolvedValue();
-const mockStop = jest.fn().mockResolvedValue();
-const mockRestart = jest.fn().mockResolvedValue();
-const mockRemove = jest.fn().mockResolvedValue();
-const mockLogs = jest.fn().mockResolvedValue(Buffer.from('log line 1\nlog line 2'));
-const mockInspect = jest.fn().mockResolvedValue({
-  State: { Status: 'running', Running: true, Health: { Status: 'healthy' } },
-  Config: { Image: 'myapp:1.0' },
-  Name: '/myapp',
-});
-const mockCreateContainer = jest.fn().mockResolvedValue({
-  id: 'new-container-id',
-  start: mockStart,
-});
-const mockListContainers = jest.fn().mockResolvedValue([]);
-const mockGetContainer = jest.fn().mockReturnValue({
-  start: mockStart,
-  stop: mockStop,
-  restart: mockRestart,
-  remove: mockRemove,
-  logs: mockLogs,
-  inspect: mockInspect,
-});
-const mockPull = jest.fn().mockResolvedValue('stream');
-const mockFollowProgress = jest.fn().mockImplementation((_stream, cb) => {
-  cb(null, [{ status: 'done' }]);
-});
+const {
+  mockStart, mockStop, mockRestart, mockRemove, mockLogs, mockInspect,
+  mockCreateContainer, mockListContainers, mockGetContainer,
+  mockPull, mockFollowProgress, dockerodeMockFactory,
+} = require('./helpers/dockerode-mock');
 
-jest.mock('dockerode', () => {
-  return jest.fn().mockImplementation(() => ({
-    listContainers: mockListContainers,
-    createContainer: mockCreateContainer,
-    getContainer: mockGetContainer,
-    pull: mockPull,
-    modem: { followProgress: mockFollowProgress },
-  }));
-});
+jest.mock('dockerode', dockerodeMockFactory);
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
@@ -47,6 +17,7 @@ jest.mock('../src/utils/logger', () => ({
 }));
 
 const containerManager = require('../src/services/container-manager');
+const { ENV_PREFIX, LABELS } = require('../src/utils/constants');
 
 describe('container-manager', () => {
   beforeEach(() => {
@@ -62,7 +33,7 @@ describe('container-manager', () => {
           Image: 'myapp:latest',
           State: 'running',
           Status: 'Up 2 hours',
-          Labels: { 'io.stratura.managed': 'true' },
+          Labels: { [LABELS.MANAGED]: 'true' },
         },
       ]);
 
@@ -70,7 +41,7 @@ describe('container-manager', () => {
 
       expect(mockListContainers).toHaveBeenCalledWith({
         all: true,
-        filters: { label: ['io.stratura.managed=true'] },
+        filters: { label: [`${LABELS.MANAGED}=true`] },
       });
       expect(result).toEqual([
         {
@@ -79,7 +50,7 @@ describe('container-manager', () => {
           image: 'myapp:latest',
           state: 'running',
           status: 'Up 2 hours',
-          labels: { 'io.stratura.managed': 'true' },
+          labels: { [LABELS.MANAGED]: 'true' },
         },
       ]);
     });
@@ -278,9 +249,9 @@ describe('container-manager', () => {
         version: '2.0',
       });
       const opts = mockCreateContainer.mock.calls[0][0];
-      expect(opts.Labels['io.stratura.managed']).toBe('true');
-      expect(opts.Labels['io.stratura.app.name']).toBe('myapp');
-      expect(opts.Labels['io.stratura.version']).toBe('2.0');
+      expect(opts.Labels[LABELS.MANAGED]).toBe('true');
+      expect(opts.Labels[LABELS.APP_NAME]).toBe('myapp');
+      expect(opts.Labels[LABELS.APP_VERSION]).toBe('2.0');
     });
 
     it('sets healthcheck when provided', async () => {
@@ -304,7 +275,7 @@ describe('container-manager', () => {
       expect(opts.Healthcheck).toBeUndefined();
     });
 
-    it('builds environment variables with STRATURA_ prefix', async () => {
+    it('builds environment variables with branded prefix', async () => {
       await containerManager.createContainer({
         name: 'myapp',
         image: 'b',
@@ -312,7 +283,7 @@ describe('container-manager', () => {
         environment: { MY_VAR: 'hello' },
       });
       const opts = mockCreateContainer.mock.calls[0][0];
-      expect(opts.Env).toContain('STRATURA_APP_NAME=myapp');
+      expect(opts.Env).toContain(`${ENV_PREFIX}_APP_NAME=myapp`);
       expect(opts.Env).toContain('MY_VAR=hello');
     });
 

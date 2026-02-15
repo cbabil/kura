@@ -1,4 +1,4 @@
-"""Tests for network_manager.py (stratura-config).
+"""Tests for network_manager.py (os-config).
 
 The NetworkManager class relies on dbus for D-Bus communication with
 the system NetworkManager daemon. All dbus calls are fully mocked.

@@ -1,0 +1,52 @@
+#!/bin/bash
+# lightman — Fake modem dial-up sequence (David Lightman style)
+
+G=$'\033[1;32m'
+g=$'\033[0;32m'
+R=$'\033[0m'
+
+type_slow() {
+    local text="$1"
+    for ((i=0; i<${#text}; i++)); do
+        printf "${g}%s${R}" "${text:$i:1}"
+        sleep 0.02
+    done
+    echo ""
+}
+
+echo ""
+type_slow "  IMSAI 8080 TERMINAL"
+type_slow "  ==================="
+sleep 0.3
+type_slow "  ATDT 311-399-2364"
+sleep 0.5
+
+# Modem noise simulation
+printf "  ${g}"
+for _ in {1..30}; do
+    CHARS=('~' '^' '*' '#' '@' '!' '%' '&' '+' '=')
+    printf "%s" "${CHARS[$((RANDOM % ${#CHARS[@]}))]}"
+    sleep 0.03
+done
+printf "${R}\n"
+sleep 0.3
+
+type_slow "  CONNECT 1200"
+sleep 0.5
+echo ""
+type_slow "  PRT CON. 311-767-8739"
+type_slow "  CLASS ASSIGNED"
+type_slow "  CONNECT COMPLETE"
+sleep 0.3
+echo ""
+printf "${G}  LOGON: ${R}"
+sleep 0.8
+type_slow "Joshua"
+sleep 0.3
+printf "${G}  PASSWORD: ${R}"
+sleep 0.5
+type_slow "CPE 1704 TKS"
+sleep 0.5
+echo ""
+type_slow "  GREETINGS PROFESSOR FALKEN" "$G"
+echo ""

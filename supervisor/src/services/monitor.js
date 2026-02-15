@@ -1,25 +1,8 @@
 'use strict';
 
 const si = require('systeminformation');
-const client = require('prom-client');
 const logger = require('../utils/logger');
 const { THRESHOLDS } = require('../utils/constants');
-
-const register = new client.Registry();
-client.collectDefaultMetrics({ register });
-
-const cpuUsage = new client.Gauge({ name: 'system_cpu_usage', help: 'CPU usage %', registers: [register] });
-const memUsage = new client.Gauge({ name: 'system_memory_usage', help: 'Memory usage %', registers: [register] });
-const diskUsage = new client.Gauge({ name: 'system_disk_usage', help: 'Disk usage %', registers: [register] });
-const cpuTemp = new client.Gauge({ name: 'system_cpu_temperature', help: 'CPU temperature C', registers: [register] });
-const netErrors = new client.Counter({ name: 'system_network_errors_total', help: 'Network errors', registers: [register] });
-
-const containerStatus = new client.Gauge({
-  name: 'container_status',
-  help: 'Container status (1=running, 0=stopped)',
-  labelNames: ['name'],
-  registers: [register],
-});
 
 let lastMetrics = null;
 
@@ -37,18 +20,7 @@ async function collectMetrics() {
     const rootDisk = disk.find((d) => d.mount === '/') || disk[0] || {};
     const diskPercent = rootDisk.use || 0;
 
-    cpuUsage.set(cpu.currentLoad || 0);
-    memUsage.set(memPercent);
-    diskUsage.set(diskPercent);
-
-    if (temp.main !== null && temp.main !== undefined) {
-      cpuTemp.set(temp.main);
-    }
-
     const primaryNet = net[0] || {};
-    if ((primaryNet.rx_errors || 0) > 0 || (primaryNet.tx_errors || 0) > 0) {
-      netErrors.inc();
-    }
 
     lastMetrics = {
       timestamp: new Date().toISOString(),
@@ -98,14 +70,6 @@ function checkThresholds(metrics) {
   return alerts;
 }
 
-function setContainerMetric(name, running) {
-  containerStatus.set({ name }, running ? 1 : 0);
-}
-
-async function getPrometheusMetrics() {
-  return register.metrics();
-}
-
 function getLastMetrics() {
   return lastMetrics;
 }
@@ -113,7 +77,5 @@ function getLastMetrics() {
 module.exports = {
   collectMetrics,
   checkThresholds,
-  getPrometheusMetrics,
   getLastMetrics,
-  setContainerMetric,
 };

@@ -2,9 +2,8 @@
 linux-image-rpi-2712
 raspi-firmware
 
-# Container runtime (included in image, not deferred)
-docker.io
-containerd
+# NOTE: Docker is NOT in the image. It is installed at first boot
+# by the firstboot service to keep the image small.
 
 # Wireless
 wireless-tools

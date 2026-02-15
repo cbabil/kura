@@ -1,0 +1,61 @@
+#!/bin/bash
+# war — Global Thermonuclear War simulation
+
+G=$'\033[1;32m'
+g=$'\033[0;32m'
+r=$'\033[1;31m'
+Y=$'\033[1;33m'
+R=$'\033[0m'
+
+type_slow() {
+    local text="$1" color="${2:-$g}"
+    for ((i=0; i<${#text}; i++)); do
+        printf "${color}%s${R}" "${text:$i:1}"
+        sleep 0.02
+    done
+    echo ""
+}
+
+echo ""
+type_slow "  GLOBAL THERMONUCLEAR WAR" "$G"
+echo ""
+sleep 0.3
+type_slow "  UNITED STATES           SOVIET UNION"
+sleep 0.2
+type_slow "  ===========================================" "$g"
+sleep 0.3
+type_slow "  TARGET SELECTION COMPLETE"
+sleep 0.2
+type_slow "  PRIMARY TARGETS ......... 256"
+sleep 0.1
+type_slow "  SECONDARY TARGETS ....... 412"
+sleep 0.1
+type_slow "  ESTIMATED CASUALTIES .... 642,000,000"
+sleep 0.5
+echo ""
+type_slow "  LAUNCHING ..." "$r"
+sleep 0.3
+
+for i in 10 9 8 7 6 5 4 3 2 1; do
+    printf "\r  ${r}T-MINUS %2d${R}" "$i"
+    sleep 0.3
+done
+echo ""
+sleep 0.5
+
+echo ""
+printf "  ${r}  * * * * * * * * * * * * * * * * * * *${R}\n"
+sleep 0.2
+printf "  ${r}  *                                   *${R}\n"
+printf "  ${r}  *      SIMULATION TERMINATED        *${R}\n"
+printf "  ${r}  *                                   *${R}\n"
+printf "  ${r}  * * * * * * * * * * * * * * * * * * *${R}\n"
+echo ""
+sleep 0.5
+type_slow "  WINNER: NONE" "$Y"
+echo ""
+type_slow "  A STRANGE GAME." "$g"
+type_slow "  THE ONLY WINNING MOVE IS NOT TO PLAY." "$g"
+echo ""
+type_slow "  HOW ABOUT A NICE GAME OF CHESS?" "$G"
+echo ""

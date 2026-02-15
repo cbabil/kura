@@ -8,25 +8,31 @@ jest.mock('../src/utils/logger', () => ({
   debug: jest.fn(),
 }));
 
-jest.mock('../src/config', () => ({
-  loadSecurityConfig: jest.fn().mockReturnValue({
-    container_security: {
-      verify_signatures: true,
-      allowed_registries: ['registry.stratura.io', 'docker.io'],
-      seccomp_profile: 'default',
-    },
-    update_security: {
-      verify_signatures: true,
-      require_chain_of_trust: true,
-      rollback_protection: true,
-    },
-  }),
-}));
-
+const config = require('../src/config');
 const securityManager = require('../src/services/security-manager');
-const { loadSecurityConfig } = require('../src/config');
 
 describe('security-manager', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    securityManager._resetConfig();
+    jest.spyOn(config, 'loadSecurityConfig').mockReturnValue({
+      container_security: {
+        verify_signatures: true,
+        allowed_registries: ['registry.falken.io', 'docker.io'],
+        seccomp_profile: 'default',
+      },
+      update_security: {
+        verify_signatures: true,
+        require_chain_of_trust: true,
+        rollback_protection: true,
+      },
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   describe('getSecurityOpts', () => {
     it('returns no-new-privileges and default seccomp for non-privileged', () => {
       const opts = securityManager.getSecurityOpts({ name: 'test' });
@@ -53,7 +59,7 @@ describe('security-manager', () => {
 
   describe('validateImage', () => {
     it('validates allowed registry', () => {
-      const result = securityManager.validateImage('registry.stratura.io/app:1.0');
+      const result = securityManager.validateImage('registry.falken.io/app:1.0');
       expect(result.valid).toBe(true);
     });
 
@@ -74,28 +80,14 @@ describe('security-manager', () => {
     });
 
     it('allows when signature verification disabled', () => {
-      loadSecurityConfig.mockReturnValueOnce({
+      securityManager._resetConfig();
+      config.loadSecurityConfig.mockReturnValueOnce({
         container_security: {
           verify_signatures: false,
           allowed_registries: [],
         },
       });
-      // Force reload of security config by requiring fresh module
-      // Since securityConfig is cached, we need to clear the module cache
-      jest.resetModules();
-      jest.mock('../src/utils/logger', () => ({
-        info: jest.fn(), warn: jest.fn(), error: jest.fn(), fatal: jest.fn(), debug: jest.fn(),
-      }));
-      jest.mock('../src/config', () => ({
-        loadSecurityConfig: jest.fn().mockReturnValue({
-          container_security: {
-            verify_signatures: false,
-            allowed_registries: [],
-          },
-        }),
-      }));
-      const freshSecurity = require('../src/services/security-manager');
-      const result = freshSecurity.validateImage('any.registry/app:1.0');
+      const result = securityManager.validateImage('any.registry/app:1.0');
       expect(result.valid).toBe(true);
     });
   });

@@ -1,15 +1,16 @@
 # Kernel
 linux-image-amd64
 
-# Bootloader
-grub-pc-bin
-grub-efi-amd64-bin
-
 # Live boot (mounts squashfs, handles boot=live toram)
 live-boot
 
 # Cloud/VM support
 cloud-guest-utils
+qemu-guest-agent
 
-# Squashfs tools (host-side, for building the ISO)
-squashfs-tools
+# NOTE: Docker is NOT in the image. It is installed at first boot
+# by the firstboot service to keep the image small.
+
+# NOTE: grub-pc-bin, grub-efi-amd64-bin, squashfs-tools are HOST-only
+# dependencies (used by create-iso.sh). They are installed via
+# ./build.sh setup, NOT in the rootfs.
