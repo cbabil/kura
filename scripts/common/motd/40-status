@@ -1,18 +1,21 @@
 #!/bin/bash
 # 40-status — Side-by-side containers and services
 
-C=$'\033[1;36m'   # bold cyan    — headers, dividers
-W=$'\033[1;37m'   # bold white   — key values
-w=$'\033[0;37m'   # dim white    — body text, dots
-G=$'\033[1;32m'   # bold green   — running, active
-r=$'\033[1;31m'   # bold red     — stopped, failed
-R=$'\033[0m'      # reset
-
 # Source brand.env for runtime brand discovery
 BRAND_ENV="/etc/falken/brand.env"
 if [ -f "${BRAND_ENV}" ]; then
     . "${BRAND_ENV}"
 fi
+
+# Brand color
+_c="${BRAND_COLOR:-#33ff00}"
+C=$(printf '\033[38;2;%d;%d;%dm' "0x${_c:1:2}" "0x${_c:3:2}" "0x${_c:5:2}")
+G="${C}"                   # same brand color for active/running
+W=$'\033[1;37m'            # bold white    — key values
+w=$'\033[0;37m'            # dim white     — body text, dots
+r=$'\033[1;31m'            # bold red      — stopped, failed
+R=$'\033[0m'               # reset
+
 # Fallback must match DEFAULT_BRAND in scripts/common/brand-defaults.sh
 BP="${BRAND_PREFIX:-falken}"
 

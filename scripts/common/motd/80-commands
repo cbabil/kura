@@ -1,10 +1,13 @@
 #!/bin/bash
 # 80-commands — Quick reference commands
 
-C=$'\033[1;36m'   # bold cyan    — headers, dividers
+# Brand color from brand.env (fallback: #33ff00)
+BRAND_ENV="/etc/falken/brand.env"
+[ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+_c="${BRAND_COLOR:-#33ff00}"
+C=$(printf '\033[38;2;%d;%d;%dm' "0x${_c:1:2}" "0x${_c:3:2}" "0x${_c:5:2}")
 w=$'\033[0;37m'   # dim white    — body text, dots
 W=$'\033[1;37m'   # bold white   — command names
-G=$'\033[0;32m'   # green        — WOPR text
 R=$'\033[0m'      # reset
 
 DIV="$(printf '\xe2\x94\x80%.0s' {1..67})"  # ─ repeated 67 times

@@ -8,6 +8,7 @@
 
 DEFAULT_BRAND="falken"
 DEFAULT_NAME="FalkenOS"
+DEFAULT_COLOR="#33ff00"
 DEFAULT_API_ENDPOINT="https://api.falken.io"
 DEFAULT_REGISTRY="registry.falken.io"
 DEFAULT_HOSTNAME="${DEFAULT_BRAND}os"

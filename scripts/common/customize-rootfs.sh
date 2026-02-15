@@ -16,6 +16,7 @@ source "$(dirname "$0")/brand-defaults.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
+COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
 HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
 export ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
 VERSION="${OS_VERSION:-2.0}"
@@ -48,19 +49,35 @@ chmod 755 "${ROOTFS}/var/log/${BRAND}"
 
 # ---- Python environment ----
 install -d "${ROOTFS}/etc/profile.d"
-cat > "${ROOTFS}/etc/profile.d/${BRAND}.sh" <<'PROFEOF'
-export PYTHONPATH=/usr/lib/__BRAND__
-export OS_CONFIG=/etc/__BRAND__/config.json
+# Derive RGB from hex color for truecolor escape
+_cr=$((16#${COLOR:1:2})); _cg=$((16#${COLOR:3:2})); _cb=$((16#${COLOR:5:2}))
+cat > "${ROOTFS}/etc/profile.d/${BRAND}.sh" <<PROFEOF
+export PYTHONPATH=/usr/lib/${BRAND}
+export OS_CONFIG=/etc/${BRAND}/config.json
 
-# IBM green phosphor terminal style
-# Re-apply green before every prompt (survives commands that reset colors)
-PROMPT_COMMAND='printf "\033[0;32m"'
+# Fall back to xterm-256color for terminals without local terminfo
+case "\$TERM" in
+    xterm-256color|xterm|linux|vt*|screen*|tmux*|dumb) ;;
+    *) export TERM=xterm-256color ;;
+esac
+
+# Suppress "terminal is not fully functional" from less/systemctl.
+# Debian trixie ncurses 6.x wide-format terminfo can be unreadable by less;
+# the -d flag tells less to silently ignore missing terminal capabilities.
+export SYSTEMD_LESS=FRSXMKd
+export LESS='-FRSXMKd'
+
+# Brand color (${COLOR}) applied to prompt and cursor
+if [ "\$TERM" = "linux" ]; then
+    PROMPT_COMMAND='printf "\033[1;32m"'
+else
+    PROMPT_COMMAND='printf "\033[38;2;${_cr};${_cg};${_cb}m"'
+fi
 PS1='\u@\h:\w > '
-# Blinking block cursor + green cursor color (xterm-compatible terminals)
+# Blinking block cursor + matching brand color
 printf '\033[1 q' 2>/dev/null
-printf '\033]12;#33ff00\007' 2>/dev/null
+printf '\033]12;${COLOR}\007' 2>/dev/null
 PROFEOF
-sed -i "s|__BRAND__|${BRAND}|g" "${ROOTFS}/etc/profile.d/${BRAND}.sh"
 
 # ---- Enable systemd services ----
 # multi-user.target (service names use ${BRAND} prefix)
@@ -74,6 +91,14 @@ done
 install -d "${ROOTFS}/etc/systemd/system/sysinit.target.wants"
 ln -sf "/usr/lib/systemd/system/${BRAND}-security.service" \
     "${ROOTFS}/etc/systemd/system/sysinit.target.wants/${BRAND}-security.service"
+
+# /etc/environment — read by PAM (pam_env) for ALL sessions before any shell.
+# -d flag suppresses "terminal is not fully functional" from less (ncurses 6.x
+# wide-format terminfo on Debian trixie is unreadable by less).
+cat >> "${ROOTFS}/etc/environment" <<'ENVEOF'
+SYSTEMD_LESS=FRSXMKd
+LESS=-FRSXMKd
+ENVEOF
 
 # Ensure /etc/resolv.conf is a regular writable file (not a stale symlink).
 # NM with dns=default writes nameservers directly here at runtime.
@@ -100,6 +125,7 @@ install -d "${ROOTFS}/etc/falken"
 cat > "${ROOTFS}/etc/falken/brand.env" <<BRANDEOF
 BRAND_NAME="${OS_NAME}"
 BRAND_PREFIX="${BRAND}"
+BRAND_COLOR="${COLOR}"
 BRAND_VERSION="${VERSION}"
 BRAND_API_ENDPOINT="${API_ENDPOINT}"
 BRAND_REGISTRY="${REGISTRY}"
@@ -120,11 +146,12 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
         "${ROOTFS}/etc/${BRAND}/config.json"
 fi
 
-# ---- ANSI color definitions (IBM green phosphor) ----
+# ---- ANSI color definitions (from brand color) ----
 ESC=$'\033'
-B="${ESC}[1;32m"    # bright green
-G="${ESC}[0;32m"    # normal green
-R="${ESC}[0m"       # reset
+_r=$((16#${COLOR:1:2})); _g=$((16#${COLOR:3:2})); _b=$((16#${COLOR:5:2}))
+B="${ESC}[38;2;${_r};${_g};${_b}m"
+G="${B}"
+R="${ESC}[0m"
 
 # ---- Generate colored /etc/issue (pre-login banner) ----
 # agetty passes raw ANSI bytes through; \r \m \l are agetty escapes
