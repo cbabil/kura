@@ -1,10 +1,10 @@
 #!/bin/bash
-# StraturaOS Build Script (Debian)
+# OS Build Script (Debian)
 # Usage: ./build.sh [command]
 #
 # Commands:
 #   setup            - Install host dependencies for Debian builds
-#   build {target}   - Build StraturaOS image (rpi5|iso|docker|all)
+#   build {target}   - Build OS image (rpi5|iso|docker|all)
 #   clean            - Remove build rootfs and temp files
 #   help             - Show this help message
 
@@ -32,12 +32,12 @@ elif [ -f "${PROJECT_DIR}/.env.example" ]; then
     echo -e "\033[1;33m[WARNING]\033[0m No .env found. Copy the template: cp .env.example .env"
 fi
 
-EXPECTED_CONF_VERSION="2"
+EXPECTED_CONF_VERSION="4"
 
-STRATURAOS_CONF_VERSION="${STRATURAOS_CONF_VERSION:-${EXPECTED_CONF_VERSION}}"
+OS_CONF_VERSION="${OS_CONF_VERSION:-${EXPECTED_CONF_VERSION}}"
 
-if [ "${STRATURAOS_CONF_VERSION}" != "${EXPECTED_CONF_VERSION}" ]; then
-    echo -e "\033[1;33m[WARNING]\033[0m .env version mismatch (have: ${STRATURAOS_CONF_VERSION}, expected: ${EXPECTED_CONF_VERSION})"
+if [ "${OS_CONF_VERSION}" != "${EXPECTED_CONF_VERSION}" ]; then
+    echo -e "\033[1;33m[WARNING]\033[0m .env version mismatch (have: ${OS_CONF_VERSION}, expected: ${EXPECTED_CONF_VERSION})"
     echo -e "\033[1;33m[WARNING]\033[0m Your .env may need updating. See .env.example for current variables."
 fi
 
@@ -45,25 +45,38 @@ fi
 # Defaults
 # ============================================================================
 
-STRATURAOS_DEBIAN_SUITE="${STRATURAOS_DEBIAN_SUITE:-trixie}"
-STRATURAOS_DEBIAN_MIRROR="${STRATURAOS_DEBIAN_MIRROR:-http://deb.debian.org/debian}"
-STRATURAOS_CROSS_BUILD="${STRATURAOS_CROSS_BUILD:-auto}"
-STRATURAOS_PARALLEL_JOBS="${STRATURAOS_PARALLEL_JOBS:-$(nproc 2>/dev/null || echo 1)}"
-STRATURAOS_NAME="${STRATURAOS_NAME:-StraturaOS}"
-STRATURAOS_VERSION="${STRATURAOS_VERSION:-2.0}"
-STRATURAOS_HOSTNAME="${STRATURAOS_HOSTNAME:-straturaos}"
-STRATURAOS_ROOT_PASSWD="${STRATURAOS_ROOT_PASSWD:-stratura}"
-STRATURAOS_ISSUE="${STRATURAOS_ISSUE:-Welcome to StraturaOS}"
-STRATURAOS_DHCP_INTERFACE="${STRATURAOS_DHCP_INTERFACE:-eth0}"
-STRATURAOS_ROOTFS_SIZE="${STRATURAOS_ROOTFS_SIZE:-2G}"
-STRATURAOS_TMP="${STRATURAOS_TMP:-/home/straturaos/tmp}"
+# Single source of truth for default brand values
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/brand-defaults.sh"
 
-export STRATURAOS_CONF_VERSION STRATURAOS_DEBIAN_SUITE STRATURAOS_DEBIAN_MIRROR
-export STRATURAOS_CROSS_BUILD STRATURAOS_PARALLEL_JOBS STRATURAOS_NAME STRATURAOS_VERSION
-export STRATURAOS_HOSTNAME STRATURAOS_ROOT_PASSWD STRATURAOS_ISSUE
-export STRATURAOS_DHCP_INTERFACE STRATURAOS_ROOTFS_SIZE STRATURAOS_TMP
+BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
+OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
+OS_DEBIAN_MIRROR="${OS_DEBIAN_MIRROR:-http://deb.debian.org/debian}"
+OS_CROSS_BUILD="${OS_CROSS_BUILD:-auto}"
+OS_PARALLEL_JOBS="${OS_PARALLEL_JOBS:-$(nproc 2>/dev/null || echo 1)}"
+OS_BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
+OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
+OS_VERSION="${OS_VERSION:-2.0}"
+OS_HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
+OS_ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
+OS_ISSUE="${OS_ISSUE:-Welcome to ${DEFAULT_NAME}}"
+OS_DHCP_INTERFACE="${OS_DHCP_INTERFACE:-eth0}"
+OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
+OS_TMP="${OS_TMP:-${DEFAULT_TMP}}"
+OS_API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
+OS_REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
 
-mkdir -p "${STRATURAOS_TMP}" 2>/dev/null || true
+export OS_CONF_VERSION OS_DEBIAN_SUITE OS_DEBIAN_MIRROR
+export OS_CROSS_BUILD OS_PARALLEL_JOBS OS_BRAND OS_NAME
+export OS_VERSION OS_HOSTNAME OS_ROOT_PASSWD OS_ISSUE
+export OS_DHCP_INTERFACE OS_ROOTFS_SIZE OS_TMP
+export OS_API_ENDPOINT OS_REGISTRY
+
+mkdir -p "${OS_TMP}" 2>/dev/null || true
+
+# Derived brand variables
+BRAND="${OS_BRAND}"
+ARTIFACT_PREFIX="${BRAND}os"
 
 # Shared paths
 RELEASE_DIR="${PROJECT_DIR}/release"
@@ -71,19 +84,19 @@ PACKAGES_DIR="${PROJECT_DIR}/packages"
 SCRIPTS_DIR="${PROJECT_DIR}/scripts"
 OVERLAY_DIR="${PROJECT_DIR}/overlay"
 CONFIG_DIR="${PROJECT_DIR}/config"
-VERSION="${STRATURAOS_VERSION}"
+VERSION="${OS_VERSION}"
 BUILD_DATE=$(date +%Y%m%d)
 # Build number (auto-incremented, zero-padded, stored in .build-number)
 BUILD_NUMBER_FILE="${PROJECT_DIR}/.build-number"
 if [ -f "${BUILD_NUMBER_FILE}" ]; then
-    STRATURAOS_BUILD_NUMBER=$(cat "${BUILD_NUMBER_FILE}")
+    OS_BUILD_NUMBER=$(cat "${BUILD_NUMBER_FILE}")
 else
-    STRATURAOS_BUILD_NUMBER=0
+    OS_BUILD_NUMBER=0
 fi
-STRATURAOS_BUILD_NUMBER=$((STRATURAOS_BUILD_NUMBER + 1))
-echo "${STRATURAOS_BUILD_NUMBER}" > "${BUILD_NUMBER_FILE}"
-STRATURAOS_BUILD_SEQ=$(printf "%04d" "${STRATURAOS_BUILD_NUMBER}")
-export BUILD_DATE STRATURAOS_BUILD_SEQ
+OS_BUILD_NUMBER=$((OS_BUILD_NUMBER + 1))
+echo "${OS_BUILD_NUMBER}" > "${BUILD_NUMBER_FILE}"
+OS_BUILD_SEQ=$(printf "%04d" "${OS_BUILD_NUMBER}")
+export BUILD_DATE OS_BUILD_SEQ
 
 # ============================================================================
 # Color output helpers
@@ -95,7 +108,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 print_status() {
-    echo -e "${GREEN}[StraturaOS]${NC} $1"
+    echo -e "${GREEN}[${OS_NAME}]${NC} $1"
 }
 
 print_warning() {
@@ -144,7 +157,7 @@ print_build_summary() {
     echo -e "${GREEN}║${NC}  ${BOLD}Build Complete: ${TARGET_LABEL}${NC}${DURATION}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
 
-    for file in "${TARGET_DIR}"/straturaos-"${VERSION}"-*; do
+    for file in "${TARGET_DIR}"/${ARTIFACT_PREFIX}-"${VERSION}"-*; do
         [ ! -f "${file}" ] && continue
         [[ "${file}" =~ \.sign$ ]] && continue
         [[ "$(basename "${file}")" = "SHA512SUMS" ]] && continue
@@ -193,6 +206,7 @@ setup_host() {
         shellcheck
         docker.io
         containerd
+        zstd
     "
 
     local missing=""
@@ -231,15 +245,15 @@ bootstrap_rootfs() {
     local HOST_ARCH
     HOST_ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
     if [ "${ARCH}" != "${HOST_ARCH}" ]; then
-        if [ "${STRATURAOS_CROSS_BUILD}" = "no" ]; then
-            print_error "Cross-build required (host=${HOST_ARCH}, target=${ARCH}) but STRATURAOS_CROSS_BUILD=no"
+        if [ "${OS_CROSS_BUILD}" = "no" ]; then
+            print_error "Cross-build required (host=${HOST_ARCH}, target=${ARCH}) but OS_CROSS_BUILD=no"
             exit 1
         fi
         print_status "Cross-building: host=${HOST_ARCH}, target=${ARCH}"
     fi
 
     mmdebstrap "${MMDEBSTRAP_OPTS[@]}" \
-        "${STRATURAOS_DEBIAN_SUITE}" "${ROOTFS}" "${STRATURAOS_DEBIAN_MIRROR}"
+        "${OS_DEBIAN_SUITE}" "${ROOTFS}" "${OS_DEBIAN_MIRROR}"
 
     print_status "Bootstrap complete."
 }
@@ -269,12 +283,35 @@ install_packages() {
         PACKAGES="${PACKAGES} ${TARGET_PKGS}"
     fi
 
+    # Suppress debconf dialog warnings inside chroot
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Prevent daemons from starting during package installation (standard
+    # Debian image-build practice).  Without this, packages like docker.io
+    # fail their postinst when they try to start services in a chroot.
+    cat > "${ROOTFS}/usr/sbin/policy-rc.d" <<'POLICYEOF'
+#!/bin/sh
+exit 101
+POLICYEOF
+    chmod +x "${ROOTFS}/usr/sbin/policy-rc.d"
+
     if [ -n "${PACKAGES}" ]; then
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get update -qq 2>&1 | grep -v "^$" || true
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get install -y -qq --no-install-recommends ${PACKAGES}
     fi
+
+    # Purge build-only packages no longer needed at runtime
+    print_status "Purging build-only packages..."
+    chroot "${ROOTFS}" apt-get purge -y -qq gnupg 2>/dev/null || true
+    chroot "${ROOTFS}" apt-get autoremove -y -qq 2>/dev/null || true
+    chroot "${ROOTFS}" apt-get clean -qq
+    rm -rf "${ROOTFS}/var/cache/apt/archives"/*.deb
+    rm -rf "${ROOTFS}/var/lib/apt/lists"/*
+
+    # Remove the policy that blocks daemons — services should start at boot
+    rm -f "${ROOTFS}/usr/sbin/policy-rc.d"
 
     umount_chroot "${ROOTFS}"
 }
@@ -302,13 +339,13 @@ umount_chroot() {
 }
 
 # ============================================================================
-# install_stratura_pkgs -- install Stratura services into rootfs
+# install_os_pkgs -- install OS services into rootfs
 # ============================================================================
 
-install_stratura_pkgs() {
+install_os_pkgs() {
     local ROOTFS="$1"
 
-    "${SCRIPTS_DIR}/common/install-stratura-pkgs.sh" "${ROOTFS}" "${PACKAGES_DIR}"
+    "${SCRIPTS_DIR}/common/install-os-pkgs.sh" "${ROOTFS}" "${PACKAGES_DIR}"
 }
 
 # ============================================================================
@@ -356,7 +393,7 @@ set_root_password() {
     local ROOTFS="$1"
 
     mount_chroot "${ROOTFS}"
-    chroot "${ROOTFS}" sh -c "echo 'root:${STRATURAOS_ROOT_PASSWD}' | chpasswd"
+    chroot "${ROOTFS}" sh -c "echo 'root:${OS_ROOT_PASSWD}' | chpasswd"
     umount_chroot "${ROOTFS}"
 }
 
@@ -388,6 +425,9 @@ create_rpi5_image() {
     local ROOTFS="$1"
     local OUTPUT_DIR="${RELEASE_DIR}/${VERSION}/arm64"
 
+    # Remove previous images so only the new one remains
+    rm -f "${OUTPUT_DIR}"/${ARTIFACT_PREFIX}-*.img* "${OUTPUT_DIR}"/SHA512SUMS* 2>/dev/null || true
+
     "${SCRIPTS_DIR}/rpi5/create-image.sh" "${ROOTFS}" "${OUTPUT_DIR}"
 }
 
@@ -398,6 +438,9 @@ create_rpi5_image() {
 create_x86_iso() {
     local ROOTFS="$1"
     local OUTPUT_DIR="${RELEASE_DIR}/${VERSION}/iso"
+
+    # Remove previous ISOs so only the new one remains
+    rm -f "${OUTPUT_DIR}"/${ARTIFACT_PREFIX}-*.iso "${OUTPUT_DIR}"/SHA512SUMS* 2>/dev/null || true
 
     if [ -x "${SCRIPTS_DIR}/x86_64/create-iso.sh" ]; then
         "${SCRIPTS_DIR}/x86_64/create-iso.sh" "${ROOTFS}" "${OUTPUT_DIR}"
@@ -427,7 +470,7 @@ package_release() {
     fi
 
     # Check if there are any release files
-    if ! ls "${TARGET_DIR}"/straturaos-* 1>/dev/null 2>&1; then
+    if ! ls "${TARGET_DIR}"/${ARTIFACT_PREFIX}-* 1>/dev/null 2>&1; then
         return 0
     fi
 
@@ -435,11 +478,11 @@ package_release() {
 
     (
         cd "${TARGET_DIR}"
-        sha512sum straturaos-"${VERSION}"-* > SHA512SUMS 2>/dev/null || true
+        sha512sum ${ARTIFACT_PREFIX}-"${VERSION}"-* > SHA512SUMS 2>/dev/null || true
 
         # GPG sign if key is available
         if command -v gpg >/dev/null 2>&1 && gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
-            for file in straturaos-"${VERSION}"-*; do
+            for file in ${ARTIFACT_PREFIX}-"${VERSION}"-*; do
                 if [ -f "${file}" ] && [[ ! "${file}" =~ \.sign$ ]]; then
                     gpg --yes --detach-sign -o "${file}.sign" "${file}" 2>/dev/null || true
                 fi
@@ -470,12 +513,12 @@ cleanup_old_artifacts() {
                 for ext in img iso tar qcow2; do
                     local COUNT=0
                     # shellcheck disable=SC2206
-                    local FILES=( "${arch_dir}"straturaos-*.${ext} )
+                    local FILES=( "${arch_dir}"${ARTIFACT_PREFIX}-*.${ext} )
                     [[ -e "${FILES[0]}" ]] && COUNT=${#FILES[@]}
                     if [ "${COUNT}" -gt "${KEEP_COUNT}" ]; then
                         print_status "Removing old .${ext} files in $(basename "${arch_dir}")..."
                         # shellcheck disable=SC2012
-                        ls -1t "${arch_dir}"straturaos-*.${ext} 2>/dev/null | tail -n +$((KEEP_COUNT + 1)) | while read -r f; do
+                        ls -1t "${arch_dir}"${ARTIFACT_PREFIX}-*.${ext} 2>/dev/null | tail -n +$((KEEP_COUNT + 1)) | while read -r f; do
                             echo "  Removing: $(basename "${f}")"
                             rm -f "${f}" "${f}.sign"
                         done
@@ -488,7 +531,7 @@ cleanup_old_artifacts() {
     # Clean Docker images
     if command -v docker >/dev/null 2>&1; then
         local DOCKER_IMAGES
-        DOCKER_IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep '^straturaos:' | grep -v ':latest' | sort -r || true)
+        DOCKER_IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep "^${ARTIFACT_PREFIX}:" | grep -v ':latest' | sort -r || true)
         local DOCKER_COUNT=0
         if [ -n "${DOCKER_IMAGES}" ]; then
             DOCKER_COUNT=$(echo "${DOCKER_IMAGES}" | wc -l | tr -d ' ')
@@ -506,7 +549,7 @@ cleanup_old_artifacts() {
     fi
 
     # Clean temporary build files
-    rm -rf "${STRATURAOS_TMP}"/straturaos-* 2>/dev/null || true
+    rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-* 2>/dev/null || true
 
     echo ""
     print_status "Disk usage after cleanup:"
@@ -522,36 +565,101 @@ cleanup_old_artifacts() {
 clean_build() {
     print_status "Cleaning build directories..."
 
-    rm -rf "${STRATURAOS_TMP}"/straturaos-rootfs-* 2>/dev/null || true
-    rm -rf "${STRATURAOS_TMP}"/straturaos-docker-* 2>/dev/null || true
-    rm -rf "${STRATURAOS_TMP}"/straturaos-iso-* 2>/dev/null || true
+    rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-rootfs-* 2>/dev/null || true
+    rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-docker-* 2>/dev/null || true
+    rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-iso-* 2>/dev/null || true
 
     print_status "Clean complete!"
 }
 
 # ============================================================================
-# build_supervisor -- build Docker supervisor image and save to rootfs
+# build_supervisor -- install supervisor directly into rootfs (no Docker)
 # ============================================================================
 
 build_supervisor() {
     local ROOTFS="$1"
+    local TARGET_ARCH="${2:-amd64}"
 
-    print_status "Building supervisor container image..."
+    print_status "Installing supervisor into rootfs..."
 
     if [ ! -d "${PROJECT_DIR}/supervisor" ]; then
-        print_error "supervisor/ directory not found. Cannot build supervisor image."
+        print_error "supervisor/ directory not found. Cannot install supervisor."
         exit 1
     fi
 
-    # Build the Docker image
-    docker build -t "stratura/supervisor:${STRATURAOS_VERSION}" "${PROJECT_DIR}/supervisor/"
+    # Determine Bun release name for the target rootfs.
+    # x64 uses the -baseline variant (no AVX2 requirement) so it runs on
+    # any x86_64 CPU including build VMs without SIMD extensions.
+    # aarch64 has no baseline variant; the standard build works everywhere.
+    local TARGET_BUN_NAME="bun-linux-aarch64"
+    [ "${TARGET_ARCH}" != "arm64" ] && TARGET_BUN_NAME="bun-linux-x64-baseline"
 
-    # Save as tar for embedding in rootfs
-    install -d "${ROOTFS}/var/lib/stratura"
-    docker save "stratura/supervisor:${STRATURAOS_VERSION}" \
-        -o "${ROOTFS}/var/lib/stratura/supervisor.tar"
+    # Determine host-compatible Bun for running `bun install` during build.
+    local HOST_BUN_NAME
+    if [ "$(uname -m)" = "aarch64" ]; then
+        HOST_BUN_NAME="bun-linux-aarch64"
+    else
+        HOST_BUN_NAME="bun-linux-x64-baseline"
+    fi
 
-    print_status "Supervisor image saved to rootfs"
+    # --- Download and install TARGET Bun binary to rootfs ---
+    # TODO: Add SHA256 checksum verification for pinned Bun releases
+    local BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${TARGET_BUN_NAME}.zip"
+    print_status "Downloading Bun v${BUN_VERSION} (${TARGET_BUN_NAME}) for rootfs..."
+    if ! curl -fsSL "${BUN_URL}" -o "${ROOTFS}/tmp/bun.zip"; then
+        print_error "Failed to download Bun from ${BUN_URL}"
+        exit 1
+    fi
+    if ! unzip -o "${ROOTFS}/tmp/bun.zip" -d "${ROOTFS}/tmp/bun-extract"; then
+        print_error "Failed to extract Bun binary"
+        rm -rf "${ROOTFS}/tmp/bun.zip" "${ROOTFS}/tmp/bun-extract"
+        exit 1
+    fi
+    install -m 0755 "${ROOTFS}/tmp/bun-extract/${TARGET_BUN_NAME}/bun" \
+        "${ROOTFS}/usr/local/bin/bun"
+    rm -rf "${ROOTFS}/tmp/bun.zip" "${ROOTFS}/tmp/bun-extract"
+
+    # --- Get a host-compatible Bun for dependency installation ---
+    local BUILD_BUN="${ROOTFS}/usr/local/bin/bun"
+    if [ "${HOST_BUN_NAME}" != "${TARGET_BUN_NAME}" ]; then
+        # Cross-compiling: download a host-compatible Bun binary
+        local HOST_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${HOST_BUN_NAME}.zip"
+        print_status "Downloading Bun v${BUN_VERSION} (${HOST_BUN_NAME}) for build host..."
+        curl -fsSL "${HOST_URL}" -o "${ROOTFS}/tmp/bun-host.zip"
+        unzip -o "${ROOTFS}/tmp/bun-host.zip" -d "${ROOTFS}/tmp/bun-host"
+        BUILD_BUN="${ROOTFS}/tmp/bun-host/${HOST_BUN_NAME}/bun"
+        chmod +x "${BUILD_BUN}"
+    fi
+
+    # --- Copy supervisor source and package manifests ---
+    local DEST="${ROOTFS}/opt/${BRAND}-supervisor"
+    install -d "${DEST}"
+    cp -r "${PROJECT_DIR}/supervisor/src" "${DEST}/"
+    cp "${PROJECT_DIR}/supervisor/package.json" "${DEST}/"
+    cp "${PROJECT_DIR}/supervisor/bun.lock" "${DEST}/"
+
+    # Install production dependencies directly (no chroot needed;
+    # all supervisor deps are pure JS so the host can install them).
+    # --ignore-scripts prevents native install scripts (e.g. ssh2) from
+    # running; ssh2 is an optional dockerode dep unused by the supervisor.
+    if ! (cd "${DEST}" && "${BUILD_BUN}" install --production --ignore-scripts); then
+        print_error "bun install failed"
+        exit 1
+    fi
+
+    # Remove cpu-features (unused native addon)
+    rm -rf "${DEST}/node_modules/cpu-features"
+
+    # Clean build artifacts
+    rm -rf "${ROOTFS}/tmp/bun-host.zip" "${ROOTFS}/tmp/bun-host"
+    rm -rf "${ROOTFS}/root/.bun/install/cache"
+
+    if [ ! -d "${DEST}/node_modules" ]; then
+        print_error "bun install failed — node_modules not found"
+        exit 1
+    fi
+
+    print_status "Supervisor installed to /opt/${BRAND}-supervisor"
 }
 
 # ============================================================================
@@ -575,9 +683,9 @@ build_target() {
     echo -e "${BOLD}  Building: ${TARGET_LABEL}${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "  Version:  ${VERSION}"
-    echo -e "  Suite:    ${STRATURAOS_DEBIAN_SUITE}"
-    echo -e "  Mirror:   ${STRATURAOS_DEBIAN_MIRROR}"
-    echo -e "  Tmp dir:  ${STRATURAOS_TMP}"
+    echo -e "  Suite:    ${OS_DEBIAN_SUITE}"
+    echo -e "  Mirror:   ${OS_DEBIAN_MIRROR}"
+    echo -e "  Tmp dir:  ${OS_TMP}"
     echo -e "  Release:  ${RELEASE_DIR}/${VERSION}/"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
@@ -598,11 +706,11 @@ build_target() {
     local TARGET_DIRNAME="${TARGET}"
     [ "${TARGET}" = "iso" ] && TARGET_DIRNAME="x86_64"
 
-    local ROOTFS="${STRATURAOS_TMP}/straturaos-rootfs-${TARGET}"
+    local ROOTFS="${OS_TMP}/${ARTIFACT_PREFIX}-rootfs-${TARGET}"
     rm -rf "${ROOTFS}"
 
     # Phase 1: Bootstrap
-    print_status "[1/7] Bootstrapping Debian ${STRATURAOS_DEBIAN_SUITE} (${ARCH})..."
+    print_status "[1/7] Bootstrapping Debian ${OS_DEBIAN_SUITE} (${ARCH})..."
     print_status "  Rootfs: ${ROOTFS}"
     bootstrap_rootfs "${ROOTFS}" "${ARCH}"
 
@@ -611,20 +719,70 @@ build_target() {
     print_status "  Package lists: ${CONFIG_DIR}/packages-common.list, ${CONFIG_DIR}/packages-${TARGET_DIRNAME}.list"
     install_packages "${ROOTFS}" "${TARGET_DIRNAME}"
 
-    # Phase 3: Install Stratura packages
-    print_status "[3/7] Installing Stratura packages..."
+    # Phase 3: Install OS packages
+    print_status "[3/7] Installing OS packages..."
     print_status "  Source: ${PACKAGES_DIR}/"
-    install_stratura_pkgs "${ROOTFS}"
+    install_os_pkgs "${ROOTFS}"
 
-    # Phase 4: Build supervisor container
-    print_status "[4/7] Building supervisor container..."
-    build_supervisor "${ROOTFS}"
+    # Phase 4: Install supervisor
+    print_status "[4/7] Installing supervisor..."
+    build_supervisor "${ROOTFS}" "${ARCH}"
 
     # Phase 5: Customize
     print_status "[5/7] Customizing rootfs (common + ${TARGET_DIRNAME})..."
     apply_overlays "${ROOTFS}" "${TARGET_DIRNAME}"
     customize_rootfs "${ROOTFS}" "${TARGET_DIRNAME}"
     set_root_password "${ROOTFS}"
+
+    # Verify critical files before creating the artifact
+    # Note: enable symlinks are absolute paths (e.g. -> /usr/lib/systemd/...)
+    # so we use -L (is-symlink) for those since -e follows the symlink to the
+    # host filesystem where the target doesn't exist.
+    print_status "Verifying rootfs..."
+    local VERIFY_FAIL=0
+    # Target-specific files to verify
+    local EXTRA_FILES=""
+    if [ "${TARGET}" = "iso" ]; then
+        EXTRA_FILES="usr/lib/${BRAND}os/firstboot.sh"
+    fi
+    for f in \
+        "usr/local/bin/bun" \
+        "usr/bin/${BRAND}-config" \
+        "usr/bin/${BRAND}-security" \
+        "usr/lib/systemd/system/${BRAND}-supervisor.service" \
+        "usr/lib/systemd/system/${BRAND}-config.service" \
+        "usr/lib/systemd/system/${BRAND}-security.service" \
+        "opt/${BRAND}-supervisor/src/index.js" \
+        "opt/${BRAND}-supervisor/node_modules" \
+        ${EXTRA_FILES} \
+    ; do
+        if [ ! -e "${ROOTFS}/${f}" ]; then
+            print_error "  MISSING: /${f}"
+            VERIFY_FAIL=1
+        fi
+    done
+    # Symlinks (absolute targets — use -L not -e)
+    local EXTRA_SYMLINKS=""
+    if [ "${TARGET}" = "iso" ]; then
+        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}os-firstboot.service"
+    fi
+    for f in \
+        "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \
+        "etc/systemd/system/multi-user.target.wants/${BRAND}-config.service" \
+        "etc/systemd/system/sysinit.target.wants/${BRAND}-security.service" \
+        "etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service" \
+        ${EXTRA_SYMLINKS} \
+    ; do
+        if [ ! -L "${ROOTFS}/${f}" ]; then
+            print_error "  MISSING symlink: /${f}"
+            VERIFY_FAIL=1
+        fi
+    done
+    if [ "${VERIFY_FAIL}" -eq 1 ]; then
+        print_error "Rootfs verification failed — aborting"
+        exit 1
+    fi
+    print_status "Rootfs verification passed"
 
     # Phase 6: Create artifact
     print_status "[6/7] Creating ${TARGET_LABEL}..."
@@ -647,13 +805,13 @@ build_target() {
 # ============================================================================
 
 show_help() {
-    echo "StraturaOS Build System (Debian)"
+    echo "${OS_NAME} Build System (Debian)"
     echo ""
     echo "Usage: ./build.sh [command]"
     echo ""
     echo "Commands:"
     echo "  setup              Install host build dependencies"
-    echo "  build {target}     Build StraturaOS image"
+    echo "  build {target}     Build ${OS_NAME} image"
     echo "  clean              Remove build rootfs and temp files"
     echo "  help               Show this help message"
     echo ""
@@ -671,8 +829,8 @@ show_help() {
     echo "  ./build.sh build all      # Build all targets"
     echo ""
     echo "Docker images created:"
-    echo "  straturaos:latest-arm64     # RPi5 build"
-    echo "  straturaos:latest-amd64     # x86_64 build"
+    echo "  ${ARTIFACT_PREFIX}:latest-arm64     # RPi5 build"
+    echo "  ${ARTIFACT_PREFIX}:latest-amd64     # x86_64 build"
 }
 
 # ============================================================================
@@ -699,7 +857,7 @@ case "${1:-help}" in
                 local MINS=$(( ELAPSED / 60 ))
                 local SECS=$(( ELAPSED % 60 ))
                 echo ""
-                echo -e "${GREEN}[StraturaOS]${NC} ${BOLD}All targets built successfully!${NC} (${MINS}m ${SECS}s)"
+                echo -e "${GREEN}[${OS_NAME}]${NC} ${BOLD}All targets built successfully!${NC} (${MINS}m ${SECS}s)"
                 echo ""
                 ;;
             docker|iso|rpi5)

@@ -1,0 +1,137 @@
+#!/bin/bash
+# game-blackjack — Blackjack (21)
+
+G=$'\033[1;32m'; g=$'\033[0;32m'; Y=$'\033[1;33m'
+r=$'\033[1;31m'; W=$'\033[1;37m'; w=$'\033[0;37m'; R=$'\033[0m'
+
+SUITS=(♠ ♥ ♦ ♣)
+RANKS=(A 2 3 4 5 6 7 8 9 10 J Q K)
+DECK=()
+PLAYER=(); DEALER=()
+
+shuffle() {
+    DECK=()
+    for s in "${SUITS[@]}"; do
+        for r in "${RANKS[@]}"; do
+            DECK+=("${r}${s}")
+        done
+    done
+    for ((i=${#DECK[@]}-1; i>0; i--)); do
+        j=$((RANDOM % (i+1)))
+        tmp="${DECK[$i]}"; DECK[$i]="${DECK[$j]}"; DECK[$j]="$tmp"
+    done
+    DECK_POS=0
+}
+
+deal() { local card="${DECK[$DECK_POS]}"; ((DECK_POS++)); echo "$card"; }
+
+card_value() {
+    local rank="${1%%[♠♥♦♣]*}"
+    case "$rank" in
+        A) echo 11 ;;
+        K|Q|J) echo 10 ;;
+        *) echo "$rank" ;;
+    esac
+}
+
+hand_total() {
+    local -n hand_ref=$1
+    local total=0 aces=0
+    for card in "${hand_ref[@]}"; do
+        local val=$(card_value "$card")
+        total=$((total + val))
+        [[ "${card%%[♠♥♦♣]*}" == "A" ]] && ((aces++))
+    done
+    while [ $total -gt 21 ] && [ $aces -gt 0 ]; do
+        total=$((total - 10)); ((aces--))
+    done
+    echo $total
+}
+
+show_cards() {
+    local label="$1"; shift
+    local cards=("$@")
+    printf "  ${g}%-10s${R}" "$label"
+    for c in "${cards[@]}"; do
+        local suit="${c##*[0-9AJQK]}"
+        [[ "$suit" == "♥" || "$suit" == "♦" ]] && printf " ${r}[%s]${R}" "$c" || printf " ${w}[%s]${R}" "$c"
+    done
+    echo ""
+}
+
+echo ""
+echo "${G}  ██ BLACK JACK ██${R}"
+echo ""
+
+CHIPS=100
+while [ $CHIPS -gt 0 ]; do
+    printf "  ${g}Chips: ${W}$CHIPS${R}\n"
+    printf "  ${g}Bet (0 to quit): ${R}"
+    read -r BET
+    [[ "$BET" == "0" || -z "$BET" ]] && break
+    [[ ! "$BET" =~ ^[0-9]+$ ]] && continue
+    [ "$BET" -gt "$CHIPS" ] && { echo "  ${r}Not enough chips!${R}"; continue; }
+
+    shuffle
+    PLAYER=(); DEALER=()
+    PLAYER+=("$(deal)"); DEALER+=("$(deal)")
+    PLAYER+=("$(deal)"); DEALER+=("$(deal)")
+
+    echo ""
+    show_cards "DEALER:" "${DEALER[0]}" "??"
+    show_cards "YOU:" "${PLAYER[@]}"
+    PTOTAL=$(hand_total PLAYER)
+    printf "  ${w}Total: ${W}%d${R}\n" "$PTOTAL"
+
+    if [ "$PTOTAL" -eq 21 ]; then
+        echo "  ${G}BLACKJACK!${R}"
+    else
+        while true; do
+            printf "  ${g}(H)it or (S)tand? ${R}"
+            read -r -n1 action; echo ""
+            case "$action" in
+                h|H)
+                    PLAYER+=("$(deal)")
+                    show_cards "YOU:" "${PLAYER[@]}"
+                    PTOTAL=$(hand_total PLAYER)
+                    printf "  ${w}Total: ${W}%d${R}\n" "$PTOTAL"
+                    [ "$PTOTAL" -gt 21 ] && { echo "  ${r}BUST!${R}"; break; }
+                    [ "$PTOTAL" -eq 21 ] && break
+                    ;;
+                s|S) break ;;
+            esac
+        done
+    fi
+
+    if [ "$PTOTAL" -le 21 ]; then
+        echo ""
+        DTOTAL=$(hand_total DEALER)
+        while [ "$DTOTAL" -lt 17 ]; do
+            DEALER+=("$(deal)")
+            DTOTAL=$(hand_total DEALER)
+        done
+        show_cards "DEALER:" "${DEALER[@]}"
+        printf "  ${w}Dealer total: ${W}%d${R}\n" "$DTOTAL"
+        echo ""
+
+        if [ "$DTOTAL" -gt 21 ]; then
+            echo "  ${G}DEALER BUSTS — YOU WIN!${R}"
+            CHIPS=$((CHIPS + BET))
+        elif [ "$PTOTAL" -gt "$DTOTAL" ]; then
+            echo "  ${G}YOU WIN!${R}"
+            CHIPS=$((CHIPS + BET))
+        elif [ "$PTOTAL" -lt "$DTOTAL" ]; then
+            echo "  ${r}DEALER WINS${R}"
+            CHIPS=$((CHIPS - BET))
+        else
+            echo "  ${Y}PUSH${R}"
+        fi
+    else
+        CHIPS=$((CHIPS - BET))
+    fi
+    echo ""
+done
+
+echo "  ${g}Final chips: ${W}$CHIPS${R}"
+[ "$CHIPS" -le 0 ] && echo "  ${r}THE HOUSE ALWAYS WINS.${R}"
+echo ""

@@ -1,5 +1,0 @@
-config BR2_PACKAGE_STRATURA_SECURITY
-	bool "stratura-security"
-	select BR2_PACKAGE_PYTHON3
-	help
-	  StraturaOS Security Hardening - System security policies and hardening.

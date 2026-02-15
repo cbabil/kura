@@ -1,0 +1,42 @@
+#!/bin/bash
+# wopr — Fake WOPR boot sequence
+
+G=$'\033[1;32m'
+g=$'\033[0;32m'
+r=$'\033[1;31m'
+R=$'\033[0m'
+
+type_slow() {
+    local text="$1"
+    for ((i=0; i<${#text}; i++)); do
+        printf "${g}%s${R}" "${text:$i:1}"
+        sleep 0.02
+    done
+    echo ""
+}
+
+echo ""
+type_slow "  WOPR SYSTEM BOOT SEQUENCE"
+type_slow "  WAR OPERATION PLAN RESPONSE"
+sleep 0.3
+type_slow "  ================================"
+sleep 0.2
+type_slow "  CRYSTAL PALACE NETWORK .... ONLINE"
+sleep 0.1
+type_slow "  NORAD COC ................. ONLINE"
+sleep 0.1
+type_slow "  SAC COMMAND ............... ONLINE"
+sleep 0.1
+type_slow "  PENTAGON .................. ONLINE"
+sleep 0.1
+type_slow "  NATO ALLIES ............... STANDBY"
+sleep 0.3
+type_slow "  ================================"
+echo ""
+type_slow "  LOGON: "
+sleep 0.5
+printf "${G}  Joshua${R}\n"
+sleep 0.3
+echo ""
+type_slow "  GREETINGS PROFESSOR FALKEN"
+echo ""

@@ -1,0 +1,123 @@
+#!/bin/bash
+# game-poker — 5-Card Draw Poker
+
+G=$'\033[1;32m'; g=$'\033[0;32m'; Y=$'\033[1;33m'
+r=$'\033[1;31m'; W=$'\033[1;37m'; w=$'\033[0;37m'; R=$'\033[0m'
+
+SUITS=(♠ ♥ ♦ ♣)
+RANKS=(2 3 4 5 6 7 8 9 10 J Q K A)
+DECK=(); HAND=(); DECK_POS=0
+
+shuffle() {
+    DECK=()
+    for s in "${SUITS[@]}"; do for r in "${RANKS[@]}"; do DECK+=("${r}${s}"); done; done
+    for ((i=${#DECK[@]}-1; i>0; i--)); do
+        j=$((RANDOM % (i+1))); tmp="${DECK[$i]}"; DECK[$i]="${DECK[$j]}"; DECK[$j]="$tmp"
+    done
+    DECK_POS=0
+}
+
+deal() { echo "${DECK[$DECK_POS]}"; ((DECK_POS++)); }
+
+rank_val() {
+    local rank="${1%%[♠♥♦♣]*}"
+    case "$rank" in
+        A) echo 14;; K) echo 13;; Q) echo 12;; J) echo 11;; *) echo "$rank";;
+    esac
+}
+
+show_hand() {
+    printf "  "
+    for i in "${!HAND[@]}"; do
+        local c="${HAND[$i]}" suit="${HAND[$i]##*[0-9AJQK]}"
+        [[ "$suit" == "♥" || "$suit" == "♦" ]] && printf "${r}%d)[%s]${R} " "$((i+1))" "$c" \
+            || printf "${w}%d)[%s]${R} " "$((i+1))" "$c"
+    done
+    echo ""
+}
+
+evaluate() {
+    local vals=() suits=()
+    for c in "${HAND[@]}"; do
+        vals+=($(rank_val "$c")); suits+=("${c##*[0-9AJQK]}")
+    done
+    IFS=$'\n' sorted=($(sort -n <<<"${vals[*]}")); unset IFS
+
+    local flush=true pair=0 three=0 four=0 straight=false
+    for ((i=1; i<5; i++)); do [[ "${suits[$i]}" != "${suits[0]}" ]] && flush=false; done
+
+    local counts=()
+    for v in "${sorted[@]}"; do counts[$v]=$(( ${counts[$v]:-0} + 1 )); done
+    for v in "${!counts[@]}"; do
+        case "${counts[$v]}" in 2) ((pair++));; 3) ((three++));; 4) ((four++));; esac
+    done
+
+    if [ "${sorted[4]}" -eq $((${sorted[0]} + 4)) ]; then straight=true; fi
+    if [[ "${sorted[*]}" == "2 3 4 5 14" ]]; then straight=true; fi
+
+    if $flush && $straight; then echo "800|STRAIGHT FLUSH"
+    elif [ $four -gt 0 ]; then echo "700|FOUR OF A KIND"
+    elif [ $three -gt 0 ] && [ $pair -gt 0 ]; then echo "600|FULL HOUSE"
+    elif $flush; then echo "500|FLUSH"
+    elif $straight; then echo "400|STRAIGHT"
+    elif [ $three -gt 0 ]; then echo "300|THREE OF A KIND"
+    elif [ $pair -eq 2 ]; then echo "200|TWO PAIR"
+    elif [ $pair -eq 1 ]; then echo "100|ONE PAIR"
+    else echo "0|HIGH CARD"
+    fi
+}
+
+echo ""
+echo "${G}  ██ 5-CARD DRAW POKER ██${R}"
+echo ""
+
+CHIPS=100
+while [ $CHIPS -gt 0 ]; do
+    printf "  ${g}Chips: ${W}$CHIPS${g} — Ante (0 to quit): ${R}"
+    read -r ANTE
+    [[ "$ANTE" == "0" || -z "$ANTE" ]] && break
+    [[ ! "$ANTE" =~ ^[0-9]+$ ]] && continue
+    [ "$ANTE" -gt "$CHIPS" ] && { echo "  ${r}Not enough chips!${R}"; continue; }
+
+    shuffle; HAND=()
+    for i in {1..5}; do HAND+=("$(deal)"); done
+
+    echo ""; echo "  ${g}YOUR HAND:${R}"; show_hand
+
+    printf "  ${g}Cards to discard (e.g. 1 3 5, Enter to keep): ${R}"
+    read -r -a DISCARD
+    for d in "${DISCARD[@]}"; do
+        if [[ "$d" =~ ^[1-5]$ ]]; then
+            HAND[$((d-1))]="$(deal)"
+        fi
+    done
+
+    echo ""; echo "  ${g}YOUR HAND:${R}"; show_hand
+
+    RESULT=$(evaluate)
+    SCORE="${RESULT%%|*}"; LABEL="${RESULT##*|}"
+    echo "  ${G}>> ${LABEL} <<${R}"
+
+    # Payout: pair=1x, two pair=2x, etc.
+    if [ "$SCORE" -ge 800 ]; then WIN=$((ANTE * 50))
+    elif [ "$SCORE" -ge 700 ]; then WIN=$((ANTE * 25))
+    elif [ "$SCORE" -ge 600 ]; then WIN=$((ANTE * 9))
+    elif [ "$SCORE" -ge 500 ]; then WIN=$((ANTE * 6))
+    elif [ "$SCORE" -ge 400 ]; then WIN=$((ANTE * 4))
+    elif [ "$SCORE" -ge 300 ]; then WIN=$((ANTE * 3))
+    elif [ "$SCORE" -ge 200 ]; then WIN=$((ANTE * 2))
+    elif [ "$SCORE" -ge 100 ]; then WIN=$((ANTE * 1))
+    else WIN=$((-ANTE))
+    fi
+
+    if [ $WIN -gt 0 ]; then
+        echo "  ${G}WIN +${WIN}${R}"
+    else
+        echo "  ${r}LOSE ${WIN}${R}"
+    fi
+    CHIPS=$((CHIPS + WIN))
+    echo ""
+done
+
+echo "  ${g}Final chips: ${W}$CHIPS${R}"
+echo ""

@@ -1,13 +1,13 @@
 'use strict';
 
 const logger = require('../utils/logger');
-const { loadSecurityConfig } = require('../config');
+const config = require('../config');
 
 let securityConfig = null;
 
 function getConfig() {
   if (!securityConfig) {
-    securityConfig = loadSecurityConfig();
+    securityConfig = config.loadSecurityConfig();
   }
   return securityConfig;
 }
@@ -93,8 +93,13 @@ function auditContainerSecurity(inspectData) {
   return findings;
 }
 
+function _resetConfig() {
+  securityConfig = null;
+}
+
 module.exports = {
   getSecurityOpts,
   validateImage,
   auditContainerSecurity,
+  _resetConfig,
 };

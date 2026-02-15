@@ -1,0 +1,60 @@
+#!/bin/bash
+# defcon — System health as DEFCON level
+
+G=$'\033[1;32m'   # green
+Y=$'\033[1;33m'   # yellow
+r=$'\033[1;31m'   # red
+C=$'\033[1;36m'   # cyan
+w=$'\033[0;37m'   # dim white
+W=$'\033[1;37m'   # bold white
+R=$'\033[0m'      # reset
+
+# Collect metrics
+LOAD=$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo "0")
+NCPU=$(nproc 2>/dev/null || echo "1")
+DISK_PCT=$(df / 2>/dev/null | awk 'NR==2{gsub(/%/,""); print $5}' || echo "0")
+MEM_PCT=$(free 2>/dev/null | awk '/Mem:/{printf "%.0f", $3/$2*100}' || echo "0")
+
+# Count failed services
+FAILED=$(systemctl --failed --no-legend 2>/dev/null | wc -l || echo "0")
+
+# Calculate DEFCON (lower = worse)
+SCORE=0
+LOAD_RATIO=$(awk "BEGIN{printf \"%.0f\", ($LOAD/$NCPU)*100}")
+[ "$LOAD_RATIO" -gt 200 ] && SCORE=$((SCORE + 3))
+[ "$LOAD_RATIO" -gt 100 ] && SCORE=$((SCORE + 1))
+[ "$DISK_PCT" -gt 90 ] && SCORE=$((SCORE + 3))
+[ "$DISK_PCT" -gt 75 ] && SCORE=$((SCORE + 1))
+[ "$MEM_PCT" -gt 90 ] && SCORE=$((SCORE + 2))
+[ "$MEM_PCT" -gt 75 ] && SCORE=$((SCORE + 1))
+[ "$FAILED" -gt 3 ] && SCORE=$((SCORE + 3))
+[ "$FAILED" -gt 0 ] && SCORE=$((SCORE + 1))
+
+if [ "$SCORE" -ge 8 ]; then
+    LEVEL=1; COLOR="$r"; DESC="MAXIMUM FORCE READINESS"
+elif [ "$SCORE" -ge 5 ]; then
+    LEVEL=2; COLOR="$r"; DESC="ARMED FORCES READY TO DEPLOY IN 6 HOURS"
+elif [ "$SCORE" -ge 3 ]; then
+    LEVEL=3; COLOR="$Y"; DESC="INCREASE IN FORCE READINESS"
+elif [ "$SCORE" -ge 1 ]; then
+    LEVEL=4; COLOR="$Y"; DESC="INCREASED INTELLIGENCE WATCH"
+else
+    LEVEL=5; COLOR="$G"; DESC="LOWEST STATE OF READINESS"
+fi
+
+echo ""
+printf "  ${C}NORAD DEFENSE CONDITION${R}\n"
+echo ""
+printf "  ${COLOR}  ██████  ███████ ███████  ██████  ██████  ███    ██  %s${R}\n" "$LEVEL"
+printf "  ${COLOR}  ██   ██ ██      ██      ██      ██    ██ ████   ██${R}\n"
+printf "  ${COLOR}  ██   ██ █████   █████   ██      ██    ██ ██ ██  ██${R}\n"
+printf "  ${COLOR}  ██   ██ ██      ██      ██      ██    ██ ██  ██ ██${R}\n"
+printf "  ${COLOR}  ██████  ███████ ██       ██████  ██████  ██   ████${R}\n"
+echo ""
+printf "  ${COLOR}${DESC}${R}\n"
+echo ""
+printf "  ${w}CPU Load ........ ${W}%s${w} (%s cores)${R}\n" "$LOAD" "$NCPU"
+printf "  ${w}Memory .......... ${W}%s%%${R}\n" "$MEM_PCT"
+printf "  ${w}Disk ............ ${W}%s%%${R}\n" "$DISK_PCT"
+printf "  ${w}Failed services . ${W}%s${R}\n" "$FAILED"
+echo ""

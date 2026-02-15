@@ -1,9 +1,5 @@
 'use strict';
 
-jest.mock('proper-lockfile', () => ({
-  lock: jest.fn(),
-}));
-
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
   warn: jest.fn(),
@@ -15,13 +11,6 @@ jest.mock('../src/utils/logger', () => ({
 const fs = require('fs');
 const lockfile = require('proper-lockfile');
 
-// We need to mock fs methods used by state-manager
-jest.spyOn(fs, 'existsSync');
-jest.spyOn(fs, 'mkdirSync').mockReturnValue(undefined);
-jest.spyOn(fs, 'readFileSync');
-jest.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
-jest.spyOn(fs, 'renameSync').mockReturnValue(undefined);
-
 const stateManager = require('../src/services/state-manager');
 
 describe('state-manager', () => {
@@ -29,9 +18,20 @@ describe('state-manager', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Spy on fs methods (inside beforeEach so restoreAllMocks undoes them)
+    jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+    jest.spyOn(fs, 'mkdirSync').mockReturnValue(undefined);
+    jest.spyOn(fs, 'readFileSync');
+    jest.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
+    jest.spyOn(fs, 'renameSync').mockReturnValue(undefined);
+
     mockRelease = jest.fn().mockResolvedValue();
-    lockfile.lock.mockResolvedValue(mockRelease);
-    fs.existsSync.mockReturnValue(true);
+    jest.spyOn(lockfile, 'lock').mockResolvedValue(mockRelease);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('getDefaultState', () => {

@@ -1,0 +1,12 @@
+[Unit]
+Description=__BRAND_NAME__ Configuration Manager
+After=network-online.target
+Before=__BRAND__-supervisor.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/__BRAND__-config
+Environment=PYTHONPATH=/usr/lib/__BRAND__
+
+[Install]
+WantedBy=multi-user.target

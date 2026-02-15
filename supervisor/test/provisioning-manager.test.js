@@ -1,20 +1,7 @@
 'use strict';
 
-jest.mock('../src/services/state-manager', () => ({
-  load: jest.fn(),
-  save: jest.fn().mockResolvedValue(),
-  setProvisioningComplete: jest.fn().mockResolvedValue(),
-  updateContainerStatus: jest.fn().mockResolvedValue(),
-}));
-
-jest.mock('../src/services/container-manager', () => ({
-  pullImage: jest.fn().mockResolvedValue(),
-  createContainer: jest.fn().mockResolvedValue('container-id'),
-}));
-
-jest.mock('../src/services/security-manager', () => ({
-  validateImage: jest.fn(),
-}));
+const { dockerodeMockFactory } = require('./helpers/dockerode-mock');
+jest.mock('dockerode', dockerodeMockFactory);
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
@@ -32,7 +19,22 @@ const provisioningManager = require('../src/services/provisioning-manager');
 describe('provisioning-manager', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    securityManager.validateImage.mockReturnValue({ valid: true, reason: 'ok' });
+
+    jest.spyOn(stateManager, 'load').mockResolvedValue({
+      provisioning: { completed: false, timestamp: null },
+    });
+    jest.spyOn(stateManager, 'save').mockResolvedValue();
+    jest.spyOn(stateManager, 'setProvisioningComplete').mockResolvedValue();
+    jest.spyOn(stateManager, 'updateContainerStatus').mockResolvedValue();
+
+    jest.spyOn(containerManager, 'pullImage').mockResolvedValue();
+    jest.spyOn(containerManager, 'createContainer').mockResolvedValue('container-id');
+
+    jest.spyOn(securityManager, 'validateImage').mockReturnValue({ valid: true, reason: 'ok' });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('isProvisioned', () => {
@@ -63,8 +65,8 @@ describe('provisioning-manager', () => {
 
       const config = {
         applications: [
-          { name: 'app1', image: 'registry.stratura.io/app1:1.0' },
-          { name: 'app2', image: 'registry.stratura.io/app2:1.0' },
+          { name: 'app1', image: 'registry.falken.io/app1:1.0' },
+          { name: 'app2', image: 'registry.falken.io/app2:1.0' },
         ],
       };
 
@@ -154,13 +156,13 @@ describe('provisioning-manager', () => {
       const config = {
         applications: [
           { name: 'bad', image: 'evil.io/app:1' },
-          { name: 'good', image: 'registry.stratura.io/app:1' },
+          { name: 'good', image: 'registry.falken.io/app:1' },
         ],
       };
 
       await provisioningManager.provision(config);
       expect(containerManager.pullImage).toHaveBeenCalledTimes(1);
-      expect(containerManager.pullImage).toHaveBeenCalledWith('registry.stratura.io/app:1');
+      expect(containerManager.pullImage).toHaveBeenCalledWith('registry.falken.io/app:1');
     });
 
     it('updates container status after successful setup', async () => {

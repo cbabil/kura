@@ -16,22 +16,6 @@ jest.mock('../src/utils/logger', () => ({
   debug: jest.fn(),
 }));
 
-// Mock prom-client before requiring monitor
-jest.mock('prom-client', () => {
-  const mockGauge = { set: jest.fn() };
-  const mockCounter = { inc: jest.fn() };
-  return {
-    Registry: jest.fn().mockImplementation(() => ({
-      metrics: jest.fn().mockResolvedValue(
-        '# HELP system_cpu_usage CPU usage %\nsystem_cpu_usage 42\n',
-      ),
-    })),
-    collectDefaultMetrics: jest.fn(),
-    Gauge: jest.fn().mockImplementation(() => mockGauge),
-    Counter: jest.fn().mockImplementation(() => mockCounter),
-  };
-});
-
 const si = require('systeminformation');
 const monitor = require('../src/services/monitor');
 
@@ -244,19 +228,8 @@ describe('monitor', () => {
     });
   });
 
-  describe('getPrometheusMetrics', () => {
-    it('returns text format metrics', async () => {
-      const output = await monitor.getPrometheusMetrics();
-      expect(typeof output).toBe('string');
-      expect(output).toContain('system_cpu_usage');
-    });
-  });
-
   describe('getLastMetrics', () => {
     it('returns null before first collection', () => {
-      // getLastMetrics returns the module-level lastMetrics variable
-      // After our other tests, it may have a value, so this test is
-      // order-dependent. We test the return type instead.
       const metrics = monitor.getLastMetrics();
       expect(metrics === null || typeof metrics === 'object').toBe(true);
     });

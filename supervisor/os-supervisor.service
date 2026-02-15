@@ -1,0 +1,15 @@
+[Unit]
+Description=__BRAND_NAME__ Supervisor
+After=network-online.target docker.service __BRAND__os-firstboot.service
+Wants=network-online.target docker.service __BRAND__os-firstboot.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/__BRAND__-supervisor
+ExecStart=/usr/local/bin/bun src/index.js
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

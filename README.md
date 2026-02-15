@@ -1,6 +1,6 @@
-# StraturaOS
+# Custom Linux OS
 
-StraturaOS is a custom operating system built on Debian 13 (Trixie) using mmdebstrap for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
+A custom operating system built on Debian 13 (Trixie) using mmdebstrap for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
 
 ## Features
 
@@ -10,6 +10,7 @@ StraturaOS is a custom operating system built on Debian 13 (Trixie) using mmdebs
 - **Container Support**: Integrated Docker runtime
 - **Security**: Security hardening and monitoring tools
 - **Network Management**: NetworkManager for flexible configuration
+- **Rebrandable**: All user-visible branding controlled via `.env` variables
 
 ## Quick Start
 
@@ -31,12 +32,12 @@ Create a Debian/Ubuntu VM with:
 
 **Note:** All configurable values are in `.env`. Copy the template on first setup: `cp .env.example .env`
 
-### 2. Install StraturaOS
+### 2. Install
 
 ```bash
 # Create project directory
-mkdir -p /home/straturaos
-cd /home/straturaos
+mkdir -p /home/os-build
+cd /home/os-build
 
 # Clone repository (or copy via SCP)
 git clone <repo-url> .
@@ -46,17 +47,14 @@ cp .env.example .env
 
 # Setup (installs host dependencies)
 ./build.sh setup
-
-# Install global command
-./build.sh install
 ```
 
 ### 3. Build
 
 ```bash
-straturaos build           # Build all targets (clean build)
-straturaos build iso       # Build x86_64 only (incremental)
-straturaos build rpi5      # Build RPi5 only (incremental)
+./build.sh build all        # Build all targets (clean build)
+./build.sh build iso        # Build x86_64 only (incremental)
+./build.sh build rpi5       # Build RPi5 only (incremental)
 ```
 
 **Note:** Docker images are created automatically with each build. On the ISO target, Docker itself is deferred to firstboot; on RPi5, Docker is included directly in the image.
@@ -69,55 +67,64 @@ All tunable build values live in `.env` at the project root. Copy the template o
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_CONF_VERSION` | .env format version (for upgrade warnings) | `2` |
+| `OS_CONF_VERSION` | .env format version (for upgrade warnings) | `4` |
 
 **Debian Base**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_DEBIAN_SUITE` | Debian suite for mmdebstrap | `trixie` |
-| `STRATURAOS_DEBIAN_MIRROR` | APT mirror URL | `http://deb.debian.org/debian` |
-| `STRATURAOS_CROSS_BUILD` | Cross-compilation mode | `auto` (auto\|yes\|no) |
+| `OS_DEBIAN_SUITE` | Debian suite for mmdebstrap | `trixie` |
+| `OS_DEBIAN_MIRROR` | APT mirror URL | `http://deb.debian.org/debian` |
+| `OS_CROSS_BUILD` | Cross-compilation mode | `auto` (auto\|yes\|no) |
 
 **Parallelism**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_PARALLEL_JOBS` | Parallel make jobs | `$(nproc)` |
+| `OS_PARALLEL_JOBS` | Parallel make jobs | `$(nproc)` |
+
+**Branding**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OS_BRAND` | Lowercase prefix for paths, services, user/group | *(see brand-defaults.sh)* |
+| `OS_NAME` | Display name shown in banners, MOTD, logs | *(see brand-defaults.sh)* |
+| `OS_API_ENDPOINT` | API endpoint for connectivity checks | *(see brand-defaults.sh)* |
+| `OS_REGISTRY` | Container registry for managed apps | *(see brand-defaults.sh)* |
 
 **Distribution**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_VERSION` | Release version baked into images | `2.0` |
-| `STRATURAOS_HOSTNAME` | Default hostname | `straturaos` |
-| `STRATURAOS_ROOT_PASSWD` | Root password (plaintext) | `stratura` |
-| `STRATURAOS_ISSUE` | Login banner | `Welcome to StraturaOS` |
+| `OS_VERSION` | Release version baked into images | `2.0` |
+| `OS_HOSTNAME` | Default hostname | `${OS_BRAND}os` |
+| `OS_ROOT_PASSWD` | Root password (plaintext) | `${OS_BRAND}` |
+| `OS_ISSUE` | Login banner | `Welcome to ${OS_NAME}` |
 
 **Network**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_DHCP_INTERFACE` | Interface for DHCP at first boot | `eth0` |
+| `OS_DHCP_INTERFACE` | Interface for DHCP at first boot | `eth0` |
 
 **Filesystem**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_ROOTFS_SIZE` | RPi5 rootfs ext4 + partition size | `2G` |
+| `OS_ROOTFS_SIZE` | RPi5 rootfs ext4 + partition size | `2G` |
 
 **Build Directories**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `STRATURAOS_TMP` | Temp directory for builds | `/home/straturaos/tmp` |
+| `OS_TMP` | Temp directory for builds | `/home/${OS_BRAND}os/tmp` |
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `setup` | Install host dependencies for Debian builds |
-| `build [target]` | Build StraturaOS image (mmdebstrap + overlays) |
+| `build [target]` | Build OS image (mmdebstrap + overlays) |
 | `clean` | Remove build rootfs and temp files |
 | `help` | Show help |
 
@@ -130,26 +137,26 @@ All tunable build values live in `.env` at the project root. Copy the template o
 ## Output Files
 
 ```
-release/2.0/
+release/<version>/
 ├── arm64/
-│   └── straturaos-2.0-rpi5-arm64-YYYYMMDD-HHMM.img
+│   └── <brand>os-<version>-rpi5-arm64-YYYYMMDD-HHMM.img
 ├── iso/
-│   └── straturaos-2.0-x86_64-amd64-YYYYMMDD-HHMM.iso
+│   └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-HHMM.iso
 └── docker/
-    ├── straturaos-2.0-rpi5-arm64-YYYYMMDD-HHMM.tar
-    └── straturaos-2.0-x86_64-amd64-YYYYMMDD-HHMM.tar
+    ├── <brand>os-<version>-rpi5-arm64-YYYYMMDD-HHMM.tar
+    └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-HHMM.tar
 ```
 
 **Docker images:**
-- `straturaos:latest-arm64` - RPi5 build
-- `straturaos:latest-amd64` - x86_64 build
+- `<brand>os:latest-arm64` - RPi5 build
+- `<brand>os:latest-amd64` - x86_64 build
 
 ## Deploying
 
 ### RPi5 - Flash SD Card
 
 ```bash
-sudo dd if=release/2.0/arm64/straturaos-*.img of=/dev/sdX bs=4M status=progress
+sudo dd if=release/<version>/arm64/<brand>os-*.img of=/dev/sdX bs=4M status=progress
 sync
 ```
 
@@ -157,39 +164,62 @@ sync
 
 ```bash
 # QEMU
-qemu-system-x86_64 -cdrom release/2.0/iso/straturaos-*.iso -m 2048 -enable-kvm
+qemu-system-x86_64 -cdrom release/<version>/iso/<brand>os-*.iso -m 2048 -enable-kvm
 
 # Proxmox - Upload ISO and create VM via web UI
-scp release/2.0/iso/straturaos-*.iso root@proxmox:/var/lib/vz/template/iso/
+scp release/<version>/iso/<brand>os-*.iso root@proxmox:/var/lib/vz/template/iso/
 ```
 
 ### Docker
 
 ```bash
 # Images are created automatically during build
-docker run -it straturaos:latest-amd64 /bin/bash   # x86_64
-docker run -it straturaos:latest-arm64 /bin/bash   # RPi5/ARM64
+docker run -it <brand>os:latest-amd64 /bin/bash   # x86_64
+docker run -it <brand>os:latest-arm64 /bin/bash   # RPi5/ARM64
 
 # Or import from tarball
-docker import release/2.0/docker/straturaos-*-amd64-*.tar straturaos:latest-amd64
-docker import release/2.0/docker/straturaos-*-arm64-*.tar straturaos:latest-arm64
+docker import release/<version>/docker/<brand>os-*-amd64-*.tar <brand>os:latest-amd64
+docker import release/<version>/docker/<brand>os-*-arm64-*.tar <brand>os:latest-arm64
 ```
 
 ## Project Structure
 
 ```
-/home/straturaos/
 ├── .env.example          # Build config template (cp to .env)
 ├── .env                  # Local build config (gitignored)
 ├── build.sh              # Main build script
 ├── config/               # Package lists per target
-├── packages/             # Stratura package sources
+├── packages/             # OS package sources (os-config, os-security)
 ├── overlay/              # Filesystem overlays (common, rpi5, x86_64)
 ├── scripts/              # Build scripts (common, rpi5, x86_64, docker)
+├── supervisor/           # Node.js device supervisor (Docker-based)
 ├── tests/                # Unit tests (pytest)
 └── release/              # Output images
 ```
 
+## Rebranding
+
+The OS can be rebranded by editing variables in `.env`:
+
+```bash
+OS_BRAND="myco"           # paths: /etc/myco/, services: myco-supervisor
+OS_NAME="MyCo OS"         # display name in banners and logs
+OS_API_ENDPOINT="https://api.myco.io"
+```
+
+Default brand values are defined in `scripts/common/brand-defaults.sh` (single source of truth).
+
+After changing these values, rebuild (`./build.sh build all`). The build system propagates branding through:
+
+- **Build scripts**: `${OS_BRAND}` substitution for paths, artifact names, Docker tags
+- **Service files**: `__BRAND__` / `__BRAND_NAME__` placeholders, sed-replaced at install
+- **Runtime**: `/etc/${BRAND}/brand.env` generated at build, read by supervisor and MOTD
+- **Dockerfile**: `--build-arg BRAND` for container user/group/workdir
+
+**What stays static** (not affected by rebranding):
+- Source filenames in `packages/` (installed under branded names)
+- The bootstrap path `/etc/falken/brand.env` (hardcoded discovery point)
+
 ## License
 
-StraturaOS is licensed under the GNU License. See [LICENSE](LICENSE) for details.
+Licensed under the GNU License. See [LICENSE](LICENSE) for details.

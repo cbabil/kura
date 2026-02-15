@@ -1,28 +1,36 @@
 'use strict';
 
+const brand = require('./brand');
+
+const prefix = brand.BRAND_PREFIX;
+
 const PATHS = Object.freeze({
-  CONFIG: '/etc/stratura/supervisor-config.json',
-  SECURITY_CONFIG: '/etc/stratura/security-config.json',
-  STATE_FILE: '/var/lib/stratura/device-state.json',
-  STATE_LOCK: '/var/lib/stratura/device-state.lock',
-  UPDATE_LOCK: '/var/lib/stratura/update.lock',
-  VOLUMES_DIR: '/var/lib/stratura/volumes',
-  LOG_DIR: '/var/log/stratura',
-  CERT_DIR: '/etc/stratura/certs',
+  CONFIG: `/etc/${prefix}/supervisor-config.json`,
+  SECURITY_CONFIG: `/etc/${prefix}/security-config.json`,
+  STATE_FILE: `/var/lib/${prefix}/device-state.json`,
+  STATE_LOCK: `/var/lib/${prefix}/device-state.lock`,
+  UPDATE_LOCK: `/var/lib/${prefix}/update.lock`,
+  VOLUMES_DIR: `/var/lib/${prefix}/volumes`,
+  LOG_DIR: `/var/log/${prefix}`,
+  CERT_DIR: `/etc/${prefix}/certs`,
 });
 
 const DEFAULTS = Object.freeze({
-  PORT: 48484,
   POLL_INTERVAL: 60,
-  API_ENDPOINT: 'https://api.stratura.io',
-  MONITOR_CRON: '*/30 * * * * *',
+  API_ENDPOINT: brand.BRAND_API_ENDPOINT,
+  WS_ENDPOINT: brand.BRAND_API_ENDPOINT.replace(/^http/, 'ws') + '/ws',
+  WS_HEARTBEAT_INTERVAL: 30000,
+  WS_HEARTBEAT_TIMEOUT: 90000,
+  WS_RECONNECT_BASE: 1000,
+  WS_RECONNECT_MAX: 60000,
+  TELEMETRY_CRON: '*/30 * * * * *',
   LOG_LEVEL: 'info',
 });
 
 const LABELS = Object.freeze({
-  MANAGED: 'io.stratura.managed',
-  APP_NAME: 'io.stratura.app.name',
-  APP_VERSION: 'io.stratura.version',
+  MANAGED: `io.${prefix}.managed`,
+  APP_NAME: `io.${prefix}.app.name`,
+  APP_VERSION: `io.${prefix}.version`,
 });
 
 const UPDATE_STATES = Object.freeze({
@@ -33,6 +41,8 @@ const UPDATE_STATES = Object.freeze({
   COMPLETED: 'completed',
   FAILED: 'failed',
 });
+
+const ENV_PREFIX = prefix.toUpperCase();
 
 const THRESHOLDS = Object.freeze({
   CPU_WARNING: 80,
@@ -50,4 +60,5 @@ module.exports = {
   LABELS,
   UPDATE_STATES,
   THRESHOLDS,
+  ENV_PREFIX,
 };

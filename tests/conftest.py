@@ -1,4 +1,4 @@
-"""Shared fixtures for StraturaOS service tests."""
+"""Shared fixtures for OS service tests."""
 
 import json
 import os
@@ -13,10 +13,8 @@ _PACKAGES_ROOT = os.path.join(
 )
 
 _SRC_DIRS = [
-    os.path.join(_PACKAGES_ROOT, "stratura-supervisor", "src"),
-    os.path.join(_PACKAGES_ROOT, "stratura-config", "src"),
-    os.path.join(_PACKAGES_ROOT, "stratura-monitor", "src"),
-    os.path.join(_PACKAGES_ROOT, "stratura-security", "src"),
+    os.path.join(_PACKAGES_ROOT, "os-config", "src"),
+    os.path.join(_PACKAGES_ROOT, "os-security", "src"),
 ]
 
 for src_dir in _SRC_DIRS:
@@ -63,14 +61,14 @@ def mock_config(tmp_path):
 def mock_rootfs(tmp_path):
     """Create a temporary rootfs-like directory structure."""
     dirs = [
-        "etc/stratura/certs",
-        "etc/stratura/keys",
-        "etc/stratura/security/seccomp",
-        "etc/stratura/selinux",
+        "etc/falken/certs",
+        "etc/falken/keys",
+        "etc/falken/security/seccomp",
+        "etc/falken/selinux",
         "etc/ssh",
         "etc/audit/rules.d",
-        "etc/apparmor.d/stratura",
-        "var/lib/stratura/volumes",
+        "etc/apparmor.d/falken",
+        "var/lib/falken/volumes",
         "var/lock",
         "var/log",
         "boot",
@@ -137,7 +135,7 @@ def hardening_config(tmp_path):
     """Create a security hardening config file."""
     config = {
         "apparmor_profiles": [
-            {"name": "stratura-supervisor", "content": "profile stratura {}"}
+            {"name": "falken-supervisor", "content": "profile falken {}"}
         ],
         "seccomp_profiles": [
             {
