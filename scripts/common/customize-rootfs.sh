@@ -99,10 +99,29 @@ printf '\033[1 q' 2>/dev/null
 printf '\033]12;${COLOR}\007' 2>/dev/null
 PROFEOF
 
+# ---- Silence kernel console after boot ----
+# loglevel=7 in GRUB shows boot progress; this service lowers it to 1
+# (emergency only) once boot completes, preventing late kernel messages
+# from polluting the login screen.
+cat > "${ROOTFS}/usr/lib/systemd/system/console-loglevel.service" <<'CLEOF'
+[Unit]
+Description=Lower console log level after boot
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/dmesg -n 1
+
+[Install]
+WantedBy=multi-user.target
+CLEOF
+install -d "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+ln -sf /usr/lib/systemd/system/console-loglevel.service \
+    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/console-loglevel.service"
+
 # ---- Enable systemd services ----
 # multi-user.target (service names use ${BRAND} prefix)
 for svc in ${BRAND}-supervisor ${BRAND}-config; do
-    install -d "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
     ln -sf "/usr/lib/systemd/system/${svc}.service" \
         "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${svc}.service"
 done
