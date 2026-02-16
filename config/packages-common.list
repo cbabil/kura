@@ -11,6 +11,9 @@ sudo
 # JSON parsing (for os-config and os-security shell scripts)
 jq
 
+# Security
+auditd
+
 # Networking
 network-manager
 openssh-server
