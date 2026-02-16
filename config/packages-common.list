@@ -6,11 +6,10 @@ locales
 ca-certificates
 util-linux
 gnupg
+sudo
 
-# Python runtime (for os-config and os-security host services)
-python3
-python3-jinja2
-python3-yaml
+# JSON parsing (for os-config and os-security shell scripts)
+jq
 
 # Networking
 network-manager

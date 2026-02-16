@@ -1,13 +1,14 @@
 # Build directories
 build/
 tmp/
-sstate-cache/
 cache/
 
-# Yocto build output
+# Build output
 *.wic
 *.wic.bmap
 *.ext4
+*.iso
+*.img
 *.tar.bz2
 *.tar.gz
 *.tar.xz
@@ -24,10 +25,6 @@ cache/
 *.bak
 *.old
 
-# Python cache
-__pycache__/
-*.py[cod]
-
 # Node.js
 node_modules/
 
@@ -36,10 +33,6 @@ node_modules/
 Thumbs.db
 *.~lock.*
 *.~*
-
-# Git and GitHub
-.git/
-.github/
 
 # Docker
 docker-compose.override.yml

@@ -32,11 +32,10 @@ echo "Creating Docker rootfs (${ARCH})..."
 mmdebstrap --variant=minbase --arch="${ARCH}" \
     "${SUITE}" "${DOCKER_ROOTFS}" "${MIRROR}"
 
-# ---- Install Python deps only (no kernel, no systemd, no Docker) ----
+# ---- Install runtime deps (no kernel, no systemd, no Docker) ----
 chroot "${DOCKER_ROOTFS}" apt-get update -qq
 chroot "${DOCKER_ROOTFS}" apt-get install -y --no-install-recommends \
-    python3 python3-jinja2 python3-yaml python3-requests python3-setuptools \
-    network-manager openssh-server curl nano
+    jq network-manager openssh-server curl nano
 
 # ---- Install OS packages ----
 "${SCRIPT_DIR}/common/install-os-pkgs.sh" "${DOCKER_ROOTFS}" "${PKG_DIR}"

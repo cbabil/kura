@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/common/customize-rootfs.sh
 # Shared rootfs customization (runs outside chroot, operates on rootfs directory).
-# Adapted from buildroot-external post-build.sh
+# Common rootfs customizations applied during build
 #
 # Usage: customize-rootfs.sh <rootfs-dir>
 # Requires: OS_* env vars exported by build.sh
@@ -15,11 +15,18 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 source "$(dirname "$0")/brand-defaults.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
+# Validate BRAND (must be lowercase alphanumeric with hyphens, no shell metacharacters)
+if ! [[ "${BRAND}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+    echo "ERROR: Invalid OS_BRAND '${BRAND}' (must be lowercase alphanumeric with hyphens)" >&2
+    exit 1
+fi
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
 HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
 export ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
-VERSION="${OS_VERSION:-2.0}"
+LOGIN_USER="${OS_USER:-joshua}"
+export LOGIN_USER_PASSWD="${OS_USER_PASSWD:-joshua}"
+VERSION="${OS_VERSION:-0.0.1}"
 DHCP_IFACE="${OS_DHCP_INTERFACE:-eth0}"
 API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
 REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
@@ -27,12 +34,26 @@ REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
 echo "Customizing rootfs at ${ROOTFS}..."
 
 # ---- Directory structure ----
-install -d -m 0755 "${ROOTFS}/var/lib/${BRAND}"
-install -d -m 0755 "${ROOTFS}/var/lib/${BRAND}/volumes"
-install -d -m 0755 "${ROOTFS}/var/lib/${BRAND}-supervisor"
-install -d -m 0755 "${ROOTFS}/var/log/${BRAND}"
-install -d -m 0700 "${ROOTFS}/etc/${BRAND}/certs"
+install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/lib/${BRAND}"
+install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/lib/${BRAND}/volumes"
+install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/lib/${BRAND}-supervisor"
+install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/log/${BRAND}"
+install -d -m 0750 -g 999 "${ROOTFS}/etc/${BRAND}/certs"
 install -d -m 0755 "${ROOTFS}/mnt/data"
+
+# ---- System user for supervisor (runs unprivileged) ----
+if ! grep -q "^${BRAND}:" "${ROOTFS}/etc/passwd" 2>/dev/null; then
+    echo "${BRAND}:x:999:999:${OS_NAME} Supervisor:/opt/${BRAND}-supervisor:/usr/sbin/nologin" \
+        >> "${ROOTFS}/etc/passwd"
+    echo "${BRAND}:x:999:" >> "${ROOTFS}/etc/group"
+    echo "${BRAND}:!:19000:0:99999:7:::" >> "${ROOTFS}/etc/shadow"
+fi
+# Add brand user to docker group (docker group is created later by Docker install)
+if grep -q "^docker:" "${ROOTFS}/etc/group" 2>/dev/null &&
+   ! grep -q "^docker:.*:${BRAND}\(,\|$\)" "${ROOTFS}/etc/group"; then
+    # Append to docker group members (handles both empty and non-empty member lists)
+    sed -i "s/^\(docker:[^:]*:[^:]*:.*\)$/\1,${BRAND}/; s/:,/:/" "${ROOTFS}/etc/group"
+fi
 
 # ---- Hostname ----
 echo "${HOSTNAME}" > "${ROOTFS}/etc/hostname"
@@ -43,16 +64,15 @@ cat > "${ROOTFS}/etc/hosts" <<EOF
 EOF
 
 # ---- Permissions ----
-chmod 700 "${ROOTFS}/etc/${BRAND}"
-chmod 755 "${ROOTFS}/var/lib/${BRAND}"
-chmod 755 "${ROOTFS}/var/log/${BRAND}"
+# /etc/${BRAND} readable by brand group (supervisor needs config access)
+chmod 750 "${ROOTFS}/etc/${BRAND}"
+chgrp 999 "${ROOTFS}/etc/${BRAND}"
 
-# ---- Python environment ----
+# ---- Shell environment ----
 install -d "${ROOTFS}/etc/profile.d"
 # Derive RGB from hex color for truecolor escape
 _cr=$((16#${COLOR:1:2})); _cg=$((16#${COLOR:3:2})); _cb=$((16#${COLOR:5:2}))
 cat > "${ROOTFS}/etc/profile.d/${BRAND}.sh" <<PROFEOF
-export PYTHONPATH=/usr/lib/${BRAND}
 export OS_CONFIG=/etc/${BRAND}/config.json
 
 # Fall back to xterm-256color for terminals without local terminfo
@@ -95,10 +115,13 @@ ln -sf "/usr/lib/systemd/system/${BRAND}-security.service" \
 # /etc/environment — read by PAM (pam_env) for ALL sessions before any shell.
 # -d flag suppresses "terminal is not fully functional" from less (ncurses 6.x
 # wide-format terminfo on Debian trixie is unreadable by less).
-cat >> "${ROOTFS}/etc/environment" <<'ENVEOF'
+# Append only if not already present (idempotent)
+if ! grep -q 'SYSTEMD_LESS=' "${ROOTFS}/etc/environment" 2>/dev/null; then
+    cat >> "${ROOTFS}/etc/environment" <<'ENVEOF'
 SYSTEMD_LESS=FRSXMKd
 LESS=-FRSXMKd
 ENVEOF
+fi
 
 # Ensure /etc/resolv.conf is a regular writable file (not a stale symlink).
 # NM with dns=default writes nameservers directly here at runtime.
@@ -144,6 +167,8 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
         "${ROOTFS}/etc/${BRAND}/config.json"
     sed -i "s|\"path\": \"[^\"]*\"|\"path\": \"/var/log/${BRAND}\"|" \
         "${ROOTFS}/etc/${BRAND}/config.json"
+    chown 999:999 "${ROOTFS}/etc/${BRAND}/config.json"
+    chmod 600 "${ROOTFS}/etc/${BRAND}/config.json"
 fi
 
 # ---- ANSI color definitions (from brand color) ----
@@ -185,21 +210,56 @@ for egg in "${SCRIPT_DIR}/easter-eggs"/*; do
     install -m 0755 "${egg}" "${ROOTFS}/usr/local/bin/$(basename "${egg}")"
 done
 
-# ---- SSH: allow root login with password ----
+# ---- Login user (SSH with password) ----
+# Create login user with home directory; password set via chroot later by build.sh
+if ! grep -q "^${LOGIN_USER}:" "${ROOTFS}/etc/passwd" 2>/dev/null; then
+    echo "${LOGIN_USER}:x:1000:1000:${LOGIN_USER}:/home/${LOGIN_USER}:/bin/bash" \
+        >> "${ROOTFS}/etc/passwd"
+    echo "${LOGIN_USER}:x:1000:" >> "${ROOTFS}/etc/group"
+    echo "${LOGIN_USER}:!:19000:0:99999:7:::" >> "${ROOTFS}/etc/shadow"
+    install -d -m 0700 -o 1000 -g 1000 "${ROOTFS}/home/${LOGIN_USER}"
+fi
+# Add login user to sudo group
+if grep -q "^sudo:" "${ROOTFS}/etc/group" 2>/dev/null &&
+   ! grep -q "^sudo:.*${LOGIN_USER}" "${ROOTFS}/etc/group"; then
+    sed -i "s/^\(sudo:[^:]*:[^:]*:.*\)$/\1,${LOGIN_USER}/; s/:,/:/" "${ROOTFS}/etc/group"
+fi
+
+# ---- SSH: root key-only, login user password allowed ----
 install -d "${ROOTFS}/etc/ssh/sshd_config.d"
 cat > "${ROOTFS}/etc/ssh/sshd_config.d/10-${BRAND}.conf" <<SSHEOF
-PermitRootLogin yes
-PrintLastLog no
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+
+Match User ${LOGIN_USER}
+    PasswordAuthentication yes
 SSHEOF
 
-# ---- Set root password ----
+# ---- Set passwords ----
 # Uses chpasswd inside chroot (called by build.sh after mounting /proc etc.)
-# build.sh will run: chroot ${ROOTFS} sh -c "echo 'root:${ROOT_PASSWD}' | chpasswd"
+# build.sh will run: chroot ${ROOTFS} sh -c "echo 'root:...\n${LOGIN_USER}:...' | chpasswd"
 
 # ---- Locale (C + en_US) ----
 if [ -f "${ROOTFS}/etc/locale.gen" ]; then
     sed -i 's/^# en_US.UTF-8/en_US.UTF-8/' "${ROOTFS}/etc/locale.gen"
 fi
+
+# ---- Sudoers: allow brand user to reboot/shutdown (supervisor runs unprivileged) ----
+install -d -m 0750 "${ROOTFS}/etc/sudoers.d"
+cat > "${ROOTFS}/etc/sudoers.d/${BRAND}" <<SUDOEOF
+${BRAND} ALL=(root) NOPASSWD: /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff
+SUDOEOF
+chmod 440 "${ROOTFS}/etc/sudoers.d/${BRAND}"
+
+# ---- Journald: limit persistent log storage ----
+JOURNAL_MAX="${OS_JOURNAL_MAX_SIZE:-100M}"
+JOURNAL_MAX_FILE="${OS_JOURNAL_MAX_FILE_SEC:-1week}"
+install -d "${ROOTFS}/etc/systemd/journald.conf.d"
+cat > "${ROOTFS}/etc/systemd/journald.conf.d/10-size-limit.conf" <<JRNLEOF
+[Journal]
+SystemMaxUse=${JOURNAL_MAX}
+MaxFileSec=${JOURNAL_MAX_FILE}
+JRNLEOF
 
 # ---- Aggressive cleanup to reduce image size ----
 echo "Stripping rootfs to reduce image size..."
@@ -211,14 +271,6 @@ rm -rf "${ROOTFS}/var/cache/debconf"/*
 rm -rf "${ROOTFS}/var/lib/dpkg/info"/*.md5sums
 rm -rf "${ROOTFS}/usr/share/bug"
 rm -rf "${ROOTFS}/usr/share/lintian"
-
-# Python bytecode caches
-find "${ROOTFS}" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-find "${ROOTFS}" -name '*.pyc' -delete 2>/dev/null || true
-
-# Python packaging metadata (not needed at runtime)
-find "${ROOTFS}" -type d -name '*.dist-info' -exec rm -rf {} + 2>/dev/null || true
-find "${ROOTFS}" -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
 
 # Strip debug symbols from ELF binaries and shared libraries.
 # Skip /usr/local/bin/bun — it embeds resources and breaks if stripped.

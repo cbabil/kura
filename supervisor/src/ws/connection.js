@@ -13,6 +13,7 @@ let reconnectTimer = null;
 let onMessageHandler = null;
 let shuttingDown = false;
 let authenticated = false;
+let pendingAuthId = null;
 
 function getEndpoint() {
   const endpoint = process.env.WS_ENDPOINT || DEFAULTS.WS_ENDPOINT;
@@ -39,12 +40,14 @@ function connect(messageHandler) {
   const endpoint = getEndpoint();
 
   logger.info({ endpoint }, 'Connecting to cloud');
-  ws = new WebSocket(endpoint, { maxPayload: 1024 * 1024 });
+  ws = new WebSocket(endpoint, { maxPayload: 128 * 1024 });
 
   ws.on('open', () => {
     logger.info({ endpoint }, 'WebSocket connected');
     reconnectAttempt = 0;
-    send(createAuth());
+    const authMsg = createAuth();
+    pendingAuthId = authMsg.id;
+    send(authMsg);
     startHeartbeat();
   });
 
@@ -58,6 +61,7 @@ function connect(messageHandler) {
   ws.on('close', (code, reason) => {
     logger.warn({ code, reason: reason.toString() }, 'WebSocket closed');
     authenticated = false;
+    pendingAuthId = null;
     stopHeartbeat();
     if (!shuttingDown) {
       scheduleReconnect();
@@ -80,7 +84,12 @@ function send(msg) {
     logger.warn('WebSocket not open, dropping message');
     return false;
   }
-  ws.send(JSON.stringify(msg));
+  try {
+    ws.send(JSON.stringify(msg));
+  } catch (err) {
+    logger.error({ err: err.message }, 'Failed to send WebSocket message');
+    return false;
+  }
   return true;
 }
 
@@ -114,9 +123,9 @@ function scheduleReconnect() {
   const base = DEFAULTS.WS_RECONNECT_BASE;
   const max = DEFAULTS.WS_RECONNECT_MAX;
   const jitter = Math.random() * 1000;
-  const delay = Math.min(base * Math.pow(2, reconnectAttempt), max) + jitter;
+  const delay = Math.min(base * (2 ** reconnectAttempt), max) + jitter;
 
-  reconnectAttempt++;
+  reconnectAttempt = Math.min(reconnectAttempt + 1, 100);
   const logLevel = reconnectAttempt > 10 ? 'error' : 'info';
   logger[logLevel]({ attempt: reconnectAttempt, delay: Math.round(delay) }, 'Scheduling reconnect');
 
@@ -128,6 +137,7 @@ function scheduleReconnect() {
 function close() {
   shuttingDown = true;
   authenticated = false;
+  pendingAuthId = null;
   stopHeartbeat();
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (ws) {
@@ -148,4 +158,12 @@ function setAuthenticated(value) {
   authenticated = value;
 }
 
-module.exports = { connect, send, close, isConnected, isAuthenticated, setAuthenticated };
+function getPendingAuthId() {
+  return pendingAuthId;
+}
+
+function clearPendingAuthId() {
+  pendingAuthId = null;
+}
+
+module.exports = { connect, send, close, isConnected, isAuthenticated, setAuthenticated, getPendingAuthId, clearPendingAuthId };

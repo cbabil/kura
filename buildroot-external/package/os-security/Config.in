@@ -1,5 +1,0 @@
-config BR2_PACKAGE_OS_SECURITY
-	bool "os-security"
-	select BR2_PACKAGE_PYTHON3
-	help
-	  Security Hardening - System security policies and hardening.

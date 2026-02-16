@@ -58,6 +58,19 @@ describe('container-opts', () => {
       const opts = containerOpts.buildNetworkOpts({ network: { mode: 'none' } });
       expect(opts.networkMode).toBe('none');
     });
+
+    it('rejects invalid port string format (no colon)', () => {
+      expect(() => containerOpts.buildNetworkOpts({
+        network: { ports: ['8080'] },
+      })).toThrow('Invalid port mapping format');
+    });
+
+    it('parses valid port string', () => {
+      const opts = containerOpts.buildNetworkOpts({
+        network: { ports: ['8080:80'] },
+      });
+      expect(opts.portBindings['80/tcp']).toEqual([{ HostPort: '8080' }]);
+    });
   });
 
   describe('buildEnv', () => {
@@ -76,9 +89,58 @@ describe('container-opts', () => {
 
     it('handles volume object with default mode', () => {
       const binds = containerOpts.buildBinds({
-        volumes: [{ host_path: '/a', container_path: '/b' }],
+        volumes: [{ host_path: '/var/lib/app', container_path: '/b' }],
       });
-      expect(binds).toEqual(['/a:/b:rw']);
+      expect(binds).toEqual(['/var/lib/app:/b:rw']);
+    });
+
+    it('validates string volumes against allowed roots', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: ['/etc/shadow:/data:ro'],
+      })).toThrow('not under allowed roots');
+    });
+
+    it('allows string volumes under allowed roots', () => {
+      const binds = containerOpts.buildBinds({
+        volumes: ['/var/lib/app:/data:ro'],
+      });
+      expect(binds).toEqual(['/var/lib/app:/data:ro']);
+    });
+
+    it('rejects object volumes outside allowed roots', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: [{ host_path: '/etc/passwd', container_path: '/data' }],
+      })).toThrow('not under allowed roots');
+    });
+
+    it('rejects traversal via parent directory', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: [{ host_path: '/var/lib/../../etc/shadow', container_path: '/data' }],
+      })).toThrow('not under allowed roots');
+    });
+
+    it('rejects empty host_path', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: [{ host_path: '', container_path: '/data' }],
+      })).toThrow('host_path is required');
+    });
+
+    it('rejects non-string host_path', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: [{ host_path: 123, container_path: '/data' }],
+      })).toThrow('host_path is required');
+    });
+
+    it('rejects relative host_path', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: [{ host_path: 'relative/path', container_path: '/data' }],
+      })).toThrow('must be absolute');
+    });
+
+    it('rejects host_path with null bytes', () => {
+      expect(() => containerOpts.buildBinds({
+        volumes: [{ host_path: '/var/lib/app\x00evil', container_path: '/data' }],
+      })).toThrow('null bytes');
     });
   });
 

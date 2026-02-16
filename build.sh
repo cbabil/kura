@@ -51,7 +51,7 @@ source "${PROJECT_DIR}/scripts/common/brand-defaults.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
-OS_DEBIAN_MIRROR="${OS_DEBIAN_MIRROR:-http://deb.debian.org/debian}"
+OS_DEBIAN_MIRROR="${OS_DEBIAN_MIRROR:-https://deb.debian.org/debian}"
 OS_CROSS_BUILD="${OS_CROSS_BUILD:-auto}"
 OS_PARALLEL_JOBS="${OS_PARALLEL_JOBS:-$(nproc 2>/dev/null || echo 1)}"
 OS_BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
@@ -65,12 +65,16 @@ OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
 OS_TMP="${OS_TMP:-${DEFAULT_TMP}}"
 OS_API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
 OS_REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
+OS_COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
+OS_JOURNAL_MAX_SIZE="${OS_JOURNAL_MAX_SIZE:-100M}"
+OS_JOURNAL_MAX_FILE_SEC="${OS_JOURNAL_MAX_FILE_SEC:-1week}"
 
 export OS_CONF_VERSION OS_DEBIAN_SUITE OS_DEBIAN_MIRROR
 export OS_CROSS_BUILD OS_PARALLEL_JOBS OS_BRAND OS_NAME
 export OS_VERSION OS_HOSTNAME OS_ROOT_PASSWD OS_ISSUE
 export OS_DHCP_INTERFACE OS_ROOTFS_SIZE OS_TMP
 export OS_API_ENDPOINT OS_REGISTRY
+export OS_COLOR OS_JOURNAL_MAX_SIZE OS_JOURNAL_MAX_FILE_SEC
 
 mkdir -p "${OS_TMP}" 2>/dev/null || true
 
@@ -201,9 +205,8 @@ setup_host() {
         squashfs-tools
         e2fsprogs
         gdisk
-        python3
-        python3-pytest
         shellcheck
+        bats
         docker.io
         containerd
         zstd
@@ -386,14 +389,17 @@ apply_overlays() {
 }
 
 # ============================================================================
-# set_root_password -- set root password inside chroot
+# set_passwords -- set root password inside chroot
 # ============================================================================
 
-set_root_password() {
+set_passwords() {
     local ROOTFS="$1"
+    local LOGIN_USER="${OS_USER:-joshua}"
+    local LOGIN_USER_PASSWD="${OS_USER_PASSWD:-joshua}"
 
     mount_chroot "${ROOTFS}"
-    chroot "${ROOTFS}" sh -c "echo 'root:${OS_ROOT_PASSWD}' | chpasswd"
+    chroot "${ROOTFS}" sh -c "printf 'root:%s\n%s:%s\n' \
+        '${OS_ROOT_PASSWD}' '${LOGIN_USER}' '${LOGIN_USER_PASSWD}' | chpasswd"
     umount_chroot "${ROOTFS}"
 }
 
@@ -603,11 +609,31 @@ build_supervisor() {
     fi
 
     # --- Download and install TARGET Bun binary to rootfs ---
-    # TODO: Add SHA256 checksum verification for pinned Bun releases
     local BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${TARGET_BUN_NAME}.zip"
     print_status "Downloading Bun v${BUN_VERSION} (${TARGET_BUN_NAME}) for rootfs..."
     if ! curl -fsSL "${BUN_URL}" -o "${ROOTFS}/tmp/bun.zip"; then
         print_error "Failed to download Bun from ${BUN_URL}"
+        exit 1
+    fi
+    # Verify SHA256 checksum if configured
+    local EXPECTED_SHA=""
+    if [ "${TARGET_BUN_NAME}" = "bun-linux-x64-baseline" ]; then
+        EXPECTED_SHA="${OS_BUN_SHA256_X64:-}"
+    else
+        EXPECTED_SHA="${OS_BUN_SHA256_AARCH64:-}"
+    fi
+    if [ -n "${EXPECTED_SHA}" ]; then
+        local ACTUAL_SHA
+        ACTUAL_SHA=$(sha256sum "${ROOTFS}/tmp/bun.zip" | awk '{print $1}')
+        if [ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]; then
+            print_error "Bun SHA256 mismatch! Expected: ${EXPECTED_SHA}, Got: ${ACTUAL_SHA}"
+            rm -f "${ROOTFS}/tmp/bun.zip"
+            exit 1
+        fi
+        print_status "Bun SHA256 verified: ${ACTUAL_SHA}"
+    else
+        print_error "No SHA256 checksum configured for Bun — set OS_BUN_SHA256_X64 or OS_BUN_SHA256_AARCH64 in .env"
+        rm -f "${ROOTFS}/tmp/bun.zip"
         exit 1
     fi
     if ! unzip -o "${ROOTFS}/tmp/bun.zip" -d "${ROOTFS}/tmp/bun-extract"; then
@@ -626,6 +652,27 @@ build_supervisor() {
         local HOST_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${HOST_BUN_NAME}.zip"
         print_status "Downloading Bun v${BUN_VERSION} (${HOST_BUN_NAME}) for build host..."
         curl -fsSL "${HOST_URL}" -o "${ROOTFS}/tmp/bun-host.zip"
+        # Verify host Bun SHA256 checksum if configured
+        local HOST_SHA=""
+        if [ "${HOST_BUN_NAME}" = "bun-linux-x64-baseline" ]; then
+            HOST_SHA="${OS_BUN_SHA256_X64:-}"
+        else
+            HOST_SHA="${OS_BUN_SHA256_AARCH64:-}"
+        fi
+        if [ -n "${HOST_SHA}" ]; then
+            local ACTUAL_HOST_SHA
+            ACTUAL_HOST_SHA=$(sha256sum "${ROOTFS}/tmp/bun-host.zip" | awk '{print $1}')
+            if [ "${ACTUAL_HOST_SHA}" != "${HOST_SHA}" ]; then
+                print_error "Host Bun SHA256 mismatch! Expected: ${HOST_SHA}, Got: ${ACTUAL_HOST_SHA}"
+                rm -f "${ROOTFS}/tmp/bun-host.zip"
+                exit 1
+            fi
+            print_status "Host Bun SHA256 verified: ${ACTUAL_HOST_SHA}"
+        else
+            print_error "No SHA256 checksum configured for host Bun (${HOST_BUN_NAME}) -- set OS_BUN_SHA256_X64 or OS_BUN_SHA256_AARCH64 in .env"
+            rm -f "${ROOTFS}/tmp/bun-host.zip"
+            exit 1
+        fi
         unzip -o "${ROOTFS}/tmp/bun-host.zip" -d "${ROOTFS}/tmp/bun-host"
         BUILD_BUN="${ROOTFS}/tmp/bun-host/${HOST_BUN_NAME}/bun"
         chmod +x "${BUILD_BUN}"
@@ -732,7 +779,7 @@ build_target() {
     print_status "[5/7] Customizing rootfs (common + ${TARGET_DIRNAME})..."
     apply_overlays "${ROOTFS}" "${TARGET_DIRNAME}"
     customize_rootfs "${ROOTFS}" "${TARGET_DIRNAME}"
-    set_root_password "${ROOTFS}"
+    set_passwords "${ROOTFS}"
 
     # Verify critical files before creating the artifact
     # Note: enable symlinks are absolute paths (e.g. -> /usr/lib/systemd/...)

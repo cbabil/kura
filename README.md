@@ -32,14 +32,31 @@ Create a Debian/Ubuntu VM with:
 
 **Note:** All configurable values are in `.env`. Copy the template on first setup: `cp .env.example .env`
 
-### 2. Install
+### 2. Prerequisites
+
+The build VM needs a working HTTPS connection and up-to-date CA certificates:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl git
+```
+
+If `apt-get update` fails with SSL errors (fresh minimal install), temporarily bypass TLS verification to bootstrap certificates:
+
+```bash
+sudo apt-get -o Acquire::https::Verify-Peer=false update
+sudo apt-get install -y ca-certificates
+sudo update-ca-certificates
+```
+
+### 3. Install
 
 ```bash
 # Create project directory
 mkdir -p /home/os-build
 cd /home/os-build
 
-# Clone repository (or copy via SCP)
+# Clone repository (or rsync from dev machine)
 git clone <repo-url> .
 
 # Create local config from template
@@ -47,14 +64,20 @@ cp .env.example .env
 
 # Setup (installs host dependencies)
 ./build.sh setup
+
+# Optional: create a system-wide symlink for convenience
+sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/falkenos
 ```
 
-### 3. Build
+### 4. Build
 
 ```bash
 ./build.sh build all        # Build all targets (clean build)
 ./build.sh build iso        # Build x86_64 only (incremental)
 ./build.sh build rpi5       # Build RPi5 only (incremental)
+
+# Or with the symlink:
+falkenos build iso
 ```
 
 **Note:** Docker images are created automatically with each build. On the ISO target, Docker itself is deferred to firstboot; on RPi5, Docker is included directly in the image.
@@ -192,8 +215,8 @@ docker import release/<version>/docker/<brand>os-*-arm64-*.tar <brand>os:latest-
 ├── packages/             # OS package sources (os-config, os-security)
 ├── overlay/              # Filesystem overlays (common, rpi5, x86_64)
 ├── scripts/              # Build scripts (common, rpi5, x86_64, docker)
-├── supervisor/           # Node.js device supervisor (Docker-based)
-├── tests/                # Unit tests (pytest)
+├── supervisor/           # Node.js device supervisor (Bun/WebSocket)
+├── tests/shell/          # Shell script tests (bats)
 └── release/              # Output images
 ```
 

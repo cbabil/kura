@@ -1,5 +1,5 @@
 #!/bin/bash
-# 40-status — Side-by-side containers and services
+# 40-status — Service status display
 
 # Source brand.env for runtime brand discovery
 BRAND_ENV="/etc/falken/brand.env"
@@ -21,35 +21,11 @@ BP="${BRAND_PREFIX:-falken}"
 
 DIV="$(printf '\xe2\x94\x80%.0s' {1..33})"  # ─ repeated 33 times
 
-# ---- Left column: Containers ----
-left=()
-left+=("${C}Containers${R}")
-left+=("${w}${DIV}${R}")
-
-if command -v docker >/dev/null 2>&1 && timeout 3 docker info >/dev/null 2>&1; then
-    while IFS=$'\t' read -r name status; do
-        case "$status" in
-            Up*)
-                left+=("$(printf "${W}%-13s ${G}running${w}   %s${R}" "$name" "$status")")
-                ;;
-            *)
-                left+=("$(printf "${W}%-13s ${r}stopped${w}   %s${R}" "$name" "$status")")
-                ;;
-        esac
-    done < <(timeout 3 docker ps --all --format '{{.Names}}\t{{.Status}}' 2>/dev/null)
-    if [ "${#left[@]}" -eq 2 ]; then
-        left+=("${w}  (no containers)${R}")
-    fi
-else
-    left+=("${w}  Docker not available${R}")
-fi
-
-# ---- Right column: Services ----
+# ---- Services ----
 SERVICES=(${BP}-supervisor docker NetworkManager sshd)
 
-right=()
-right+=("${C}Services${R}")
-right+=("${w}${DIV}${R}")
+printf "  %s\n" "${C}Services${R}"
+printf "  %s\n" "${w}${DIV}${R}"
 
 for svc in "${SERVICES[@]}"; do
     state=$(timeout 2 systemctl is-active "$svc" 2>/dev/null) || true
@@ -57,24 +33,11 @@ for svc in "${SERVICES[@]}"; do
     dots=$(printf '%*s' $((24 - ${#svc})) '' | tr ' ' '.')
     case "$state" in
         active)
-            right+=("$(printf "${W}%s ${w}%s ${G}%s${R}" "$svc" "$dots" "$state")")
+            printf "  ${W}%s ${w}%s ${G}%s${R}\n" "$svc" "$dots" "$state"
             ;;
         *)
-            right+=("$(printf "${W}%s ${w}%s ${r}%s${R}" "$svc" "$dots" "$state")")
+            printf "  ${W}%s ${w}%s ${r}%s${R}\n" "$svc" "$dots" "$state"
             ;;
     esac
-done
-
-# ---- Merge columns side by side ----
-max=${#left[@]}
-[ "${#right[@]}" -gt "$max" ] && max=${#right[@]}
-
-for i in $(seq 0 $((max - 1))); do
-    # Strip ANSI codes for padding calculation
-    left_plain=$(echo -e "${left[$i]:-}" | sed 's/\x1b\[[0-9;]*m//g')
-    pad=$((36 - ${#left_plain}))
-    [ "$pad" -lt 1 ] && pad=1
-    spacing=$(printf '%*s' "$pad" '')
-    printf "  %s%s%s\n" "${left[$i]:-}" "$spacing" "${right[$i]:-}"
 done
 echo ""

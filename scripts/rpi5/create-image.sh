@@ -1,7 +1,6 @@
 #!/bin/bash
 # scripts/rpi5/create-image.sh
 # Create RPi5 SD card image using sfdisk + losetup.
-# Replaces Buildroot genimage.cfg.
 #
 # Usage: create-image.sh <rootfs-dir> <output-dir>
 # Requires: sfdisk, losetup, mkfs.vfat, mkfs.ext4 (root required)

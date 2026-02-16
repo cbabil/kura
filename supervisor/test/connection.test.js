@@ -45,7 +45,7 @@ describe('connection', () => {
       connection.connect(jest.fn());
       expect(MockWebSocket).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ maxPayload: 1024 * 1024 }),
+        expect.objectContaining({ maxPayload: 128 * 1024 }),
       );
     });
 
@@ -175,6 +175,19 @@ describe('connection', () => {
       closeHandler(1006, Buffer.from('abnormal'));
 
       expect(connection.isAuthenticated()).toBe(false);
+    });
+
+    it('resets pendingAuthId on close event', () => {
+      connection.connect(jest.fn());
+      // Trigger open to set pendingAuthId
+      const openHandler = mockWsInstance.on.mock.calls.find((c) => c[0] === 'open')[1];
+      openHandler();
+      expect(connection.getPendingAuthId()).not.toBeNull();
+
+      const closeHandler = mockWsInstance.on.mock.calls.find((c) => c[0] === 'close')[1];
+      closeHandler(1006, Buffer.from('abnormal'));
+
+      expect(connection.getPendingAuthId()).toBeNull();
     });
   });
 

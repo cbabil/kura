@@ -1,11 +1,31 @@
-#!/usr/bin/env python3
-"""FalkenOS Security Hardening launcher"""
+#!/bin/bash
+# __BRAND__-security — apply system hardening measures
+# Sources library scripts from /usr/lib/__BRAND__/security/
 
-import sys
-sys.path.insert(0, '/usr/lib/falken')
+set -euo pipefail
 
-from security_hardening import SecurityHardening
+LIB_DIR="/usr/lib/__BRAND__/security"
+CONFIG="/etc/__BRAND__/security/hardening.json"
 
-if __name__ == "__main__":
-    hardening = SecurityHardening()
-    hardening.apply()
+# Source all library files
+for lib in common kernel apparmor seccomp ssh auditd firewall filesystem; do
+    # shellcheck disable=SC1090
+    source "${LIB_DIR}/${lib}.sh"
+done
+
+if [[ ! -f "${CONFIG}" ]]; then
+    log_error "Config not found: ${CONFIG}"
+    exit 1
+fi
+
+log_info "Applying system hardening..."
+
+apply_kernel_parameters
+apply_apparmor_profiles "${CONFIG}"
+apply_seccomp_profiles  "${CONFIG}"
+apply_ssh_hardening
+apply_audit_rules
+apply_firewall          "${CONFIG}"
+apply_filesystem_hardening
+
+log_info "System hardening complete."
