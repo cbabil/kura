@@ -1,4 +1,16 @@
-# Custom Linux OS
+<p align="center">
+  <img src=".github/banner.png" alt="FalkenOS" width="700">
+</p>
+
+<p align="center">
+  <a href="https://github.com/cbabil/FalkenOS/actions/workflows/ci.yml"><img src="https://github.com/cbabil/FalkenOS/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI"></a>
+  <img src="https://img.shields.io/badge/debian-trixie-A81D33?logo=debian" alt="Debian Trixie">
+  <img src="https://img.shields.io/badge/platform-x86__64%20%7C%20arm64-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/license-GPL-green" alt="License">
+  <img src="https://img.shields.io/github/v/tag/cbabil/FalkenOS?label=version&color=orange" alt="Version">
+</p>
+
+# FalkenOS
 
 A custom operating system built on Debian 13 (Trixie) using mmdebstrap for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
 
