@@ -118,12 +118,21 @@ All tunable build values live in `.env` at the project root. Copy the template o
 |----------|-------------|---------|
 | `OS_PARALLEL_JOBS` | Parallel make jobs | `$(nproc)` |
 
+**Bun Runtime**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OS_BUN_VERSION` | Bun version for supervisor | `1.2.4` |
+| `OS_BUN_SHA256_X64` | SHA256 checksum for x86_64 binary | *(see .env.example)* |
+| `OS_BUN_SHA256_AARCH64` | SHA256 checksum for aarch64 binary | *(see .env.example)* |
+
 **Branding**
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OS_BRAND` | Lowercase prefix for paths, services, user/group | *(see brand-defaults.sh)* |
 | `OS_NAME` | Display name shown in banners, MOTD, logs | *(see brand-defaults.sh)* |
+| `OS_COLOR` | Brand accent color (hex) | `#33ff00` |
 | `OS_API_ENDPOINT` | API endpoint for connectivity checks | *(see brand-defaults.sh)* |
 | `OS_REGISTRY` | Container registry for managed apps | *(see brand-defaults.sh)* |
 
@@ -131,9 +140,11 @@ All tunable build values live in `.env` at the project root. Copy the template o
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OS_VERSION` | Release version baked into images | `2.0` |
+| `OS_VERSION` | Release version baked into images | `0.0.1` |
 | `OS_HOSTNAME` | Default hostname | `${OS_BRAND}os` |
-| `OS_ROOT_PASSWD` | Root password (plaintext) | `${OS_BRAND}` |
+| `OS_USER` | Login user (SSH password auth) | `joshua` |
+| `OS_USER_PASSWD` | Login user password (plaintext) | `joshua` |
+| `OS_ROOT_PASSWD` | Root password (plaintext, key-only SSH) | `${OS_BRAND}` |
 | `OS_ISSUE` | Login banner | `Welcome to ${OS_NAME}` |
 
 **Network**
@@ -141,6 +152,13 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OS_DHCP_INTERFACE` | Interface for DHCP at first boot | `eth0` |
+
+**Logging**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OS_JOURNAL_MAX_SIZE` | Max systemd journal size | `100M` |
+| `OS_JOURNAL_MAX_FILE_SEC` | Max journal file age | `1week` |
 
 **Filesystem**
 
@@ -174,19 +192,30 @@ All tunable build values live in `.env` at the project root. Copy the template o
 ```
 release/<version>/
 ├── arm64/
-│   └── <brand>os-<version>-rpi5-arm64-YYYYMMDD-HHMM.img
+│   └── <brand>os-<version>-rpi5-arm64-YYYYMMDD-NNNN.img
 ├── iso/
-│   └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-HHMM.iso
+│   └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-NNNN.iso
 └── docker/
-    ├── <brand>os-<version>-rpi5-arm64-YYYYMMDD-HHMM.tar
-    └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-HHMM.tar
+    ├── <brand>os-<version>-rpi5-arm64-YYYYMMDD-NNNN.tar
+    └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-NNNN.tar
 ```
+
+`NNNN` is an auto-incremented build sequence number (zero-padded, stored in `.build-number`).
 
 **Docker images:**
 - `<brand>os:latest-arm64` - RPi5 build
 - `<brand>os:latest-amd64` - x86_64 build
 
 ## Deploying
+
+### Default Credentials
+
+| User | Password | SSH Access |
+|------|----------|------------|
+| `joshua` | `joshua` | Password auth |
+| `root` | `falken` | Key-only (no password SSH) |
+
+Change these in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building.
 
 ### RPi5 - Flash SD Card
 
@@ -207,12 +236,14 @@ scp release/<version>/iso/<brand>os-*.iso root@proxmox:/var/lib/vz/template/iso/
 
 ### Docker
 
+Docker images are created automatically with each build and imported into the local Docker daemon.
+
 ```bash
-# Images are created automatically during build
+# Run a built image
 docker run -it <brand>os:latest-amd64 /bin/bash   # x86_64
 docker run -it <brand>os:latest-arm64 /bin/bash   # RPi5/ARM64
 
-# Or import from tarball
+# Import from tarball (e.g. on another machine)
 docker import release/<version>/docker/<brand>os-*-amd64-*.tar <brand>os:latest-amd64
 docker import release/<version>/docker/<brand>os-*-arm64-*.tar <brand>os:latest-arm64
 ```
