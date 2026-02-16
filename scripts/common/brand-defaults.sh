@@ -6,6 +6,7 @@
 # These values match the literal strings in source/template files.
 # The build system seds them to the actual OS_* values at install time.
 
+# shellcheck disable=SC2034
 DEFAULT_BRAND="falken"
 DEFAULT_NAME="FalkenOS"
 DEFAULT_COLOR="#33ff00"

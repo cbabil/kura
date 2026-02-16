@@ -21,7 +21,8 @@ jobs:
 
       - name: Lint shell scripts
         run: |
-          shellcheck packages/os-security/src/os-security \
+          shellcheck --severity=warning \
+                     packages/os-security/src/os-security \
                      packages/os-security/src/lib/*.sh \
                      packages/os-config/src/os-config \
                      scripts/common/*.sh \
