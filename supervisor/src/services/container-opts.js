@@ -1,6 +1,10 @@
 'use strict';
 
 const { LABELS, ENV_PREFIX } = require('../utils/constants');
+const fs = require('fs');
+const path = require('path');
+
+const ALLOWED_VOLUME_ROOTS = ['/var/lib/', '/mnt/data/', '/tmp/'];
 
 function buildSecurityOpts(config) {
   const privileged = config.privileged || false;
@@ -21,13 +25,16 @@ function buildResourceOpts(config) {
   };
 }
 
+const MIN_MEMORY = 4 * 1024 * 1024; // 4MB minimum
+
 function parseMemory(memStr) {
   const match = String(memStr).match(/^(\d+)([mgk]?)$/i);
   if (!match) { return 256 * 1024 * 1024; }
   const num = parseInt(match[1], 10);
   const unit = (match[2] || 'm').toLowerCase();
   const multipliers = { k: 1024, m: 1024 * 1024, g: 1024 * 1024 * 1024 };
-  return num * (multipliers[unit] || 1024 * 1024);
+  const bytes = num * (multipliers[unit] || 1024 * 1024);
+  return Math.max(bytes, MIN_MEMORY);
 }
 
 function buildNetworkOpts(config) {
@@ -38,8 +45,11 @@ function buildNetworkOpts(config) {
   const portBindings = {};
   for (const p of net.ports || []) {
     if (typeof p === 'string') {
-      const [host, rest] = p.split(':');
-      portBindings[`${rest}/tcp`] = [{ HostPort: host }];
+      const parts = p.split(':');
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        throw new Error(`Invalid port mapping format: ${p} (expected "host:container")`);
+      }
+      portBindings[`${parts[1]}/tcp`] = [{ HostPort: parts[0] }];
     } else if (p && typeof p === 'object') {
       const proto = p.protocol || 'tcp';
       portBindings[`${p.container}/${proto}`] = [{ HostPort: String(p.host) }];
@@ -58,11 +68,38 @@ function buildEnv(config) {
   return Object.entries(merged).map(([k, v]) => `${k}=${v}`);
 }
 
+function validateHostPath(hostPath) {
+  if (!hostPath || typeof hostPath !== 'string') {
+    throw new Error('Volume host_path is required and must be a string');
+  }
+  if (hostPath.includes('\0')) {
+    throw new Error('Volume host path contains null bytes');
+  }
+  if (!path.isAbsolute(hostPath)) {
+    throw new Error(`Volume host path must be absolute: ${hostPath}`);
+  }
+  let resolved = path.resolve(hostPath);
+  // Resolve symlinks for existing paths to prevent symlink-based bypass
+  try { resolved = fs.realpathSync(resolved); } catch (_e) { /* path may not exist yet */ }
+  if (!ALLOWED_VOLUME_ROOTS.some((root) => resolved.startsWith(root))) {
+    throw new Error(
+      `Volume host path '${resolved}' not under allowed roots: ${ALLOWED_VOLUME_ROOTS.join(', ')}`,
+    );
+  }
+  return resolved;
+}
+
 function buildBinds(config) {
   return (config.volumes || []).map((vol) => {
-    if (typeof vol === 'string') { return vol; }
+    if (typeof vol === 'string') {
+      const hostPath = vol.split(':')[0];
+      const resolved = validateHostPath(hostPath);
+      const rest = vol.slice(hostPath.length);
+      return `${resolved}${rest}`;
+    }
+    const resolved = validateHostPath(vol.host_path);
     const mode = vol.mode || 'rw';
-    return `${vol.host_path}:${vol.container_path}:${mode}`;
+    return `${resolved}:${vol.container_path}:${mode}`;
   });
 }
 
@@ -102,4 +139,5 @@ module.exports = {
   buildBinds,
   buildLabels,
   buildHealthcheck,
+  ALLOWED_VOLUME_ROOTS,
 };

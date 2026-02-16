@@ -25,16 +25,16 @@ function getSecurityOpts(containerConfig) {
 }
 
 function validateImage(image) {
-  const config = getConfig();
-  const allowed = config.container_security.allowed_registries;
+  const secConfig = getConfig();
+  const allowed = secConfig.container_security.allowed_registries;
 
-  if (!config.container_security.verify_signatures) {
+  if (!secConfig.container_security.verify_signatures) {
     return { valid: true, reason: 'Signature verification disabled' };
   }
 
   const registry = extractRegistry(image);
 
-  const isAllowed = allowed.some((r) => registry === r || registry.endsWith(`.${r}`));
+  const isAllowed = allowed.some((r) => registry === r);
   if (!isAllowed) {
     logger.warn({ image, registry, allowed }, 'Image from disallowed registry');
     return { valid: false, reason: `Registry '${registry}' not in allowed list` };
@@ -46,8 +46,10 @@ function validateImage(image) {
 function extractRegistry(image) {
   const parts = image.split('/');
   if (parts.length === 1) { return 'docker.io'; }
-  if (parts[0].includes('.') || parts[0].includes(':')) {
-    return parts[0];
+  const first = parts[0];
+  if (first.includes('.') || first.includes(':')) {
+    // Strip port number for comparison (e.g., registry.io:443 -> registry.io)
+    return first.split(':')[0];
   }
   return 'docker.io';
 }

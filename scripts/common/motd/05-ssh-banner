@@ -12,8 +12,11 @@ _is_ssh() {
 }
 _is_ssh || exit 0
 
-G=$'\033[1;32m'
-g=$'\033[0;32m'
+# Brand color from brand.env (fallback: #33ff00)
+BRAND_ENV="/etc/falken/brand.env"
+[ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+_c="${BRAND_COLOR:-#33ff00}"
+G=$(printf '\033[38;2;%d;%d;%dm' "0x${_c:1:2}" "0x${_c:3:2}" "0x${_c:5:2}")
 R=$'\033[0m'
 
 echo ""
@@ -23,4 +26,4 @@ printf "${G}  █████   ███████ ██      ████�
 printf "${G}  ██      ██   ██ ██      ██  ██  ██      ██  ██ ██${R}\n"
 printf "${G}  ██      ██   ██ ███████ ██   ██ ███████ ██   ████${R}\n"
 echo ""
-printf "${g}  \"Greetings, Professor Falken. Shall we play a game?\"${R}\n"
+printf "${G}  \"Greetings, Professor Falken. Shall we play a game?\"${R}\n"

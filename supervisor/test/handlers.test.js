@@ -19,7 +19,8 @@ const updateManager = require('../src/services/update-manager');
 const stateManager = require('../src/services/state-manager');
 const monitor = require('../src/services/monitor');
 const connection = require('../src/ws/connection');
-const { handleMessage, handleCommand, COMMAND_MAP } = require('../src/ws/handlers');
+const securityManager = require('../src/services/security-manager');
+const { handleMessage, handleCommand, COMMAND_MAP, _resetRateLimit } = require('../src/ws/handlers');
 
 describe('handlers', () => {
   beforeEach(() => {
@@ -46,6 +47,9 @@ describe('handlers', () => {
     jest.spyOn(connection, 'send').mockReturnValue(true);
     jest.spyOn(connection, 'isAuthenticated').mockReturnValue(true);
     jest.spyOn(connection, 'setAuthenticated').mockImplementation(() => {});
+    jest.spyOn(connection, 'getPendingAuthId').mockReturnValue(null);
+
+    _resetRateLimit();
   });
 
   afterEach(() => {
@@ -102,6 +106,8 @@ describe('handlers', () => {
     });
 
     it('handles auth acknowledgment from server', () => {
+      jest.spyOn(connection, 'clearPendingAuthId').mockImplementation(() => {});
+      connection.getPendingAuthId.mockReturnValue('auth-1');
       handleMessage(JSON.stringify({
         type: 'response',
         id: 'auth-1',
@@ -110,6 +116,7 @@ describe('handlers', () => {
       }));
 
       expect(connection.setAuthenticated).toHaveBeenCalledWith(true);
+      expect(connection.clearPendingAuthId).toHaveBeenCalled();
     });
 
     it('ignores non-command valid message types', () => {
@@ -131,7 +138,7 @@ describe('handlers', () => {
       );
     });
 
-    it('sends error when handler throws', async () => {
+    it('sends sanitized error when handler throws', async () => {
       containerManager.listContainers.mockRejectedValue(new Error('docker down'));
       await handleCommand({ action: 'container.list', id: 'x', payload: {} });
       expect(connection.send).toHaveBeenCalledWith(
@@ -139,7 +146,7 @@ describe('handlers', () => {
           type: 'response',
           id: 'x',
           success: false,
-          error: 'docker down',
+          error: 'Command container.list failed',
         }),
       );
     });
@@ -226,7 +233,7 @@ describe('handlers', () => {
     it('container.start rejects missing id', async () => {
       await handleCommand({ action: 'container.start', id: '6b', payload: {} });
       expect(connection.send).toHaveBeenCalledWith(
-        expect.objectContaining({ success: false, error: expect.stringContaining('payload.id') }),
+        expect.objectContaining({ success: false, error: 'Command container.start failed' }),
       );
     });
 
@@ -314,7 +321,7 @@ describe('handlers', () => {
         payload: { image: 'app:2.0' },
       });
       expect(connection.send).toHaveBeenCalledWith(
-        expect.objectContaining({ success: false, error: expect.stringContaining('payload.containerId') }),
+        expect.objectContaining({ success: false, error: 'Command update.trigger failed' }),
       );
     });
 
@@ -325,8 +332,23 @@ describe('handlers', () => {
         payload: { containerId: 'c1' },
       });
       expect(connection.send).toHaveBeenCalledWith(
-        expect.objectContaining({ success: false, error: expect.stringContaining('payload.image') }),
+        expect.objectContaining({ success: false, error: 'Command update.trigger failed' }),
       );
+    });
+
+    it('update.trigger rejects disallowed image', async () => {
+      jest.spyOn(securityManager, 'validateImage').mockReturnValue({
+        valid: false, reason: 'Registry not allowed',
+      });
+      await handleCommand({
+        action: 'update.trigger',
+        id: '12d',
+        payload: { containerId: 'c1', image: 'evil.io/malware:latest' },
+      });
+      expect(connection.send).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Command update.trigger failed' }),
+      );
+      expect(updateManager.triggerUpdate).not.toHaveBeenCalled();
     });
 
     it('update.status returns update status', async () => {
@@ -351,6 +373,75 @@ describe('handlers', () => {
         expect(action in COMMAND_MAP).toBe(true);
         expect(typeof COMMAND_MAP[action]).toBe('function');
       }
+    });
+  });
+
+  describe('rate limiting', () => {
+    it('allows commands within rate limit', async () => {
+      await handleCommand({ action: 'container.list', id: 'r1', payload: {} });
+      expect(connection.send).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true }),
+      );
+    });
+
+    it('rejects commands after 60 per minute', async () => {
+      for (let i = 0; i < 60; i++) {
+        await handleCommand({ action: 'container.list', id: `r${i}`, payload: {} });
+      }
+      await handleCommand({ action: 'container.list', id: 'r-over', payload: {} });
+      const lastCall = connection.send.mock.calls[connection.send.mock.calls.length - 1][0];
+      expect(lastCall.success).toBe(false);
+      expect(lastCall.error).toContain('Rate limit');
+    });
+
+    it('resets rate limit via _resetRateLimit', async () => {
+      for (let i = 0; i < 60; i++) {
+        await handleCommand({ action: 'container.list', id: `r${i}`, payload: {} });
+      }
+      _resetRateLimit();
+      await handleCommand({ action: 'container.list', id: 'after-reset', payload: {} });
+      const lastCall = connection.send.mock.calls[connection.send.mock.calls.length - 1][0];
+      expect(lastCall.success).toBe(true);
+    });
+  });
+
+  describe('auth ID tracking', () => {
+    beforeEach(() => {
+      jest.spyOn(connection, 'clearPendingAuthId').mockImplementation(() => {});
+    });
+
+    it('accepts auth ack when pendingAuthId matches', () => {
+      connection.getPendingAuthId.mockReturnValue('auth-123');
+      handleMessage(JSON.stringify({
+        type: 'response',
+        id: 'auth-123',
+        success: true,
+        payload: { auth: true },
+      }));
+      expect(connection.setAuthenticated).toHaveBeenCalledWith(true);
+      expect(connection.clearPendingAuthId).toHaveBeenCalled();
+    });
+
+    it('rejects auth ack when pendingAuthId does not match', () => {
+      connection.getPendingAuthId.mockReturnValue('auth-123');
+      handleMessage(JSON.stringify({
+        type: 'response',
+        id: 'wrong-id',
+        success: true,
+        payload: { auth: true },
+      }));
+      expect(connection.setAuthenticated).not.toHaveBeenCalled();
+    });
+
+    it('rejects auth ack when no pendingAuthId is set', () => {
+      connection.getPendingAuthId.mockReturnValue(null);
+      handleMessage(JSON.stringify({
+        type: 'response',
+        id: 'any-id',
+        success: true,
+        payload: { auth: true },
+      }));
+      expect(connection.setAuthenticated).not.toHaveBeenCalled();
     });
   });
 });

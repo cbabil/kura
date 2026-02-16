@@ -6,8 +6,10 @@
 # These values match the literal strings in source/template files.
 # The build system seds them to the actual OS_* values at install time.
 
+# shellcheck disable=SC2034
 DEFAULT_BRAND="falken"
 DEFAULT_NAME="FalkenOS"
+DEFAULT_COLOR="#33ff00"
 DEFAULT_API_ENDPOINT="https://api.falken.io"
 DEFAULT_REGISTRY="registry.falken.io"
 DEFAULT_HOSTNAME="${DEFAULT_BRAND}os"

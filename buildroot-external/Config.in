@@ -1,2 +1,0 @@
-source "$BR2_EXTERNAL_OS_PATH/package/os-config/Config.in"
-source "$BR2_EXTERNAL_OS_PATH/package/os-security/Config.in"

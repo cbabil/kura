@@ -6,7 +6,15 @@ Before=__BRAND__-supervisor.service
 [Service]
 Type=simple
 ExecStart=/usr/bin/__BRAND__-config
-Environment=PYTHONPATH=/usr/lib/__BRAND__
+Restart=on-failure
+RestartSec=30
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
 
 [Install]
 WantedBy=multi-user.target

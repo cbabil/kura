@@ -174,14 +174,14 @@ describe('container-manager', () => {
       expect(opts.HostConfig.Memory).toBe(1024 * 1024 * 1024);
     });
 
-    it('parses memory in kilobytes', async () => {
+    it('parses memory in kilobytes (clamped to 4MB minimum)', async () => {
       await containerManager.createContainer({
         name: 'a',
         image: 'b',
         resources: { memory: '1024k' },
       });
       const opts = mockCreateContainer.mock.calls[0][0];
-      expect(opts.HostConfig.Memory).toBe(1024 * 1024);
+      expect(opts.HostConfig.Memory).toBe(4 * 1024 * 1024);
     });
 
     it('sets host network mode', async () => {
@@ -226,20 +226,20 @@ describe('container-manager', () => {
       await containerManager.createContainer({
         name: 'a',
         image: 'b',
-        volumes: ['/host/path:/container/path:ro'],
+        volumes: ['/var/lib/myapp:/container/path:ro'],
       });
       const opts = mockCreateContainer.mock.calls[0][0];
-      expect(opts.HostConfig.Binds).toEqual(['/host/path:/container/path:ro']);
+      expect(opts.HostConfig.Binds).toEqual(['/var/lib/myapp:/container/path:ro']);
     });
 
     it('builds volume binds from object config', async () => {
       await containerManager.createContainer({
         name: 'a',
         image: 'b',
-        volumes: [{ host_path: '/data', container_path: '/app/data', mode: 'rw' }],
+        volumes: [{ host_path: '/var/lib/data', container_path: '/app/data', mode: 'rw' }],
       });
       const opts = mockCreateContainer.mock.calls[0][0];
-      expect(opts.HostConfig.Binds).toEqual(['/data:/app/data:rw']);
+      expect(opts.HostConfig.Binds).toEqual(['/var/lib/data:/app/data:rw']);
     });
 
     it('sets managed labels', async () => {

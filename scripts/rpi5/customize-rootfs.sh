@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/rpi5/customize-rootfs.sh
 # RPi5-specific rootfs customization.
-# Adapted from buildroot-external post-build.sh
+# RPi5-specific rootfs customizations applied during build
 #
 # Usage: customize-rootfs.sh <rootfs-dir>
 
@@ -17,8 +17,15 @@ cat > "${ROOTFS}/etc/apt/sources.list.d/raspi.list" <<'EOF'
 deb http://archive.raspberrypi.com/debian/ trixie main
 EOF
 
-# Import RPi GPG key (if available in overlay or fetch at build time)
-# TODO: Add RPi archive signing key to rootfs
+# Import RPi archive signing key for package verification
+if [ -f "${ROOTFS}/usr/bin/gpg" ]; then
+    curl -fsSL https://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2021.1.1+rpt1_all.deb \
+        -o /tmp/raspi-keyring.deb
+    chroot "${ROOTFS}" dpkg -i /tmp/raspi-keyring.deb 2>/dev/null || true
+    rm -f /tmp/raspi-keyring.deb
+else
+    echo "WARNING: gpg not available, skipping RPi signing key import"
+fi
 
 # NOTE: Docker is installed at first boot, not baked into the image.
 

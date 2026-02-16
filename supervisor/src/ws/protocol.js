@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const os = require('os');
 const { ENV_PREFIX } = require('../utils/constants');
+const logger = require('../utils/logger');
 
 const VALID_TYPES = ['command', 'response', 'telemetry', 'log', 'auth', 'heartbeat'];
 
@@ -11,12 +12,16 @@ function createId() {
 }
 
 function createAuth() {
+  const apiKey = process.env[`${ENV_PREFIX}_API_KEY`] || '';
+  if (!apiKey) {
+    logger.warn('No API key configured; device will connect without authentication');
+  }
   return {
     type: 'auth',
     id: createId(),
     payload: {
       device_id: process.env[`${ENV_PREFIX}_DEVICE_ID`] || 'unknown',
-      api_key: process.env[`${ENV_PREFIX}_API_KEY`] || '',
+      api_key: apiKey,
       hostname: os.hostname(),
       platform: os.platform(),
       arch: os.arch(),

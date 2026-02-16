@@ -18,7 +18,7 @@ const DEFAULT_CONFIG = Object.freeze({
     heartbeat_interval: DEFAULTS.WS_HEARTBEAT_INTERVAL,
     reconnect_max: DEFAULTS.WS_RECONNECT_MAX,
   },
-  security: { tls_enabled: false, cert_path: PATHS.CERT_DIR, verify_images: true },
+  security: { tls_enabled: true, cert_path: PATHS.CERT_DIR, verify_images: true },
 });
 
 function loadConfig(configPath = PATHS.CONFIG) {
@@ -26,7 +26,14 @@ function loadConfig(configPath = PATHS.CONFIG) {
     const raw = fs.readFileSync(configPath, 'utf8');
     const parsed = JSON.parse(raw);
     logger.info({ configPath }, 'Configuration loaded');
-    return { ...DEFAULT_CONFIG, ...parsed };
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      logging: { ...DEFAULT_CONFIG.logging, ...(parsed.logging || {}) },
+      storage: { ...DEFAULT_CONFIG.storage, ...(parsed.storage || {}) },
+      ws: { ...DEFAULT_CONFIG.ws, ...(parsed.ws || {}) },
+      security: { ...DEFAULT_CONFIG.security, ...(parsed.security || {}) },
+    };
   } catch (err) {
     if (err.code === 'ENOENT') {
       logger.warn({ configPath }, 'Config file not found, using defaults');
@@ -55,7 +62,13 @@ function loadSecurityConfig(configPath = PATHS.SECURITY_CONFIG) {
 
   try {
     const raw = fs.readFileSync(configPath, 'utf8');
-    return { ...defaults, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...defaults,
+      ...parsed,
+      container_security: { ...defaults.container_security, ...(parsed.container_security || {}) },
+      update_security: { ...defaults.update_security, ...(parsed.update_security || {}) },
+    };
   } catch (_err) {
     logger.warn({ configPath }, 'Security config not found, using defaults');
     return defaults;

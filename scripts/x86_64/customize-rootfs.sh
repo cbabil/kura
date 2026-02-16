@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/x86_64/customize-rootfs.sh
 # x86_64-specific rootfs customization.
-# Adapted from buildroot-external post-build.sh
+# x86_64-specific rootfs customizations applied during build
 #
 # Usage: customize-rootfs.sh <rootfs-dir>
 
@@ -95,6 +95,26 @@ install_docker() {
                 continue
             fi
             chmod a+r /etc/apt/keyrings/docker.asc
+            # Verify Docker GPG key fingerprint (try gpg, gpg2, or skip)
+            local GPG_CMD=""
+            if command -v gpg >/dev/null 2>&1; then
+                GPG_CMD=gpg
+            elif command -v gpg2 >/dev/null 2>&1; then
+                GPG_CMD=gpg2
+            fi
+            if [ -z "${GPG_CMD}" ]; then
+                echo "WARNING: gpg not found, skipping fingerprint check (apt will still verify)"
+            fi
+            local FINGERPRINT=""
+            if [ -n "${GPG_CMD}" ]; then
+                FINGERPRINT=$("${GPG_CMD}" --show-keys --with-colons /etc/apt/keyrings/docker.asc 2>/dev/null \
+                    | awk -F: '/^fpr:/{print $10; exit}')
+            fi
+            if [ -n "${FINGERPRINT}" ] && [ "${FINGERPRINT}" != "9DC858229FC7DD38854AE2D88D81803C0EBFCD88" ]; then
+                echo "ERROR: Docker GPG key fingerprint mismatch: ${FINGERPRINT}"
+                rm -f /etc/apt/keyrings/docker.asc
+                return 1
+            fi
         fi
 
         # Step 2: Create Docker apt source

@@ -8,7 +8,10 @@ After=local-fs.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/__BRAND__-security
-Environment=PYTHONPATH=/usr/lib/__BRAND__
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelLogs=yes
+LockPersonality=yes
 
 [Install]
 WantedBy=sysinit.target

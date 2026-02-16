@@ -1,86 +1,89 @@
-#!/usr/bin/env python3
+#!/bin/bash
+# __BRAND__-config — device configuration manager
+# Reads /etc/__BRAND__/config.json and applies network + hostname settings.
 
-import json
-import os
-import subprocess
-import sys
-import time
-import logging
-from pathlib import Path
+set -euo pipefail
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('falken-config')
+CONFIG_PATH="/etc/__BRAND__/config.json"
+NM_CONN_DIR="/etc/NetworkManager/system-connections"
+SAFE_SSID_RE='^[a-zA-Z0-9][a-zA-Z0-9 _.-]*$'
 
-class FalkenConfig:
-    def __init__(self):
-        self.config_path = '/etc/falken/config.json'
-        self.network_path = '/etc/NetworkManager/system-connections/'
-        self.load_config()
-        
-    def load_config(self):
-        with open(self.config_path, 'r') as f:
-            self.config = json.load(f)
-            
-    def apply_network_config(self):
-        if self.config['networkConfig']['wifi']['enable']:
-            self.setup_wifi()
-        if self.config['networkConfig']['ethernet']['enable']:
-            self.setup_ethernet()
+log_info()    { echo "INFO:  __BRAND__-config: $*"; }
+log_warning() { echo "WARNING: __BRAND__-config: $*" >&2; }
+log_error()   { echo "ERROR: __BRAND__-config: $*" >&2; }
 
-    def setup_wifi(self):
-        interface = self.config['networkConfig']['wifi']['defaultInterface']
-        networks = self.config['networkConfig']['wifi'].get('networks', [])
-        
-        for network in networks:
-            connection_file = f"{self.network_path}/{network['ssid']}.nmconnection"
-            with open(connection_file, 'w') as f:
-                f.write(self.generate_wifi_config(network))
-            os.chmod(connection_file, 0o600)
+setup_wifi() {
+    local wifi_enabled
+    wifi_enabled=$(jq -r '.networkConfig.wifi.enable // false' "${CONFIG_PATH}")
+    [[ "${wifi_enabled}" == "true" ]] || return 0
 
-    def generate_wifi_config(self, network):
-        return f"""[connection]
-id={network['ssid']}
+    local iface count
+    iface=$(jq -r '.networkConfig.wifi.defaultInterface // "wlan0"' "${CONFIG_PATH}")
+    count=$(jq '.networkConfig.wifi.networks | length' "${CONFIG_PATH}" 2>/dev/null)
+    [[ -n "${count}" ]] && [[ "${count}" -gt 0 ]] || return 0
+
+    local i ssid psk conn_file
+    for ((i = 0; i < count; i++)); do
+        ssid=$(jq -r ".networkConfig.wifi.networks[${i}].ssid // empty" "${CONFIG_PATH}")
+        psk=$(jq -r ".networkConfig.wifi.networks[${i}].psk // empty" "${CONFIG_PATH}")
+
+        if [[ -z "${ssid}" ]] || ! [[ "${ssid}" =~ ${SAFE_SSID_RE} ]]; then
+            log_warning "Skipping invalid SSID: '${ssid}'"
+            continue
+        fi
+
+        conn_file="${NM_CONN_DIR}/${ssid}.nmconnection"
+        cat > "${conn_file}" <<NMEOF
+[connection]
+id=${ssid}
 type=wifi
-interface-name={self.config['networkConfig']['wifi']['defaultInterface']}
+interface-name=${iface}
 
 [wifi]
 mode=infrastructure
-ssid={network['ssid']}
+ssid=${ssid}
 
 [wifi-security]
 key-mgmt=wpa-psk
-psk={network['psk']}
+psk=${psk}
 
 [ipv4]
 method=auto
 
 [ipv6]
 method=auto
-"""
+NMEOF
+        chmod 0600 "${conn_file}"
+    done
+}
 
-    def apply_hostname(self):
-        hostname = self.config.get('hostname', '')
-        if hostname:
-            current = subprocess.run(
-                ['hostname'], capture_output=True, text=True
-            ).stdout.strip()
-            if current != hostname:
-                subprocess.run(['hostnamectl', 'set-hostname', hostname])
-                logger.info(f"Hostname set to {hostname}")
+apply_hostname() {
+    local desired current
+    desired=$(jq -r '.hostname // empty' "${CONFIG_PATH}")
+    [[ -n "${desired}" ]] || return 0
 
-    def setup_ethernet(self):
-        logger.info("Ethernet configuration applied (DHCP default)")
+    current=$(hostname)
+    if [[ "${current}" != "${desired}" ]]; then
+        if hostnamectl set-hostname "${desired}" 2>/dev/null; then
+            log_info "Hostname set to ${desired}"
+        else
+            log_warning "Failed to set hostname to ${desired}"
+        fi
+    fi
+}
 
-    def run(self):
-        while True:
-            try:
-                self.apply_network_config()
-                self.apply_hostname()
-                time.sleep(300)
-            except Exception as e:
-                logger.error(f"Configuration error: {e}")
-                time.sleep(10)
+apply_config() {
+    if [[ ! -f "${CONFIG_PATH}" ]]; then
+        log_error "Config not found: ${CONFIG_PATH}"
+        return 1
+    fi
 
-if __name__ == "__main__":
-    config = FalkenConfig()
-    config.run() 
+    setup_wifi
+    apply_hostname
+}
+
+# ---- Main loop ----
+while true; do
+    apply_config || log_error "Configuration cycle failed"
+    sleep 300
+done
