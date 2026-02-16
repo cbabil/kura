@@ -895,14 +895,13 @@ case "${1:-help}" in
         case "${TARGET}" in
             all)
                 print_status "Building all targets..."
-                local START_TIME
                 START_TIME=$(date +%s)
                 build_target "docker"
                 build_target "iso"
                 build_target "rpi5"
-                local ELAPSED=$(( $(date +%s) - START_TIME ))
-                local MINS=$(( ELAPSED / 60 ))
-                local SECS=$(( ELAPSED % 60 ))
+                ELAPSED=$(( $(date +%s) - START_TIME ))
+                MINS=$(( ELAPSED / 60 ))
+                SECS=$(( ELAPSED % 60 ))
                 echo ""
                 echo -e "${GREEN}[${OS_NAME}]${NC} ${BOLD}All targets built successfully!${NC} (${MINS}m ${SECS}s)"
                 echo ""
