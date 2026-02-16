@@ -29,7 +29,7 @@ trap 'rm -rf "${DOCKER_ROOTFS}"' EXIT
 echo "Creating Docker rootfs (${ARCH})..."
 
 # ---- Bootstrap minimal rootfs ----
-mmdebstrap --variant=minbase --arch="${ARCH}" \
+mmdebstrap --variant=minbase --arch="${ARCH}" --quiet \
     "${SUITE}" "${DOCKER_ROOTFS}" "${MIRROR}"
 
 # ---- Install runtime deps (no kernel, no systemd, no Docker) ----
