@@ -134,7 +134,17 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | `OS_NAME` | Display name shown in banners, MOTD, logs | *(see brand-defaults.sh)* |
 | `OS_COLOR` | Brand accent color (hex) | `#33ff00` |
 | `OS_API_ENDPOINT` | API endpoint for connectivity checks | *(see brand-defaults.sh)* |
+| `OS_WS_ENDPOINT` | WebSocket endpoint for supervisor | *(derived from API endpoint)* |
 | `OS_REGISTRY` | Container registry for managed apps | *(see brand-defaults.sh)* |
+
+**Supervisor WebSocket**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OS_WS_HEARTBEAT_INTERVAL` | Heartbeat ping interval (ms) | `30000` |
+| `OS_WS_HEARTBEAT_TIMEOUT` | Connection dead timeout (ms) | `90000` |
+| `OS_WS_RECONNECT_BASE` | Initial reconnect delay (ms, exponential backoff) | `1000` |
+| `OS_WS_RECONNECT_MAX` | Maximum reconnect delay cap (ms) | `60000` |
 
 **Distribution**
 
@@ -271,6 +281,7 @@ The OS can be rebranded by editing variables in `.env`:
 OS_BRAND="myco"           # paths: /etc/myco/, services: myco-supervisor
 OS_NAME="MyCo OS"         # display name in banners and logs
 OS_API_ENDPOINT="https://api.myco.io"
+OS_WS_ENDPOINT="wss://api.myco.io/ws"  # optional, derived from API endpoint
 ```
 
 Default brand values are defined in `scripts/common/brand-defaults.sh` (single source of truth).

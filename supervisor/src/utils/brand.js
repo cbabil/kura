@@ -10,7 +10,12 @@ const DEFAULTS = Object.freeze({
   BRAND_PREFIX: 'falken',
   BRAND_VERSION: '2.0',
   BRAND_API_ENDPOINT: 'https://api.falken.io',
+  BRAND_WS_ENDPOINT: 'wss://api.falken.io/ws',
   BRAND_REGISTRY: 'registry.falken.io',
+  BRAND_WS_HEARTBEAT_INTERVAL: '30000',
+  BRAND_WS_HEARTBEAT_TIMEOUT: '90000',
+  BRAND_WS_RECONNECT_BASE: '1000',
+  BRAND_WS_RECONNECT_MAX: '60000',
 });
 
 function loadBrand(envPath = BRAND_ENV_PATH) {
