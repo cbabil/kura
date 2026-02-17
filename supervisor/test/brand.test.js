@@ -15,7 +15,12 @@ describe('brand.js', () => {
       expect(brand.BRAND_PREFIX).toBe('falken');
       expect(brand.BRAND_VERSION).toBe('2.0');
       expect(brand.BRAND_API_ENDPOINT).toBe('https://api.falken.io');
+      expect(brand.BRAND_WS_ENDPOINT).toBe('wss://api.falken.io/ws');
       expect(brand.BRAND_REGISTRY).toBe('registry.falken.io');
+      expect(brand.BRAND_WS_HEARTBEAT_INTERVAL).toBe('30000');
+      expect(brand.BRAND_WS_HEARTBEAT_TIMEOUT).toBe('90000');
+      expect(brand.BRAND_WS_RECONNECT_BASE).toBe('1000');
+      expect(brand.BRAND_WS_RECONNECT_MAX).toBe('60000');
     });
 
     it('returns a frozen object', () => {
@@ -41,7 +46,12 @@ describe('brand.js', () => {
         'BRAND_PREFIX="test"',
         'BRAND_VERSION="3.5"',
         'BRAND_API_ENDPOINT="https://api.test.io"',
+        'BRAND_WS_ENDPOINT="wss://api.test.io/ws"',
         'BRAND_REGISTRY="registry.test.io"',
+        'BRAND_WS_HEARTBEAT_INTERVAL="15000"',
+        'BRAND_WS_HEARTBEAT_TIMEOUT="45000"',
+        'BRAND_WS_RECONNECT_BASE="2000"',
+        'BRAND_WS_RECONNECT_MAX="120000"',
       ].join('\n'));
 
       const brand = loadBrand(tmpFile);
@@ -49,7 +59,12 @@ describe('brand.js', () => {
       expect(brand.BRAND_PREFIX).toBe('test');
       expect(brand.BRAND_VERSION).toBe('3.5');
       expect(brand.BRAND_API_ENDPOINT).toBe('https://api.test.io');
+      expect(brand.BRAND_WS_ENDPOINT).toBe('wss://api.test.io/ws');
       expect(brand.BRAND_REGISTRY).toBe('registry.test.io');
+      expect(brand.BRAND_WS_HEARTBEAT_INTERVAL).toBe('15000');
+      expect(brand.BRAND_WS_HEARTBEAT_TIMEOUT).toBe('45000');
+      expect(brand.BRAND_WS_RECONNECT_BASE).toBe('2000');
+      expect(brand.BRAND_WS_RECONNECT_MAX).toBe('120000');
     });
 
     it('parses single-quoted values', () => {

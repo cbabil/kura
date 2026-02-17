@@ -26,6 +26,9 @@ BOOT_BYTES=$((256 * 1024 * 1024))
 ROOTFS_BYTES=$(numfmt --from=iec "${ROOTFS_SIZE}")
 TOTAL_BYTES=$(( BOOT_BYTES + ROOTFS_BYTES + (4 * 1024 * 1024) ))  # +4M alignment
 
+# Ensure loop device kernel module is loaded
+modprobe loop 2>/dev/null || true
+
 echo "Creating RPi5 SD card image (${IMG_NAME})..."
 
 mkdir -p "${OUTPUT_DIR}"

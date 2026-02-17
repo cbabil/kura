@@ -64,7 +64,12 @@ OS_DHCP_INTERFACE="${OS_DHCP_INTERFACE:-eth0}"
 OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
 OS_TMP="${OS_TMP:-${DEFAULT_TMP}}"
 OS_API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
+OS_WS_ENDPOINT="${OS_WS_ENDPOINT:-${DEFAULT_WS_ENDPOINT}}"
 OS_REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
+OS_WS_HEARTBEAT_INTERVAL="${OS_WS_HEARTBEAT_INTERVAL:-${DEFAULT_WS_HEARTBEAT_INTERVAL}}"
+OS_WS_HEARTBEAT_TIMEOUT="${OS_WS_HEARTBEAT_TIMEOUT:-${DEFAULT_WS_HEARTBEAT_TIMEOUT}}"
+OS_WS_RECONNECT_BASE="${OS_WS_RECONNECT_BASE:-${DEFAULT_WS_RECONNECT_BASE}}"
+OS_WS_RECONNECT_MAX="${OS_WS_RECONNECT_MAX:-${DEFAULT_WS_RECONNECT_MAX}}"
 OS_COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
 OS_JOURNAL_MAX_SIZE="${OS_JOURNAL_MAX_SIZE:-100M}"
 OS_JOURNAL_MAX_FILE_SEC="${OS_JOURNAL_MAX_FILE_SEC:-1week}"
@@ -73,7 +78,9 @@ export OS_CONF_VERSION OS_DEBIAN_SUITE OS_DEBIAN_MIRROR
 export OS_CROSS_BUILD OS_PARALLEL_JOBS OS_BRAND OS_NAME
 export OS_VERSION OS_HOSTNAME OS_ROOT_PASSWD OS_ISSUE
 export OS_DHCP_INTERFACE OS_ROOTFS_SIZE OS_TMP
-export OS_API_ENDPOINT OS_REGISTRY
+export OS_API_ENDPOINT OS_WS_ENDPOINT OS_REGISTRY
+export OS_WS_HEARTBEAT_INTERVAL OS_WS_HEARTBEAT_TIMEOUT
+export OS_WS_RECONNECT_BASE OS_WS_RECONNECT_MAX
 export OS_COLOR OS_JOURNAL_MAX_SIZE OS_JOURNAL_MAX_FILE_SEC
 
 mkdir -p "${OS_TMP}" 2>/dev/null || true
@@ -126,27 +133,72 @@ print_error() {
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 
-# print_build_summary -- show a nice summary of build artifacts
-print_build_summary() {
+# print_build_all_summary -- combined summary for build all
+print_build_all_summary() {
+    local MINS="$1"
+    local SECS="$2"
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}${OS_NAME} — All Targets Built${NC} (${MINS}m ${SECS}s)"
+    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
+    print_build_section "docker"
+    print_build_section "iso"
+    print_build_section "rpi5"
+    echo -e "${GREEN}║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+# print_build_section -- print artifact details for a single target (no box)
+print_build_section() {
     local TARGET="$1"
-    local BUILD_START="${2:-}"
-    local TARGET_DIR
+    local TARGET_DIR=""
 
     case "${TARGET}" in
         rpi5)   TARGET_DIR="${RELEASE_DIR}/${VERSION}/arm64" ;;
         iso)    TARGET_DIR="${RELEASE_DIR}/${VERSION}/iso" ;;
         docker) TARGET_DIR="${RELEASE_DIR}/${VERSION}/docker" ;;
-        *)      return 0 ;;
     esac
 
+    [ -z "${TARGET_DIR}" ] && return 0
     [ ! -d "${TARGET_DIR}" ] && return 0
 
-    local TARGET_LABEL
+    local TARGET_LABEL=""
     case "${TARGET}" in
         rpi5)   TARGET_LABEL="RPi5 SD Card Image" ;;
         iso)    TARGET_LABEL="x86_64 Hybrid ISO" ;;
         docker) TARGET_LABEL="Docker Rootfs Tarball" ;;
     esac
+
+    echo -e "${GREEN}║${NC}"
+    echo -e "${GREEN}║${NC}  ${BOLD}${TARGET_LABEL}${NC}"
+    echo -e "${GREEN}║${NC}    Path: ${TARGET_DIR}/"
+
+    local file
+    for file in "${TARGET_DIR}"/${ARTIFACT_PREFIX}-"${VERSION}"-*; do
+        [ -f "${file}" ] || continue
+        [[ "${file}" =~ \.sign$ ]] && continue
+        [[ "$(basename "${file}")" = "SHA512SUMS" ]] && continue
+        local SIZE
+        SIZE=$(du -h "${file}" 2>/dev/null | cut -f1) || SIZE="?"
+        echo -e "${GREEN}║${NC}    ${CYAN}$(basename "${file}")${NC}  (${SIZE})"
+    done
+
+    if [ -f "${TARGET_DIR}/SHA512SUMS" ]; then
+        echo -e "${GREEN}║${NC}"
+        echo -e "${GREEN}║${NC}    ${BOLD}SHA512SUMS:${NC}"
+        while IFS= read -r line; do
+            echo -e "${GREEN}║${NC}      ${line}"
+        done < "${TARGET_DIR}/SHA512SUMS"
+    fi
+    return 0
+}
+
+# print_build_summary -- show a boxed summary for a single target build
+print_build_summary() {
+    local TARGET="$1"
+    local BUILD_START="${2:-}"
 
     local DURATION=""
     if [ -n "${BUILD_START}" ]; then
@@ -158,28 +210,9 @@ print_build_summary() {
 
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║${NC}  ${BOLD}Build Complete: ${TARGET_LABEL}${NC}${DURATION}"
-    echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
-
-    for file in "${TARGET_DIR}"/${ARTIFACT_PREFIX}-"${VERSION}"-*; do
-        [ ! -f "${file}" ] && continue
-        [[ "${file}" =~ \.sign$ ]] && continue
-        [[ "$(basename "${file}")" = "SHA512SUMS" ]] && continue
-        local SIZE
-        SIZE=$(du -h "${file}" | cut -f1)
-        echo -e "${GREEN}║${NC}  ${CYAN}$(basename "${file}")${NC}"
-        echo -e "${GREEN}║${NC}    Size: ${BOLD}${SIZE}${NC}"
-        echo -e "${GREEN}║${NC}    Path: ${TARGET_DIR}/"
-    done
-
-    if [ -f "${TARGET_DIR}/SHA512SUMS" ]; then
-        echo -e "${GREEN}║${NC}"
-        echo -e "${GREEN}║${NC}  ${BOLD}SHA512SUMS:${NC}"
-        while IFS= read -r line; do
-            echo -e "${GREEN}║${NC}    ${line}"
-        done < "${TARGET_DIR}/SHA512SUMS"
-    fi
-
+    echo -e "${GREEN}║${NC}  ${BOLD}Build Complete${NC}${DURATION}"
+    print_build_section "${TARGET}"
+    echo -e "${GREEN}║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -228,6 +261,9 @@ setup_host() {
     else
         print_status "All host dependencies are installed."
     fi
+
+    # Ensure loop device support (needed for RPi5 SD card image creation)
+    modprobe loop 2>/dev/null || true
 }
 
 # ============================================================================
@@ -298,6 +334,12 @@ exit 101
 POLICYEOF
     chmod +x "${ROOTFS}/usr/sbin/policy-rc.d"
 
+    # Run per-target repo configuration (e.g. RPi APT repo, non-free-firmware)
+    local REPO_SCRIPT="${SCRIPTS_DIR}/${TARGET}/configure-repos.sh"
+    if [ -x "${REPO_SCRIPT}" ]; then
+        "${REPO_SCRIPT}" "${ROOTFS}"
+    fi
+
     if [ -n "${PACKAGES}" ]; then
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get update -qq 2>&1 | grep -v "^$" || true
@@ -326,6 +368,7 @@ POLICYEOF
 mount_chroot() {
     local ROOTFS="$1"
 
+    install -d "${ROOTFS}/proc" "${ROOTFS}/sys" "${ROOTFS}/dev" "${ROOTFS}/dev/pts"
     mount --bind /proc "${ROOTFS}/proc" 2>/dev/null || true
     mount --bind /sys  "${ROOTFS}/sys"  2>/dev/null || true
     mount --bind /dev  "${ROOTFS}/dev"  2>/dev/null || true
@@ -420,6 +463,9 @@ create_docker_image() {
         ARCH="arm64"
     fi
 
+    # Remove previous tarballs so only the new one remains
+    rm -f "${OUTPUT_DIR}"/${ARTIFACT_PREFIX}-*.tar* "${OUTPUT_DIR}"/SHA512SUMS* 2>/dev/null || true
+
     "${SCRIPTS_DIR}/docker/create-image.sh" "${OUTPUT_DIR}" "${ARCH}"
 }
 
@@ -487,7 +533,11 @@ package_release() {
         sha512sum ${ARTIFACT_PREFIX}-"${VERSION}"-* > SHA512SUMS 2>/dev/null || true
 
         # GPG sign if key is available
-        if command -v gpg >/dev/null 2>&1 && gpg --list-secret-keys 2>/dev/null | grep -q "sec"; then
+        local HAS_GPG_KEY=false
+        if command -v gpg >/dev/null 2>&1; then
+            gpg --list-secret-keys 2>/dev/null | grep -q "sec" && HAS_GPG_KEY=true
+        fi
+        if [ "${HAS_GPG_KEY}" = "true" ]; then
             for file in ${ARTIFACT_PREFIX}-"${VERSION}"-*; do
                 if [ -f "${file}" ] && [[ ! "${file}" =~ \.sign$ ]]; then
                     gpg --yes --detach-sign -o "${file}.sign" "${file}" 2>/dev/null || true
@@ -495,7 +545,7 @@ package_release() {
             done
             gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null || true
         fi
-    )
+    ) || true
 }
 
 # ============================================================================
@@ -741,8 +791,10 @@ build_target() {
     if [ "${TARGET}" = "docker" ]; then
         create_docker_image
         package_release "docker"
-        print_build_summary "docker" "${BUILD_START}"
-        return
+        if [ "${_BUILD_ALL:-0}" -eq 0 ]; then
+            print_build_summary "docker" "${BUILD_START}"
+        fi
+        return 0
     fi
 
     local ARCH="amd64"
@@ -754,6 +806,13 @@ build_target() {
     [ "${TARGET}" = "iso" ] && TARGET_DIRNAME="x86_64"
 
     local ROOTFS="${OS_TMP}/${ARTIFACT_PREFIX}-rootfs-${TARGET}"
+
+    # Ensure chroot mounts are cleaned up on failure (use global for trap visibility)
+    _CLEANUP_ROOTFS="${ROOTFS}"
+    trap 'umount_chroot "${_CLEANUP_ROOTFS}" 2>/dev/null' EXIT
+
+    # Clean up stale mounts from any previous interrupted build
+    umount_chroot "${ROOTFS}" 2>/dev/null
     rm -rf "${ROOTFS}"
 
     # Phase 1: Bootstrap
@@ -841,10 +900,13 @@ build_target() {
     # Phase 7: Package release
     print_status "[7/7] Packaging release..."
     package_release "${TARGET}"
-    print_build_summary "${TARGET}" "${BUILD_START}"
+    if [ "${_BUILD_ALL:-0}" -eq 0 ]; then
+        print_build_summary "${TARGET}" "${BUILD_START}"
+    fi
 
     # Cleanup rootfs
     rm -rf "${ROOTFS}"
+    trap - EXIT
 }
 
 # ============================================================================
@@ -896,15 +958,23 @@ case "${1:-help}" in
             all)
                 print_status "Building all targets..."
                 START_TIME=$(date +%s)
+                _BUILD_ALL=1
                 build_target "docker"
+                echo ""
+                echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
+                echo -e "${GREEN}  ✓ Docker complete — continuing with ISO...${NC}"
+                echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
                 build_target "iso"
+                echo ""
+                echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
+                echo -e "${GREEN}  ✓ ISO complete — continuing with RPi5...${NC}"
+                echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
                 build_target "rpi5"
+                _BUILD_ALL=0
                 ELAPSED=$(( $(date +%s) - START_TIME ))
                 MINS=$(( ELAPSED / 60 ))
                 SECS=$(( ELAPSED % 60 ))
-                echo ""
-                echo -e "${GREEN}[${OS_NAME}]${NC} ${BOLD}All targets built successfully!${NC} (${MINS}m ${SECS}s)"
-                echo ""
+                print_build_all_summary "${MINS}" "${SECS}"
                 ;;
             docker|iso|rpi5)
                 build_target "${TARGET}"

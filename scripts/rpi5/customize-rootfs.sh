@@ -11,22 +11,7 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 
 echo "Applying RPi5-specific customization..."
 
-# ---- Configure RPi APT repository ----
-install -d "${ROOTFS}/etc/apt/sources.list.d"
-cat > "${ROOTFS}/etc/apt/sources.list.d/raspi.list" <<'EOF'
-deb http://archive.raspberrypi.com/debian/ trixie main
-EOF
-
-# Import RPi archive signing key for package verification
-if [ -f "${ROOTFS}/usr/bin/gpg" ]; then
-    curl -fsSL https://archive.raspberrypi.com/debian/pool/main/r/raspberrypi-archive-keyring/raspberrypi-archive-keyring_2021.1.1+rpt1_all.deb \
-        -o /tmp/raspi-keyring.deb
-    chroot "${ROOTFS}" dpkg -i /tmp/raspi-keyring.deb 2>/dev/null || true
-    rm -f /tmp/raspi-keyring.deb
-else
-    echo "WARNING: gpg not available, skipping RPi signing key import"
-fi
-
+# NOTE: APT repos (RPi archive, non-free-firmware) configured in configure-repos.sh
 # NOTE: Docker is installed at first boot, not baked into the image.
 
 # ---- Serial console on tty1 at 115200 ----
