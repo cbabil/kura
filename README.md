@@ -1,5 +1,9 @@
 <p align="center">
-  <img src=".github/banner.png" alt="FalkenOS" width="700">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset=".github/banner-light.png">
+    <img src=".github/banner-dark.png" alt="FalkenOS" width="700">
+  </picture>
 </p>
 
 <p align="center">
