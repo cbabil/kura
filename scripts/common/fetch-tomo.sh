@@ -31,11 +31,12 @@ file_sha256() {
 }
 
 # target_deb_arch <target>
+# Accepts the build target (rpi5, iso) or its script directory name (x86_64).
 # Maps a Kura build target to its Debian architecture (Tomo and Docker packages).
 target_deb_arch() {
     case "$1" in
         rpi5) echo "arm64" ;;
-        iso)  echo "amd64" ;;
+        iso|x86_64) echo "amd64" ;;
         *)
             echo "ERROR: no Tomo package for target '$1'" >&2
             return 1

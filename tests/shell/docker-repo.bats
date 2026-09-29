@@ -4,6 +4,11 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
+# Plain-command assertions: bash 3.2 (macOS) ignores a failing [[ ]] that is
+# not the last command in a test, so pattern checks go through functions.
+output_has() { [[ "$output" == *"$1"* ]]; }
+matches() { [[ "$1" == $2 ]]; }
+
 # Generate one throwaway signing key for the whole file (keygen is slow).
 setup_file() {
     export TEST_GNUPGHOME="${BATS_FILE_TMPDIR}/gnupg"
@@ -68,14 +73,14 @@ stub_curl_ok() {
 @test "verify_docker_key: rejects key not matching the pin" {
     run verify_docker_key "${TEST_KEY}"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"fingerprint mismatch"* ]]
+    output_has "fingerprint mismatch"
 }
 
 @test "verify_docker_key: rejects unreadable key" {
     echo "garbage" > "${BATS_TEST_TMPDIR}/junk"
     run verify_docker_key "${BATS_TEST_TMPDIR}/junk"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"could not read"* ]]
+    output_has "could not read"
 }
 
 # ---- rootfs_codename ----
@@ -136,7 +141,7 @@ stub_curl_ok() {
     curl() { return 22; }
     run install_docker_repo "${ROOTFS}" arm64
     [ "$status" -eq 1 ]
-    [[ "$output" == *"failed to download"* ]]
+    output_has "failed to download"
     [ ! -e "${ROOTFS}/etc/apt/sources.list.d/docker.list" ]
 }
 
@@ -145,7 +150,7 @@ stub_curl_ok() {
     stub_curl_ok
     run install_docker_repo "${ROOTFS}" arm64
     [ "$status" -eq 1 ]
-    [[ "$output" == *"codename"* ]]
+    output_has "codename"
 }
 
 # ---- enable_docker_units ----

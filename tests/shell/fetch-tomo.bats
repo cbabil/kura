@@ -4,6 +4,11 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
+# Plain-command assertions: bash 3.2 (macOS) ignores a failing [[ ]] that is
+# not the last command in a test, so pattern checks go through functions.
+output_has() { [[ "$output" == *"$1"* ]]; }
+matches() { [[ "$1" == $2 ]]; }
+
 setup() {
     unset OS_TOMO_VERSION OS_TOMO_SHA256_ARM64 OS_TOMO_SHA256_AMD64 OS_TOMO_DEB
     # shellcheck disable=SC1091
@@ -42,10 +47,16 @@ stub_curl_ok() {
     [ "$output" = "amd64" ]
 }
 
+@test "target_deb_arch: accepts the x86_64 directory name used by install_packages" {
+    run target_deb_arch x86_64
+    [ "$status" -eq 0 ]
+    [ "$output" = "amd64" ]
+}
+
 @test "target_deb_arch: rejects unknown target" {
     run target_deb_arch docker
     [ "$status" -eq 1 ]
-    [[ "$output" == *"no Tomo package"* ]]
+    output_has "no Tomo package"
 }
 
 # ---- tomo_deb_url ----
@@ -66,7 +77,7 @@ stub_curl_ok() {
     OS_TOMO_VERSION="latest"
     run tomo_version
     [ "$status" -eq 1 ]
-    [[ "$output" == *"invalid OS_TOMO_VERSION"* ]]
+    output_has "invalid OS_TOMO_VERSION"
 }
 
 @test "tomo_expected_sha: pinned default per arch" {
@@ -80,14 +91,14 @@ stub_curl_ok() {
     OS_TOMO_SHA256_ARM64="abc123"
     run tomo_expected_sha arm64
     [ "$status" -eq 1 ]
-    [[ "$output" == *"invalid OS_TOMO_SHA256_ARM64"* ]]
+    output_has "invalid OS_TOMO_SHA256_ARM64"
 }
 
 @test "tomo_expected_sha: changing the version requires a new checksum" {
     OS_TOMO_VERSION="0.0.99"
     run tomo_expected_sha arm64
     [ "$status" -eq 1 ]
-    [[ "$output" == *"OS_TOMO_SHA256_ARM64"* ]]
+    output_has "OS_TOMO_SHA256_ARM64"
 }
 
 # ---- fetch_tomo_deb ----
@@ -109,7 +120,7 @@ stub_curl_ok() {
     OS_TOMO_SHA256_ARM64="$(printf '0%.0s' {1..64})"
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"checksum mismatch"* ]]
+    output_has "checksum mismatch"
     [ ! -e "${CACHE}/tomo_0.0.99_arm64.deb" ]
 }
 
@@ -132,7 +143,7 @@ stub_curl_ok() {
     OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"failed to download"* ]]
+    output_has "failed to download"
 }
 
 @test "fetch_tomo_deb: OS_TOMO_DEB uses a local build without downloading" {
@@ -142,12 +153,12 @@ stub_curl_ok() {
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 0 ]
     [ "${lines[${#lines[@]}-1]}" = "${FAKE_DEB}" ]
-    [[ "$output" == *"local Tomo package"* ]]
+    output_has "local Tomo package"
 }
 
 @test "fetch_tomo_deb: OS_TOMO_DEB must exist" {
     OS_TOMO_DEB="${BATS_TEST_TMPDIR}/missing.deb"
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 1 ]
-    [[ "$output" == *"not found"* ]]
+    output_has "not found"
 }
