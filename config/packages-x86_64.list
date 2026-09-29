@@ -5,7 +5,6 @@ linux-image-amd64
 live-boot
 
 # Cloud/VM support
-cloud-guest-utils
 qemu-guest-agent
 
 # NOTE: Docker is baked into every image (see packages-common.list).

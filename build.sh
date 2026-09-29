@@ -54,6 +54,8 @@ source "${PROJECT_DIR}/scripts/common/docker-repo.sh"
 source "${PROJECT_DIR}/scripts/common/fetch-tomo.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/install-tomo.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/install-firstboot.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
@@ -861,6 +863,8 @@ build_target() {
     apply_overlays "${ROOTFS}" "${TARGET_DIRNAME}"
     customize_rootfs "${ROOTFS}" "${TARGET_DIRNAME}"
     set_passwords "${ROOTFS}"
+    # Each flashed device must get its own SSH host keys and machine ID
+    reset_device_identity "${ROOTFS}"
 
     # Verify critical files before creating the artifact
     # Note: enable symlinks are absolute paths (e.g. -> /usr/lib/systemd/...)
@@ -869,10 +873,6 @@ build_target() {
     print_status "Verifying rootfs..."
     local VERIFY_FAIL=0
     # Target-specific files to verify
-    local EXTRA_FILES=""
-    if [ "${TARGET}" = "iso" ]; then
-        EXTRA_FILES="usr/lib/${BRAND}/firstboot.sh"
-    fi
     # Docker is baked into every image (packages-common.list)
     for f in \
         "usr/bin/docker" \
@@ -894,7 +894,9 @@ build_target() {
         "usr/lib/systemd/system/${BRAND}-security.service" \
         "opt/${BRAND}-supervisor/src/index.js" \
         "opt/${BRAND}-supervisor/node_modules" \
-        ${EXTRA_FILES} \
+        "usr/lib/${BRAND}/firstboot.sh" \
+        "usr/lib/systemd/system/${BRAND}-firstboot.service" \
+        "usr/lib/systemd/system/${BRAND}-ssh-keygen.service" \
     ; do
         if [ ! -e "${ROOTFS}/${f}" ]; then
             print_error "  MISSING: /${f}"
@@ -902,10 +904,6 @@ build_target() {
         fi
     done
     # Symlinks (absolute targets — use -L not -e)
-    local EXTRA_SYMLINKS=""
-    if [ "${TARGET}" = "iso" ]; then
-        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service"
-    fi
     for f in \
         "etc/systemd/system/multi-user.target.wants/docker.service" \
         "etc/systemd/system/multi-user.target.wants/containerd.service" \
@@ -914,13 +912,23 @@ build_target() {
         "etc/systemd/system/multi-user.target.wants/${BRAND}-config.service" \
         "etc/systemd/system/sysinit.target.wants/${BRAND}-security.service" \
         "etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service" \
-        ${EXTRA_SYMLINKS} \
+        "etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service" \
+        "etc/systemd/system/multi-user.target.wants/${BRAND}-ssh-keygen.service" \
     ; do
         if [ ! -L "${ROOTFS}/${f}" ]; then
             print_error "  MISSING symlink: /${f}"
             VERIFY_FAIL=1
         fi
     done
+    # Device identity must be generated on the device, never baked in
+    if compgen -G "${ROOTFS}/etc/ssh/ssh_host_*" >/dev/null; then
+        print_error "  SSH host keys baked into the image"
+        VERIFY_FAIL=1
+    fi
+    if [ -s "${ROOTFS}/etc/machine-id" ]; then
+        print_error "  /etc/machine-id is not empty"
+        VERIFY_FAIL=1
+    fi
     if [ "${VERIFY_FAIL}" -eq 1 ]; then
         print_error "Rootfs verification failed — aborting"
         exit 1

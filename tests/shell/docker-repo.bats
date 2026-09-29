@@ -44,12 +44,6 @@ stub_curl_ok() {
     }
 }
 
-# ---- constants ----
-
-@test "pinned fingerprint matches the x86_64 firstboot pin" {
-    grep -q "${DOCKER_GPG_FINGERPRINT}" "${REPO_ROOT}/scripts/x86_64/customize-rootfs.sh"
-}
-
 # ---- docker_key_fingerprint / verify_docker_key ----
 
 @test "docker_key_fingerprint: reads fingerprint from armored key" {

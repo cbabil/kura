@@ -26,6 +26,9 @@ nodejs
 git
 openssl
 
+# Grow the root partition on first boot (growpart)
+cloud-guest-utils
+
 # Networking
 network-manager
 openssh-server

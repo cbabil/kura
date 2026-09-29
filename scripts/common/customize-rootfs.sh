@@ -15,6 +15,8 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 source "$(dirname "$0")/brand-defaults.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/docker-repo.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/install-firstboot.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 # Validate BRAND (must be lowercase alphanumeric with hyphens, no shell metacharacters)
@@ -119,6 +121,9 @@ SYSEOF
 # ---- Enable systemd services ----
 # Docker is baked into every image (packages-common.list)
 enable_docker_units "${ROOTFS}"
+
+# First boot: SSH host keys, root partition growth, saved images, tomod network
+install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")/firstboot.sh"
 
 # multi-user.target (service names use ${BRAND} prefix)
 for svc in ${BRAND}-supervisor ${BRAND}-config; do

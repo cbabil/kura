@@ -1,7 +1,7 @@
 [Unit]
 Description=__BRAND_NAME__ Supervisor
-After=network-online.target docker.service __BRAND__os-firstboot.service
-Wants=network-online.target docker.service __BRAND__os-firstboot.service
+After=network-online.target docker.service __BRAND__-firstboot.service
+Wants=network-online.target docker.service __BRAND__-firstboot.service
 StartLimitIntervalSec=0
 
 [Service]
