@@ -13,6 +13,8 @@ OUTPUT_DIR="${2:?Usage: $0 <rootfs-dir> <output-dir>}"
 # Single source of truth for default brand values
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/brand-defaults.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/image-size.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 VERSION="${OS_VERSION:-2.0}"
@@ -25,6 +27,9 @@ IMG_NAME="${BRAND}-${VERSION}-rpi5-arm64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_
 BOOT_BYTES=$((256 * 1024 * 1024))
 ROOTFS_BYTES=$(numfmt --from=iec "${ROOTFS_SIZE}")
 TOTAL_BYTES=$(( BOOT_BYTES + ROOTFS_BYTES + (4 * 1024 * 1024) ))  # +4M alignment
+
+# Fail early, with the fix, if the rootfs cannot fit its partition
+check_rootfs_fits "$(du -s -B1 "${ROOTFS}" | cut -f1)" "${ROOTFS_BYTES}"
 
 # Ensure loop device kernel module is loaded
 modprobe loop 2>/dev/null || true
