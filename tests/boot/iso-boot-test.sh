@@ -4,7 +4,7 @@
 # Boots a Kura ISO headless in QEMU with NO internet (user networking with
 # restrict=on) and checks, from the host:
 #   1. first boot finished            ("First boot complete." on the serial console)
-#   2. the Tomo desktop is served      (http://localhost:<http-port>/ → <title>Tomo</title>)
+#   2. the Tomo desktop is served      (http://127.0.0.1:<http-port>/ → <title>Tomo</title>)
 #   3. core services are active        (docker, tomod, first boot, SSH key units; tomo_main on tomo0)
 #   4. device identity is recorded     (SSH host key, machine-id, JWT secret hash)
 #
@@ -47,6 +47,8 @@ stop_vm() {
 trap stop_vm EXIT
 
 # ---- helpers ----
+# QEMU's user networking forwards IPv4 only: use 127.0.0.1, never localhost
+# (ssh-keyscan stops at localhost's IPv6 address).
 
 report() { echo "$*" | tee -a "${REPORT}"; }
 
@@ -80,7 +82,7 @@ check() {
 serial_has() { grep -qF "$1" "${SERIAL}" 2>/dev/null; }
 
 desktop_served() {
-    curl -fsS --max-time 10 "http://localhost:${HTTP_PORT}/" 2>/dev/null \
+    curl -fsS --max-time 10 "http://127.0.0.1:${HTTP_PORT}/" 2>/dev/null \
         | grep -qF '<title>Tomo</title>'
 }
 
@@ -88,7 +90,7 @@ ssh_run() {
     sshpass -p "${LOGIN_PASS}" ssh -p "${SSH_PORT}" \
         -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o ConnectTimeout=10 -o LogLevel=ERROR \
-        "${LOGIN_USER}@localhost" "$@"
+        "${LOGIN_USER}@127.0.0.1" "$@"
 }
 
 # sudo_run <command>: run one command as root on the guest (password on
@@ -97,9 +99,14 @@ sudo_run() { ssh_run "echo '${LOGIN_PASS}' | sudo -S -p '' $1"; }
 
 ssh_ready() { ssh_run true 2>/dev/null; }
 
+# systemctl is-active exits 0 if ANY listed unit is active, so check each
+# unit's own state line.
 services_active() {
-    ssh_run systemctl is-active docker tomod "${BRAND}-firstboot" "${BRAND}-ssh-keygen" \
-        >> "${REPORT}"
+    local states
+    states=$(ssh_run systemctl is-active docker tomod "${BRAND}-firstboot" "${BRAND}-ssh-keygen" \
+        || true)
+    echo "${states}" | sed 's/^/  /' >> "${REPORT}"
+    [ "$(echo "${states}" | grep -cx active)" -eq 4 ]
 }
 
 tomo_network_on_tomo0() {
@@ -110,7 +117,7 @@ tomo_network_on_tomo0() {
 
 record_identity() {
     local host_key machine_id jwt
-    host_key=$(ssh-keyscan -p "${SSH_PORT}" -t ed25519 localhost 2>/dev/null \
+    host_key=$(ssh-keyscan -p "${SSH_PORT}" -t ed25519 127.0.0.1 2>/dev/null \
         | ssh-keygen -lf - | awk '{print $2}')
     machine_id=$(ssh_run cat /etc/machine-id)
     jwt=$(sudo_run "sha256sum /opt/tomo/data/secrets/jwt" | awk '{print $1}')

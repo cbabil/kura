@@ -9,7 +9,35 @@ set -euo pipefail
 
 ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/systemd-units.sh"
+
 echo "Applying x86_64-specific customization..."
+
+# ---- Container storage in RAM on the live ISO ----
+# The live root is an overlay (squashfs + RAM). containerd and Docker store
+# images as overlays too, and the kernel refuses an overlay on an overlay, so
+# no container can be created. On a live boot, their storage gets its own
+# tmpfs (lost at reboot, like everything on the live ISO).
+install -d "${ROOTFS}/usr/lib/systemd/system"
+for dir in containerd docker; do
+    cat > "${ROOTFS}/usr/lib/systemd/system/var-lib-${dir}.mount" <<UNITEOF
+[Unit]
+Description=${dir} storage in RAM (live system)
+ConditionKernelCommandLine=boot=live
+Before=containerd.service docker.service
+
+[Mount]
+What=tmpfs
+Where=/var/lib/${dir}
+Type=tmpfs
+Options=mode=0711
+
+[Install]
+WantedBy=local-fs.target
+UNITEOF
+    enable_unit "${ROOTFS}" local-fs.target "/usr/lib/systemd/system/var-lib-${dir}.mount"
+done
 
 # ---- QEMU guest agent (Proxmox/KVM integration) ----
 install -d "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
