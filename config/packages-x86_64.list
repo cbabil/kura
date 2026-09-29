@@ -8,9 +8,7 @@ live-boot
 cloud-guest-utils
 qemu-guest-agent
 
-# NOTE: Docker is NOT in the ISO. It is installed at first boot by the
-# firstboot service (needs network). The RPi5 image bakes Docker in instead
-# (see packages-rpi5.list).
+# NOTE: Docker is baked into every image (see packages-common.list).
 
 # NOTE: grub-pc-bin, grub-efi-amd64-bin, squashfs-tools are HOST-only
 # dependencies (used by create-iso.sh). They are installed via

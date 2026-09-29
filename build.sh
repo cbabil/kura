@@ -48,6 +48,10 @@ fi
 # Single source of truth for default brand values
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/brand-defaults.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/docker-repo.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/fetch-tomo.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
@@ -341,6 +345,11 @@ POLICYEOF
     if [ -x "${REPO_SCRIPT}" ]; then
         "${REPO_SCRIPT}" "${ROOTFS}"
     fi
+
+    # Docker's APT repo (key fingerprint verified on the host) for every target
+    local DEB_ARCH
+    DEB_ARCH=$(target_deb_arch "${TARGET}")
+    install_docker_repo "${ROOTFS}" "${DEB_ARCH}"
 
     if [ -n "${PACKAGES}" ]; then
         # shellcheck disable=SC2086
@@ -852,13 +861,15 @@ build_target() {
     local EXTRA_FILES=""
     if [ "${TARGET}" = "iso" ]; then
         EXTRA_FILES="usr/lib/${BRAND}/firstboot.sh"
-    elif [ "${TARGET}" = "rpi5" ]; then
-        # Docker is baked into the RPi5 image (no firstboot install)
-        EXTRA_FILES="usr/bin/docker usr/bin/dockerd usr/bin/containerd
-            usr/lib/systemd/system/docker.service
-            usr/lib/systemd/system/containerd.service"
     fi
+    # Docker is baked into every image (packages-common.list)
     for f in \
+        "usr/bin/docker" \
+        "usr/bin/dockerd" \
+        "usr/bin/containerd" \
+        "usr/libexec/docker/cli-plugins/docker-compose" \
+        "usr/lib/systemd/system/docker.service" \
+        "usr/lib/systemd/system/containerd.service" \
         "usr/local/bin/bun" \
         "usr/bin/${BRAND}-config" \
         "usr/bin/${BRAND}-security" \
@@ -878,11 +889,10 @@ build_target() {
     local EXTRA_SYMLINKS=""
     if [ "${TARGET}" = "iso" ]; then
         EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service"
-    elif [ "${TARGET}" = "rpi5" ]; then
-        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/docker.service
-            etc/systemd/system/multi-user.target.wants/containerd.service"
     fi
     for f in \
+        "etc/systemd/system/multi-user.target.wants/docker.service" \
+        "etc/systemd/system/multi-user.target.wants/containerd.service" \
         "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \
         "etc/systemd/system/multi-user.target.wants/${BRAND}-config.service" \
         "etc/systemd/system/sysinit.target.wants/${BRAND}-security.service" \

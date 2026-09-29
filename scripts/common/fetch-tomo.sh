@@ -30,9 +30,9 @@ file_sha256() {
     fi
 }
 
-# tomo_deb_arch <target>
-# Maps a Kura build target to the Tomo package architecture.
-tomo_deb_arch() {
+# target_deb_arch <target>
+# Maps a Kura build target to its Debian architecture (Tomo and Docker packages).
+target_deb_arch() {
     case "$1" in
         rpi5) echo "arm64" ;;
         iso)  echo "amd64" ;;

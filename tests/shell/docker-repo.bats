@@ -148,25 +148,42 @@ stub_curl_ok() {
     [[ "$output" == *"codename"* ]]
 }
 
-# ---- RPi5 wiring ----
+# ---- enable_docker_units ----
 
-@test "packages-rpi5.list includes the Docker engine packages" {
-    local list="${REPO_ROOT}/config/packages-rpi5.list"
-    for pkg in docker-ce docker-ce-cli containerd.io; do
-        grep -qx "${pkg}" "${list}"
-    done
-}
-
-@test "rpi5 configure-repos.sh adds the Docker repo for arm64" {
-    # shellcheck disable=SC2016  # literal match on script source
-    grep -q 'install_docker_repo "${ROOTFS}" arm64' \
-        "${REPO_ROOT}/scripts/rpi5/configure-repos.sh"
-}
-
-@test "rpi5 customize-rootfs.sh enables docker and containerd at boot" {
-    run "${REPO_ROOT}/scripts/rpi5/customize-rootfs.sh" "${ROOTFS}"
+@test "enable_docker_units: enables docker and containerd at boot" {
+    run enable_docker_units "${ROOTFS}"
     [ "$status" -eq 0 ]
     local wants="${ROOTFS}/etc/systemd/system/multi-user.target.wants"
     [ "$(readlink "${wants}/docker.service")" = "/usr/lib/systemd/system/docker.service" ]
     [ "$(readlink "${wants}/containerd.service")" = "/usr/lib/systemd/system/containerd.service" ]
+}
+
+# ---- build wiring (Docker is baked into every target) ----
+
+@test "packages-common.list includes Docker, Compose and Tomo's dependencies" {
+    local list="${REPO_ROOT}/config/packages-common.list"
+    for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin \
+               nodejs git openssl; do
+        grep -qx "${pkg}" "${list}"
+    done
+}
+
+@test "target package lists do not duplicate the Docker packages" {
+    run grep -qx "docker-ce" "${REPO_ROOT}/config/packages-rpi5.list"
+    [ "$status" -ne 0 ]
+    run grep -qx "docker-ce" "${REPO_ROOT}/config/packages-x86_64.list"
+    [ "$status" -ne 0 ]
+}
+
+@test "build.sh adds the Docker repo for every target" {
+    # shellcheck disable=SC2016  # literal match on script source
+    grep -q 'install_docker_repo "${ROOTFS}"' "${REPO_ROOT}/build.sh"
+    run grep -q 'install_docker_repo' "${REPO_ROOT}/scripts/rpi5/configure-repos.sh"
+    [ "$status" -ne 0 ]
+}
+
+@test "common customize-rootfs.sh enables Docker for every target" {
+    # shellcheck disable=SC2016  # literal match on script source
+    grep -q 'enable_docker_units "${ROOTFS}"' \
+        "${REPO_ROOT}/scripts/common/customize-rootfs.sh"
 }

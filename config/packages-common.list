@@ -14,6 +14,18 @@ jq
 # Security
 auditd
 
+# Containers (from Docker's APT repo, added for every target by build.sh).
+# Baked in so first boot works offline; Tomo runs apps with docker compose.
+docker-ce
+docker-ce-cli
+containerd.io
+docker-compose-plugin
+
+# Tomo platform dependencies (the Tomo .deb itself is installed separately)
+nodejs
+git
+openssl
+
 # Networking
 network-manager
 openssh-server

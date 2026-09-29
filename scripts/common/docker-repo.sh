@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/common/docker-repo.sh
 # Helpers to add Docker's official APT repository to a target rootfs at
-# build time, so docker-ce can be installed from the package list and the
+# build time, so docker-ce can be installed from the package list and every
 # image boots with Docker already present (no network needed at first boot).
 #
 # The signing key is downloaded on the host and its fingerprint is checked
@@ -90,4 +90,17 @@ install_docker_repo() {
     rm -f "${tmpkey}"
     docker_apt_source_line "${arch}" "${codename}" > "${rootfs}/${DOCKER_SOURCE_PATH}"
     echo "Docker APT repository added (${arch}, ${codename})."
+}
+
+# enable_docker_units <rootfs-dir>
+# Enables docker and containerd at boot. Package postinst normally does this;
+# set the links explicitly so the image never depends on deb-systemd-helper
+# behaviour inside a chroot.
+enable_docker_units() {
+    local rootfs="$1" wants unit
+    wants="${rootfs}/etc/systemd/system/multi-user.target.wants"
+    install -d "${wants}"
+    for unit in docker.service containerd.service; do
+        ln -sf "/usr/lib/systemd/system/${unit}" "${wants}/${unit}"
+    done
 }

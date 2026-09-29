@@ -13,6 +13,8 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 # Single source of truth for default brand values
 # shellcheck disable=SC1091
 source "$(dirname "$0")/brand-defaults.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/docker-repo.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 # Validate BRAND (must be lowercase alphanumeric with hyphens, no shell metacharacters)
@@ -115,6 +117,9 @@ kernel.printk = 1 4 1 7
 SYSEOF
 
 # ---- Enable systemd services ----
+# Docker is baked into every image (packages-common.list)
+enable_docker_units "${ROOTFS}"
+
 # multi-user.target (service names use ${BRAND} prefix)
 for svc in ${BRAND}-supervisor ${BRAND}-config; do
     ln -sf "/usr/lib/systemd/system/${svc}.service" \

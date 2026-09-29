@@ -2,13 +2,6 @@
 linux-image-rpi-2712
 raspi-firmware
 
-# Container runtime (from Docker's APT repo, added by
-# scripts/rpi5/configure-repos.sh). Baked in so first boot works offline;
-# the supervisor talks to it via dockerode.
-docker-ce
-docker-ce-cli
-containerd.io
-
 # Wireless
 wireless-tools
 wpasupplicant

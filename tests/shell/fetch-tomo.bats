@@ -30,20 +30,20 @@ stub_curl_ok() {
     }
 }
 
-# ---- tomo_deb_arch ----
+# ---- target_deb_arch ----
 
-@test "tomo_deb_arch: rpi5 is arm64" {
-    run tomo_deb_arch rpi5
+@test "target_deb_arch: rpi5 is arm64" {
+    run target_deb_arch rpi5
     [ "$output" = "arm64" ]
 }
 
-@test "tomo_deb_arch: iso is amd64" {
-    run tomo_deb_arch iso
+@test "target_deb_arch: iso is amd64" {
+    run target_deb_arch iso
     [ "$output" = "amd64" ]
 }
 
-@test "tomo_deb_arch: rejects unknown target" {
-    run tomo_deb_arch docker
+@test "target_deb_arch: rejects unknown target" {
+    run target_deb_arch docker
     [ "$status" -eq 1 ]
     [[ "$output" == *"no Tomo package"* ]]
 }

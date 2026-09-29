@@ -12,17 +12,8 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 echo "Applying RPi5-specific customization..."
 
 # NOTE: APT repos (RPi archive, non-free-firmware) configured in configure-repos.sh
-# NOTE: Docker (docker-ce, containerd.io) is baked into the image from Docker's
-# APT repo (see configure-repos.sh + packages-rpi5.list) so first boot works offline.
-
-# ---- Enable Docker at boot ----
-# Package postinst normally creates these; set them explicitly so the image
-# never depends on deb-systemd-helper behaviour inside a chroot.
-install -d "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
-for unit in docker.service containerd.service; do
-    ln -sf "/usr/lib/systemd/system/${unit}" \
-        "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${unit}"
-done
+# NOTE: Docker is baked into every image (packages-common.list) and enabled
+# by scripts/common/customize-rootfs.sh.
 
 # ---- Serial console on tty1 at 115200 ----
 install -d "${ROOTFS}/etc/systemd/system/getty.target.wants"
