@@ -7,6 +7,11 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
+# Plain-command assertions: bash 3.2 (macOS) ignores a failing [[ ]] that is
+# not the last command in a test, so pattern checks go through functions.
+output_has() { [[ "$output" == *"$1"* ]]; }
+matches() { [[ "$1" == $2 ]]; }
+
 setup() {
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/install-tomo.sh"
@@ -51,8 +56,8 @@ chroot() {
     [ "$status" -eq 0 ]
     [ "$(sed -n 1p "${CALLS}")" = \
       "dpkg-divert --local --rename --divert /usr/bin/systemctl.kura-real --add /usr/bin/systemctl" ]
-    [[ "$(sed -n 2p "${CALLS}")" == "apt-get install -y -qq --no-install-recommends /tmp/tomo.deb" ]]
-    [[ "$(sed -n 3p "${CALLS}")" == *"--remove /usr/bin/systemctl" ]]
+    [ "$(sed -n 2p "${CALLS}")" = "apt-get install -y -qq --no-install-recommends /tmp/tomo.deb" ]
+    matches "$(sed -n 3p "${CALLS}")" '*--remove /usr/bin/systemctl'
     [ "$(cat "${ROOTFS}/usr/bin/systemctl")" = "real systemctl" ]
 }
 
@@ -79,7 +84,7 @@ chroot() {
     APT_EXIT=100
     run install_tomo "${ROOTFS}" "${DEB}"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"failed to install Tomo"* ]]
+    output_has "failed to install Tomo"
     [ "$(cat "${ROOTFS}/usr/bin/systemctl")" = "real systemctl" ]
     [ ! -e "${ROOTFS}/tmp/tomo.deb" ]
 }
@@ -101,13 +106,13 @@ chroot() {
     }
     run install_tomo "${ROOTFS}" "${DEB}"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"tomod.service"* ]]
+    output_has "tomod.service"
 }
 
 @test "install_tomo: fails for a missing package" {
     run install_tomo "${ROOTFS}" "${BATS_TEST_TMPDIR}/missing.deb"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"not found"* ]]
+    output_has "not found"
     [ ! -s "${CALLS}" ]
 }
 
@@ -125,7 +130,7 @@ chroot() {
 @test "tomo_traefik_image: fails when Tomo's code is missing" {
     run tomo_traefik_image "${ROOTFS}"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"traefik-proxy.js"* ]]
+    output_has "traefik-proxy.js"
 }
 
 @test "tomo_traefik_image: fails when the version pattern changed" {
@@ -133,5 +138,61 @@ chroot() {
     echo 'const IMAGE = "traefik:latest";' > "${ROOTFS}/opt/tomo/dist/traefik-proxy.js"
     run tomo_traefik_image "${ROOTFS}"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"TRAEFIK_VERSION"* ]]
+    output_has "TRAEFIK_VERSION"
+}
+
+# ---- save_tomo_images ----
+
+# Rootfs with Tomo's traefik-proxy.js and a stub skopeo that logs its args.
+with_tomo_code() {
+    mkdir -p "${ROOTFS}/opt/tomo/dist"
+    printf 'const TRAEFIK_VERSION = "v3.3";\n' > "${ROOTFS}/opt/tomo/dist/traefik-proxy.js"
+}
+stub_skopeo_ok() {
+    skopeo() {
+        echo "$*" >> "${BATS_TEST_TMPDIR}/skopeo-calls"
+        local dest="${!#}"               # docker-archive:<path>:<ref>
+        dest="${dest#docker-archive:}"
+        dest="${dest%%:*}"
+        echo "image-archive" > "${dest}"
+    }
+}
+
+@test "save_tomo_images: saves Traefik for the target arch into the image" {
+    with_tomo_code
+    stub_skopeo_ok
+    run save_tomo_images "${ROOTFS}" kura arm64 "${BATS_TEST_TMPDIR}/cache"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/skopeo-calls")" = \
+      "copy --quiet --override-os linux --override-arch arm64 docker://docker.io/library/traefik:v3.3 docker-archive:${BATS_TEST_TMPDIR}/cache/traefik-v3.3-arm64.tar.partial:traefik:v3.3" ]
+    [ "$(cat "${ROOTFS}/usr/share/kura/images/traefik.tar")" = "image-archive" ]
+}
+
+@test "save_tomo_images: reuses the cached archive" {
+    with_tomo_code
+    # shellcheck disable=SC2329  # would be called if the cache were ignored
+    skopeo() { echo "skopeo must not run" >&2; return 1; }
+    mkdir -p "${BATS_TEST_TMPDIR}/cache"
+    echo "cached" > "${BATS_TEST_TMPDIR}/cache/traefik-v3.3-arm64.tar"
+    run save_tomo_images "${ROOTFS}" kura arm64 "${BATS_TEST_TMPDIR}/cache"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${ROOTFS}/usr/share/kura/images/traefik.tar")" = "cached" ]
+}
+
+@test "save_tomo_images: fails and leaves no partial archive when the copy fails" {
+    with_tomo_code
+    # shellcheck disable=SC2329  # invoked by save_tomo_images
+    skopeo() { return 1; }
+    run save_tomo_images "${ROOTFS}" kura arm64 "${BATS_TEST_TMPDIR}/cache"
+    [ "$status" -ne 0 ]
+    output_has "failed to save traefik:v3.3"
+    [ ! -e "${BATS_TEST_TMPDIR}/cache/traefik-v3.3-arm64.tar" ]
+    [ ! -e "${ROOTFS}/usr/share/kura/images/traefik.tar" ]
+}
+
+@test "save_tomo_images: fails when Tomo is not installed" {
+    stub_skopeo_ok
+    run save_tomo_images "${ROOTFS}" kura arm64 "${BATS_TEST_TMPDIR}/cache"
+    [ "$status" -ne 0 ]
+    output_has "traefik-proxy.js"
 }

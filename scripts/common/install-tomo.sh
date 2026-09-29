@@ -82,3 +82,30 @@ tomo_traefik_image() {
     fi
     echo "traefik:${version}"
 }
+
+# save_tomo_images <rootfs> <brand> <arch> <cache-dir>
+# Saves the container images tomod needs at first start into
+# /usr/share/<brand>/images/, so first boot works without internet
+# (kura-firstboot loads them). Uses skopeo on the build host: no Docker
+# daemon needed, and it can fetch another architecture's image.
+save_tomo_images() {
+    local rootfs="$1" brand="$2" arch="$3" cache="$4" image archive dest
+    image=$(tomo_traefik_image "${rootfs}") || return 1
+    archive="${cache}/${image/:/-}-${arch}.tar"
+    dest="${rootfs}/usr/share/${brand}/images"
+
+    if [ ! -f "${archive}" ]; then
+        install -d "${cache}"
+        if ! skopeo copy --quiet --override-os linux --override-arch "${arch}" \
+                "docker://docker.io/library/${image}" \
+                "docker-archive:${archive}.partial:${image}"; then
+            echo "ERROR: failed to save ${image} (${arch})" >&2
+            rm -f "${archive}.partial"
+            return 1
+        fi
+        mv "${archive}.partial" "${archive}"
+    fi
+    install -d "${dest}"
+    install -m 0644 "${archive}" "${dest}/traefik.tar"
+    echo "Saved ${image} (${arch}) for offline first boot."
+}

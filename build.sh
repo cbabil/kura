@@ -248,6 +248,7 @@ setup_host() {
         bats
         curl
         gnupg
+        skopeo
         docker.io
         containerd
         zstd
@@ -843,6 +844,8 @@ build_target() {
     print_status "[2/7] Installing Debian packages (common + ${TARGET_DIRNAME})..."
     print_status "  Package lists: ${CONFIG_DIR}/packages-common.list, ${CONFIG_DIR}/packages-${TARGET_DIRNAME}.list"
     install_packages "${ROOTFS}" "${TARGET_DIRNAME}"
+    save_tomo_images "${ROOTFS}" "${BRAND}" \
+        "$(target_deb_arch "${TARGET}")" "${OS_TMP}/cache/images"
 
     # Phase 3: Install OS packages
     print_status "[3/7] Installing OS packages..."
@@ -882,6 +885,7 @@ build_target() {
         "opt/tomo/dist/index.js" \
         "opt/tomo/public/index.html" \
         "etc/systemd/system/tomod.service" \
+        "usr/share/${BRAND}/images/traefik.tar" \
         "usr/local/bin/bun" \
         "usr/bin/${BRAND}-config" \
         "usr/bin/${BRAND}-security" \
