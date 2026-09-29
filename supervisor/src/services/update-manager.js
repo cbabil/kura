@@ -49,6 +49,9 @@ async function triggerUpdate(containerId, newImage) {
   if (currentState !== UPDATE_STATES.IDLE) {
     throw new Error(`Cannot update while in state: ${currentState}`);
   }
+  // Refuse containers the supervisor did not create (e.g. Tomo's) before
+  // pulling anything, so a refused update never reaches rollback.
+  await containerManager.getManagedContainer(containerId);
   let release = null;
   let oldImage = null;
   try {

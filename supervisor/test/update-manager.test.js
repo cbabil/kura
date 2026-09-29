@@ -27,6 +27,7 @@ describe('update-manager', () => {
     jest.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
 
     // Spy on container-manager methods
+    jest.spyOn(containerManager, 'getManagedContainer').mockResolvedValue({});
     jest.spyOn(containerManager, 'pullImage').mockResolvedValue();
     jest.spyOn(containerManager, 'inspectContainer').mockResolvedValue({
       Config: { Image: 'myapp:1.0' },
@@ -100,6 +101,18 @@ describe('update-manager', () => {
   });
 
   describe('triggerUpdate', () => {
+    it('refuses a container the supervisor does not manage, before pulling', async () => {
+      containerManager.getManagedContainer.mockRejectedValueOnce(
+        new Error('Container tomo-proxy is not managed by the supervisor'),
+      );
+      await expect(updateManager.triggerUpdate('tomo-proxy', 'traefik:v3.4'))
+        .rejects.toThrow('not managed');
+      expect(containerManager.pullImage).not.toHaveBeenCalled();
+      expect(containerManager.stopContainer).not.toHaveBeenCalled();
+      expect(containerManager.createContainer).not.toHaveBeenCalled();
+      expect(updateManager.getUpdateStatus().state).toBe('idle');
+    });
+
     it('follows full success path: pull -> stop -> remove -> create', async () => {
       await updateManager.triggerUpdate('container1', 'myapp:2.0');
 

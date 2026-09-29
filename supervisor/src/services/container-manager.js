@@ -116,6 +116,7 @@ async function pullImage(image) {
 }
 
 module.exports = {
+  getManagedContainer,
   listContainers,
   createContainer,
   startContainer,
