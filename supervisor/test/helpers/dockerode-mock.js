@@ -32,16 +32,14 @@ const mockFollowProgress = jest.fn().mockImplementation((_stream, cb) => {
   cb(null, [{ status: 'done' }]);
 });
 
-const dockerodeMockFactory = () => ({
-  __esModule: true,
-  default: jest.fn().mockImplementation(() => ({
-    listContainers: mockListContainers,
-    createContainer: mockCreateContainer,
-    getContainer: mockGetContainer,
-    pull: mockPull,
-    modem: { followProgress: mockFollowProgress },
-  })),
-});
+// dockerode is CommonJS: require('dockerode') returns the constructor itself.
+const dockerodeMockFactory = () => jest.fn().mockImplementation(() => ({
+  listContainers: mockListContainers,
+  createContainer: mockCreateContainer,
+  getContainer: mockGetContainer,
+  pull: mockPull,
+  modem: { followProgress: mockFollowProgress },
+}));
 
 module.exports = {
   mockStart,

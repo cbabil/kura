@@ -1,7 +1,6 @@
 'use strict';
 
-const { mockWsInstance, MockWebSocket, wsMockFactory } = require('./helpers/ws-mock');
-jest.mock('ws', wsMockFactory);
+jest.mock('ws', () => require('./helpers/ws-mock').wsMockFactory());
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
@@ -13,10 +12,17 @@ jest.mock('../src/utils/logger', () => ({
 
 describe('connection', () => {
   let connection;
+  let mockWsInstance;
+  let MockWebSocket;
 
   beforeEach(() => {
-    jest.clearAllMocks();
     jest.useFakeTimers();
+    // Fresh registry so connection.js module state (ws, timers) never leaks
+    // between tests; re-require the helper so we share the mock's references.
+    jest.resetModules();
+    ({ mockWsInstance, MockWebSocket } = require('./helpers/ws-mock'));
+    connection = require('../src/ws/connection');
+
     mockWsInstance.readyState = MockWebSocket.OPEN;
     mockWsInstance.on.mockReset();
     mockWsInstance.send.mockReset();
@@ -24,11 +30,6 @@ describe('connection', () => {
     mockWsInstance.terminate.mockReset();
     mockWsInstance.ping.mockReset();
     mockWsInstance.removeAllListeners.mockReset();
-
-    // Clear both ws and connection from cache so the mock takes effect
-    delete require.cache[require.resolve('ws')];
-    delete require.cache[require.resolve('../src/ws/connection')];
-    connection = require('../src/ws/connection');
   });
 
   afterEach(() => {

@@ -1,7 +1,6 @@
 'use strict';
 
-const { dockerodeMockFactory } = require('./helpers/dockerode-mock');
-jest.mock('dockerode', dockerodeMockFactory);
+jest.mock('dockerode', () => require('./helpers/dockerode-mock').dockerodeMockFactory());
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),

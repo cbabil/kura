@@ -3,10 +3,10 @@
 const {
   mockStart, mockStop, mockRestart, mockRemove, mockLogs, mockInspect,
   mockCreateContainer, mockListContainers, mockGetContainer,
-  mockPull, mockFollowProgress, dockerodeMockFactory,
+  mockPull, mockFollowProgress,
 } = require('./helpers/dockerode-mock');
 
-jest.mock('dockerode', dockerodeMockFactory);
+jest.mock('dockerode', () => require('./helpers/dockerode-mock').dockerodeMockFactory());
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),

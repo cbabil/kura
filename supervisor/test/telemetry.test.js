@@ -1,7 +1,6 @@
 'use strict';
 
-const { wsMockFactory } = require('./helpers/ws-mock');
-jest.mock('ws', wsMockFactory);
+jest.mock('ws', () => require('./helpers/ws-mock').wsMockFactory());
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),

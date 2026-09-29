@@ -1,10 +1,8 @@
 'use strict';
 
-const { dockerodeMockFactory } = require('./helpers/dockerode-mock');
-jest.mock('dockerode', dockerodeMockFactory);
+jest.mock('dockerode', () => require('./helpers/dockerode-mock').dockerodeMockFactory());
 
-const { wsMockFactory } = require('./helpers/ws-mock');
-jest.mock('ws', wsMockFactory);
+jest.mock('ws', () => require('./helpers/ws-mock').wsMockFactory());
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
@@ -14,6 +12,13 @@ jest.mock('../src/utils/logger', () => ({
   debug: jest.fn(),
 }));
 
+// Never let reboot/shutdown tests reach the real `sudo systemctl`.
+jest.mock('child_process', () => ({
+  ...jest.requireActual('child_process'),
+  execFile: jest.fn(),
+}));
+
+const { execFile } = require('child_process');
 const containerManager = require('../src/services/container-manager');
 const updateManager = require('../src/services/update-manager');
 const stateManager = require('../src/services/state-manager');
@@ -185,24 +190,35 @@ describe('handlers', () => {
       );
     });
 
-    it('device.reboot initiates reboot', async () => {
-      await handleCommand({ action: 'device.reboot', id: '3', payload: {} });
-      expect(connection.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: { status: 'Reboot initiated' },
-          success: true,
-        }),
-      );
-    });
+    describe.each([
+      ['device.reboot', 'Reboot initiated', 'reboot', 'Reboot failed'],
+      ['device.shutdown', 'Shutdown initiated', 'poweroff', 'Shutdown failed'],
+    ])('%s', (action, status, systemctlVerb, failureMessage) => {
+      beforeEach(() => jest.useFakeTimers());
+      afterEach(() => jest.useRealTimers());
 
-    it('device.shutdown initiates shutdown', async () => {
-      await handleCommand({ action: 'device.shutdown', id: '4', payload: {} });
-      expect(connection.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: { status: 'Shutdown initiated' },
-          success: true,
-        }),
-      );
+      it('responds immediately and runs systemctl after a delay', async () => {
+        await handleCommand({ action, id: '3', payload: {} });
+        expect(connection.send).toHaveBeenCalledWith(
+          expect.objectContaining({ payload: { status }, success: true }),
+        );
+        expect(execFile).not.toHaveBeenCalled();
+
+        jest.advanceTimersByTime(1000);
+        expect(execFile).toHaveBeenCalledWith(
+          'sudo', ['systemctl', systemctlVerb], expect.any(Function),
+        );
+      });
+
+      it('logs when systemctl fails', async () => {
+        const logger = require('../src/utils/logger');
+        await handleCommand({ action, id: '4', payload: {} });
+        jest.advanceTimersByTime(1000);
+
+        const callback = execFile.mock.calls[0][2];
+        callback(new Error('denied'));
+        expect(logger.error).toHaveBeenCalledWith({ err: 'denied' }, failureMessage);
+      });
     });
   });
 
