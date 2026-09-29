@@ -48,6 +48,18 @@ verify_docker_key() {
     fi
 }
 
+# export_pinned_key <key-file> <out-file>
+# Writes only the key whose fingerprint is DOCKER_GPG_FINGERPRINT (armored),
+# so extra keys appended to the download are never trusted by apt.
+export_pinned_key() {
+    local key="$1" out="$2" home
+    home=$(mktemp -d)
+    GNUPGHOME="${home}" gpg --batch --quiet --import "${key}" 2>/dev/null
+    GNUPGHOME="${home}" gpg --batch --armor --export "${DOCKER_GPG_FINGERPRINT}" > "${out}"
+    rm -rf "${home}"
+    [ -s "${out}" ]
+}
+
 # rootfs_codename <rootfs-dir>
 # Prints VERSION_CODENAME from the rootfs os-release (parsed, not sourced).
 rootfs_codename() {
@@ -86,8 +98,13 @@ install_docker_repo() {
 
     install -d -m 0755 "${rootfs}/$(dirname "${DOCKER_KEYRING_PATH}")" \
         "${rootfs}/$(dirname "${DOCKER_SOURCE_PATH}")"
-    install -m 0644 "${tmpkey}" "${rootfs}/${DOCKER_KEYRING_PATH}"
-    rm -f "${tmpkey}"
+    if ! export_pinned_key "${tmpkey}" "${tmpkey}.pinned"; then
+        echo "ERROR: could not extract the pinned Docker key" >&2
+        rm -f "${tmpkey}" "${tmpkey}.pinned"
+        return 1
+    fi
+    install -m 0644 "${tmpkey}.pinned" "${rootfs}/${DOCKER_KEYRING_PATH}"
+    rm -f "${tmpkey}" "${tmpkey}.pinned"
     docker_apt_source_line "${arch}" "${codename}" > "${rootfs}/${DOCKER_SOURCE_PATH}"
     echo "Docker APT repository added (${arch}, ${codename})."
 }

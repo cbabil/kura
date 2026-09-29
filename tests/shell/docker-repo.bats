@@ -32,6 +32,14 @@ setup() {
     printf 'ID=debian\nVERSION_CODENAME=trixie\n' > "${ROOTFS}/etc/os-release"
 }
 
+# key_records <file>: gpg colon listing of the keys in an armored file.
+key_records() {
+    local home
+    home=$(mktemp -d /tmp/kgpg.XXXXXX)
+    GNUPGHOME="${home}" gpg --batch --show-keys --with-colons "$1" 2>/dev/null
+    rm -rf "${home}"
+}
+
 # Stub curl: "download" the test key to the -o destination.
 stub_curl_ok() {
     curl() {
@@ -118,8 +126,27 @@ stub_curl_ok() {
     stub_curl_ok
     run install_docker_repo "${ROOTFS}" arm64
     [ "$status" -eq 0 ]
-    cmp -s "${TEST_KEY}" "${ROOTFS}/etc/apt/keyrings/docker.asc"
+    [ -s "${ROOTFS}/etc/apt/keyrings/docker.asc" ]
     grep -q "arch=arm64 .* trixie stable" "${ROOTFS}/etc/apt/sources.list.d/docker.list"
+}
+
+@test "install_docker_repo: installs only the pinned key, not extra keys in the download" {
+    # A second key appended to the download must not become trusted by apt
+    local extra_home   # short path: gpg-agent socket paths are length-limited
+    extra_home=$(mktemp -d /tmp/kgpg.XXXXXX)
+    GNUPGHOME="${extra_home}" gpg --batch --passphrase '' \
+        --quick-gen-key "Attacker Key" ed25519 sign never 2>/dev/null
+    cat "${TEST_KEY}" > "${BATS_TEST_TMPDIR}/bundle.asc"
+    GNUPGHOME="${extra_home}" gpg --batch --armor --export >> "${BATS_TEST_TMPDIR}/bundle.asc"
+    TEST_KEY="${BATS_TEST_TMPDIR}/bundle.asc"
+    DOCKER_GPG_FINGERPRINT="${TEST_KEY_FPR}"
+    stub_curl_ok
+    run install_docker_repo "${ROOTFS}" arm64
+    [ "$status" -eq 0 ]
+    local installed="${ROOTFS}/etc/apt/keyrings/docker.asc"
+    [ "$(key_records "${installed}" | grep -c '^pub:')" = "1" ]
+    [ "$(key_records "${installed}" | awk -F: '/^fpr:/{print $10; exit}')" = "${TEST_KEY_FPR}" ]
+    rm -rf "${extra_home}"
 }
 
 @test "install_docker_repo: refuses key with wrong fingerprint" {
