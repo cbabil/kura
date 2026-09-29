@@ -100,3 +100,24 @@ JSON
     last_line=$(echo "$output" | grep -v '^$' | tail -1)
     [ "${last_line}" = "COMMIT" ]
 }
+
+# Tomo: Traefik runs in a container and forwards to tomod on the host's port
+# 3000. That traffic arrives from a Docker bridge and must be accepted; port
+# 3000 must stay closed on every other interface. (grep, not [[ ]]: bash 3.2
+# ignores a failing [[ ]] that is not a test's last command.)
+
+@test "_build_iptables_rules: accepts tomod's port 3000 from Docker bridges" {
+    run _build_iptables_rules "$(create_hardening_json)"
+    [ "$status" -eq 0 ]
+    grep -qxF -- "-A INPUT -i docker0 -p tcp --dport 3000 -j ACCEPT" <<< "$output"
+    grep -qxF -- "-A INPUT -i br-+ -p tcp --dport 3000 -j ACCEPT" <<< "$output"
+}
+
+@test "_build_iptables_rules: port 3000 is not open on any other interface" {
+    run _build_iptables_rules "$(create_hardening_json)"
+    [ "$status" -eq 0 ]
+    run grep -E -- "--dport 3000" <<< "$output"
+    [ "${#lines[@]}" -eq 2 ]
+    run grep -vE -- "-i (docker0|br-\+) " <<< "$output"
+    [ "$status" -ne 0 ]
+}
