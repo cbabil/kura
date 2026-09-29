@@ -304,6 +304,39 @@ describe('container-manager', () => {
     });
   });
 
+  describe('only acts on containers the supervisor manages', () => {
+    // Tomo's containers (tomo-proxy, apps) share the Docker daemon and must be
+    // out of reach of cloud commands.
+    const unmanaged = {
+      State: { Status: 'running', Running: true },
+      Config: { Image: 'traefik:v3.3', Labels: { 'tomo.managed': 'true' } },
+      Name: '/tomo-proxy',
+    };
+
+    it.each([
+      ['startContainer', () => containerManager.startContainer('tomo-proxy'), mockStart],
+      ['stopContainer', () => containerManager.stopContainer('tomo-proxy'), mockStop],
+      ['restartContainer', () => containerManager.restartContainer('tomo-proxy'), mockRestart],
+      ['removeContainer', () => containerManager.removeContainer('tomo-proxy', true), mockRemove],
+      ['getLogs', () => containerManager.getLogs('tomo-proxy'), mockLogs],
+    ])('%s refuses an unmanaged container', async (_name, call, action) => {
+      mockInspect.mockResolvedValueOnce(unmanaged);
+      await expect(call()).rejects.toThrow('not managed');
+      expect(action).not.toHaveBeenCalled();
+    });
+
+    it('refuses a container with no labels at all', async () => {
+      mockInspect.mockResolvedValueOnce({ Config: {}, Name: '/bare' });
+      await expect(containerManager.stopContainer('bare')).rejects.toThrow('not managed');
+      expect(mockStop).not.toHaveBeenCalled();
+    });
+
+    it('acts on a managed container', async () => {
+      await containerManager.stopContainer('myapp');
+      expect(mockStop).toHaveBeenCalled();
+    });
+  });
+
   describe('startContainer', () => {
     it('calls start on the correct container', async () => {
       await containerManager.startContainer('abc123');

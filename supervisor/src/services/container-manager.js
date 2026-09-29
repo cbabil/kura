@@ -53,16 +53,35 @@ async function createContainer(config) {
   return container.id;
 }
 
-async function startContainer(id) { await docker.getContainer(id).start(); }
-async function stopContainer(id) { await docker.getContainer(id).stop(); }
-async function restartContainer(id) { await docker.getContainer(id).restart(); }
+/**
+ * Returns the container only if the supervisor manages it.
+ * Tomo's containers share this Docker daemon; cloud commands must never
+ * start, stop, remove or read the logs of containers the supervisor did not
+ * create.
+ * @param {string} id - Container ID or name
+ * @returns {Promise<object>} dockerode container handle
+ * @throws {Error} if the container lacks the managed label
+ */
+async function getManagedContainer(id) {
+  const container = docker.getContainer(id);
+  const info = await container.inspect();
+  if (info?.Config?.Labels?.[LABELS.MANAGED] !== 'true') {
+    throw new Error(`Container ${id} is not managed by the supervisor`);
+  }
+  return container;
+}
+
+async function startContainer(id) { await (await getManagedContainer(id)).start(); }
+async function stopContainer(id) { await (await getManagedContainer(id)).stop(); }
+async function restartContainer(id) { await (await getManagedContainer(id)).restart(); }
 
 async function removeContainer(id, force = false) {
-  await docker.getContainer(id).remove({ force });
+  await (await getManagedContainer(id)).remove({ force });
 }
 
 async function getLogs(id, tail = 100) {
-  const logs = await docker.getContainer(id).logs({ stdout: true, stderr: true, tail });
+  const container = await getManagedContainer(id);
+  const logs = await container.logs({ stdout: true, stderr: true, tail });
   return logs.toString('utf8');
 }
 

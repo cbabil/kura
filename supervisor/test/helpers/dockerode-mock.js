@@ -11,7 +11,7 @@ const mockRemove = jest.fn().mockResolvedValue();
 const mockLogs = jest.fn().mockResolvedValue(Buffer.from('log line 1\nlog line 2'));
 const mockInspect = jest.fn().mockResolvedValue({
   State: { Status: 'running', Running: true, Health: { Status: 'healthy' } },
-  Config: { Image: 'myapp:1.0' },
+  Config: { Image: 'myapp:1.0', Labels: { 'io.kura.managed': 'true' } },
   Name: '/myapp',
 });
 const mockCreateContainer = jest.fn().mockResolvedValue({
