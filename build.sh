@@ -52,6 +52,8 @@ source "${PROJECT_DIR}/scripts/common/brand-defaults.sh"
 source "${PROJECT_DIR}/scripts/common/docker-repo.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/fetch-tomo.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/install-tomo.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
@@ -357,6 +359,12 @@ POLICYEOF
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get install -y -qq --no-install-recommends ${PACKAGES}
     fi
+
+    # Tomo platform, from its pinned release .deb (needs apt lists + policy-rc.d)
+    print_status "Installing Tomo..."
+    local TOMO_DEB
+    TOMO_DEB=$(fetch_tomo_deb "${DEB_ARCH}" "${OS_TMP}/cache/tomo")
+    install_tomo "${ROOTFS}" "${TOMO_DEB}"
 
     # Purge build-only packages no longer needed at runtime
     print_status "Purging build-only packages..."
@@ -870,6 +878,10 @@ build_target() {
         "usr/libexec/docker/cli-plugins/docker-compose" \
         "usr/lib/systemd/system/docker.service" \
         "usr/lib/systemd/system/containerd.service" \
+        "usr/bin/node" \
+        "opt/tomo/dist/index.js" \
+        "opt/tomo/public/index.html" \
+        "etc/systemd/system/tomod.service" \
         "usr/local/bin/bun" \
         "usr/bin/${BRAND}-config" \
         "usr/bin/${BRAND}-security" \
@@ -893,6 +905,7 @@ build_target() {
     for f in \
         "etc/systemd/system/multi-user.target.wants/docker.service" \
         "etc/systemd/system/multi-user.target.wants/containerd.service" \
+        "etc/systemd/system/multi-user.target.wants/tomod.service" \
         "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \
         "etc/systemd/system/multi-user.target.wants/${BRAND}-config.service" \
         "etc/systemd/system/sysinit.target.wants/${BRAND}-security.service" \
