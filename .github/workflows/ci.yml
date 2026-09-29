@@ -27,7 +27,8 @@ jobs:
                      packages/os-config/src/os-config \
                      scripts/common/*.sh \
                      scripts/rpi5/*.sh \
-                     scripts/x86_64/*.sh
+                     scripts/x86_64/*.sh \
+                     tests/boot/*.sh
 
   test-shell:
     runs-on: ubuntu-latest
@@ -49,9 +50,13 @@ jobs:
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.4   # same as the image (OS_BUN_VERSION)
 
-      - name: Run supervisor tests
+      # The suite is written for Jest (package.json "test"), not Bun's built-in
+      # runner: `bun test` lacks jest.resetModules and differs on mock hoisting.
+      - name: Run supervisor tests (Jest, with coverage gate)
         working-directory: supervisor
         run: |
-          bun install
-          bun test
+          bun install --frozen-lockfile
+          bun run test:coverage
