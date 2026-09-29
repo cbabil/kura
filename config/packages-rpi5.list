@@ -2,8 +2,12 @@
 linux-image-rpi-2712
 raspi-firmware
 
-# NOTE: Docker is NOT in the image. It is installed at first boot
-# by the firstboot service to keep the image small.
+# Container runtime (from Docker's APT repo, added by
+# scripts/rpi5/configure-repos.sh). Baked in so first boot works offline;
+# the supervisor talks to it via dockerode.
+docker-ce
+docker-ce-cli
+containerd.io
 
 # Wireless
 wireless-tools

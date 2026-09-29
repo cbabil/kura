@@ -96,7 +96,7 @@ sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/kura
 kura build iso
 ```
 
-**Note:** Docker images are created automatically with each build. On the ISO target, Docker itself is deferred to firstboot; on RPi5, Docker is included directly in the image.
+**Note:** Docker images are created automatically with each build. On the ISO target, the Docker engine is installed at first boot (requires network). On RPi5, `docker-ce`, `docker-ce-cli` and `containerd.io` are installed at build time from Docker's APT repository (signing key fingerprint pinned), so the image boots with Docker ready and works offline.
 
 ## Configuration
 

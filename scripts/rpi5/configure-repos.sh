@@ -9,6 +9,9 @@ set -euo pipefail
 
 ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/docker-repo.sh"
+
 echo "Configuring RPi5 APT repositories..."
 
 # ---- Add non-free-firmware component (for firmware-brcm80211 etc.) ----
@@ -30,5 +33,9 @@ install -d "${ROOTFS}/etc/apt/sources.list.d"
 cat > "${ROOTFS}/etc/apt/sources.list.d/raspi.list" <<'EOF'
 deb [trusted=yes] http://archive.raspberrypi.com/debian/ trixie main
 EOF
+
+# ---- Add Docker APT repository (docker-ce is baked into the image) ----
+# Key fingerprint is verified on the host before apt in the chroot trusts it.
+install_docker_repo "${ROOTFS}" arm64
 
 echo "RPi5 APT repositories configured."

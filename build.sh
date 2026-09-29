@@ -240,6 +240,8 @@ setup_host() {
         gdisk
         shellcheck
         bats
+        curl
+        gnupg
         docker.io
         containerd
         zstd
@@ -850,6 +852,11 @@ build_target() {
     local EXTRA_FILES=""
     if [ "${TARGET}" = "iso" ]; then
         EXTRA_FILES="usr/lib/${BRAND}/firstboot.sh"
+    elif [ "${TARGET}" = "rpi5" ]; then
+        # Docker is baked into the RPi5 image (no firstboot install)
+        EXTRA_FILES="usr/bin/docker usr/bin/dockerd usr/bin/containerd
+            usr/lib/systemd/system/docker.service
+            usr/lib/systemd/system/containerd.service"
     fi
     for f in \
         "usr/local/bin/bun" \
@@ -871,6 +878,9 @@ build_target() {
     local EXTRA_SYMLINKS=""
     if [ "${TARGET}" = "iso" ]; then
         EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service"
+    elif [ "${TARGET}" = "rpi5" ]; then
+        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/docker.service
+            etc/systemd/system/multi-user.target.wants/containerd.service"
     fi
     for f in \
         "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \
