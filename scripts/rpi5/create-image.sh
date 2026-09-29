@@ -19,7 +19,7 @@ VERSION="${OS_VERSION:-2.0}"
 ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_SEQ="${OS_BUILD_SEQ:-0001}"
-IMG_NAME="${BRAND}os-${VERSION}-rpi5-arm64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.img"
+IMG_NAME="${BRAND}-${VERSION}-rpi5-arm64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.img"
 
 # Calculate total image size
 BOOT_BYTES=$((256 * 1024 * 1024))

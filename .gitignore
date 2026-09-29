@@ -50,8 +50,12 @@ docker-compose.local.yml
 .build-number
 
 # Custom directories
-/var/lib/falkenOS/
+/var/lib/kura/
 
 # Internal documentation (local only)
 docs/
-falkenos-release.gpg
+kura-release.gpg
+
+# Claude Code
+.claude/
+CLAUDE.md

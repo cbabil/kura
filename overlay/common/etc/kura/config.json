@@ -1,6 +1,6 @@
 {
-    "name": "FalkenOS",
-    "hostname": "falkenos",
+    "name": "Kura",
+    "hostname": "kura",
     "networkConfig": {
         "wifi": {
             "enable": false,
@@ -25,6 +25,6 @@
     },
     "logging": {
         "level": "INFO",
-        "path": "/var/log/falken"
+        "path": "/var/log/kura"
     }
 }

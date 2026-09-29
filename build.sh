@@ -87,7 +87,7 @@ mkdir -p "${OS_TMP}" 2>/dev/null || true
 
 # Derived brand variables
 BRAND="${OS_BRAND}"
-ARTIFACT_PREFIX="${BRAND}os"
+ARTIFACT_PREFIX="${BRAND}"
 
 # Shared paths
 RELEASE_DIR="${PROJECT_DIR}/release"
@@ -437,8 +437,8 @@ apply_overlays() {
 
 set_passwords() {
     local ROOTFS="$1"
-    local LOGIN_USER="${OS_USER:-joshua}"
-    local LOGIN_USER_PASSWD="${OS_USER_PASSWD:-joshua}"
+    local LOGIN_USER="${OS_USER:-admin}"
+    local LOGIN_USER_PASSWD="${OS_USER_PASSWD:-admin}"
 
     mount_chroot "${ROOTFS}"
     chroot "${ROOTFS}" sh -c "printf 'root:%s\n%s:%s\n' \
@@ -849,7 +849,7 @@ build_target() {
     # Target-specific files to verify
     local EXTRA_FILES=""
     if [ "${TARGET}" = "iso" ]; then
-        EXTRA_FILES="usr/lib/${BRAND}os/firstboot.sh"
+        EXTRA_FILES="usr/lib/${BRAND}/firstboot.sh"
     fi
     for f in \
         "usr/local/bin/bun" \
@@ -870,7 +870,7 @@ build_target() {
     # Symlinks (absolute targets — use -L not -e)
     local EXTRA_SYMLINKS=""
     if [ "${TARGET}" = "iso" ]; then
-        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}os-firstboot.service"
+        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service"
     fi
     for f in \
         "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \

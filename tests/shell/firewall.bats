@@ -22,8 +22,8 @@ setup() {
     [[ "$output" == *"-A INPUT -i lo -j ACCEPT"* ]]
     [[ "$output" == *"-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT"* ]]
     [[ "$output" == *"-A INPUT -p tcp --dport 22 -j ACCEPT"* ]]
-    [[ "$output" == *"-A OUTPUT -d api.falken.io -j ACCEPT"* ]]
-    [[ "$output" == *"-A OUTPUT -d updates.falken.io -j ACCEPT"* ]]
+    [[ "$output" == *"-A OUTPUT -d api.kura.io -j ACCEPT"* ]]
+    [[ "$output" == *"-A OUTPUT -d updates.kura.io -j ACCEPT"* ]]
     [[ "$output" == *"COMMIT"* ]]
 }
 

@@ -18,7 +18,7 @@ describe('security-manager', () => {
     jest.spyOn(config, 'loadSecurityConfig').mockReturnValue({
       container_security: {
         verify_signatures: true,
-        allowed_registries: ['registry.falken.io', 'docker.io'],
+        allowed_registries: ['registry.kura.io', 'docker.io'],
         seccomp_profile: 'default',
       },
       update_security: {
@@ -59,7 +59,7 @@ describe('security-manager', () => {
 
   describe('validateImage', () => {
     it('validates allowed registry', () => {
-      const result = securityManager.validateImage('registry.falken.io/app:1.0');
+      const result = securityManager.validateImage('registry.kura.io/app:1.0');
       expect(result.valid).toBe(true);
     });
 

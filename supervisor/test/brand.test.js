@@ -11,12 +11,12 @@ describe('brand.js', () => {
     it('returns frozen defaults for non-existent path', () => {
       const brand = loadBrand('/tmp/nonexistent-brand-env-' + Date.now());
 
-      expect(brand.BRAND_NAME).toBe('FalkenOS');
-      expect(brand.BRAND_PREFIX).toBe('falken');
+      expect(brand.BRAND_NAME).toBe('Kura');
+      expect(brand.BRAND_PREFIX).toBe('kura');
       expect(brand.BRAND_VERSION).toBe('2.0');
-      expect(brand.BRAND_API_ENDPOINT).toBe('https://api.falken.io');
-      expect(brand.BRAND_WS_ENDPOINT).toBe('wss://api.falken.io/ws');
-      expect(brand.BRAND_REGISTRY).toBe('registry.falken.io');
+      expect(brand.BRAND_API_ENDPOINT).toBe('https://api.kura.io');
+      expect(brand.BRAND_WS_ENDPOINT).toBe('wss://api.kura.io/ws');
+      expect(brand.BRAND_REGISTRY).toBe('registry.kura.io');
       expect(brand.BRAND_WS_HEARTBEAT_INTERVAL).toBe('30000');
       expect(brand.BRAND_WS_HEARTBEAT_TIMEOUT).toBe('90000');
       expect(brand.BRAND_WS_RECONNECT_BASE).toBe('1000');
@@ -90,7 +90,7 @@ describe('brand.js', () => {
 
       const brand = loadBrand(tmpFile);
       expect(brand.BRAND_NAME).toBe('CommentOS');
-      expect(brand.BRAND_PREFIX).toBe('falken'); // untouched default
+      expect(brand.BRAND_PREFIX).toBe('kura'); // untouched default
     });
 
     it('ignores unknown keys', () => {
@@ -108,7 +108,7 @@ describe('brand.js', () => {
       fs.writeFileSync(tmpFile, 'BRAND_NAME="PartialOS"\n');
       const brand = loadBrand(tmpFile);
       expect(brand.BRAND_NAME).toBe('PartialOS');
-      expect(brand.BRAND_PREFIX).toBe('falken');
+      expect(brand.BRAND_PREFIX).toBe('kura');
       expect(brand.BRAND_VERSION).toBe('2.0');
     });
   });

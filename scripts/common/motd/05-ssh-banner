@@ -1,5 +1,5 @@
 #!/bin/bash
-# 05-ssh-banner — FALKEN ASCII art banner (SSH sessions only)
+# 05-ssh-banner — KURA ASCII art banner (SSH sessions only)
 
 # SSH_CONNECTION is not set when pam_motd runs; detect via process ancestry
 _is_ssh() {
@@ -12,18 +12,18 @@ _is_ssh() {
 }
 _is_ssh || exit 0
 
-# Brand color from brand.env (fallback: #33ff00)
-BRAND_ENV="/etc/falken/brand.env"
+# Brand color from brand.env (fallback: #9146FF)
+BRAND_ENV="/etc/kura/brand.env"
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
-_c="${BRAND_COLOR:-#33ff00}"
+_c="${BRAND_COLOR:-#9146FF}"
 G=$(printf '\033[38;2;%d;%d;%dm' "0x${_c:1:2}" "0x${_c:3:2}" "0x${_c:5:2}")
 R=$'\033[0m'
 
 echo ""
-printf "${G}  ███████  █████  ██      ██   ██ ███████ ███    ██${R}\n"
-printf "${G}  ██      ██   ██ ██      ██  ██  ██      ████   ██${R}\n"
-printf "${G}  █████   ███████ ██      █████   █████   ██ ██  ██${R}\n"
-printf "${G}  ██      ██   ██ ██      ██  ██  ██      ██  ██ ██${R}\n"
-printf "${G}  ██      ██   ██ ███████ ██   ██ ███████ ██   ████${R}\n"
+printf "${G}  ██   ██ ██    ██ ██████   █████${R}\n"
+printf "${G}  ██  ██  ██    ██ ██   ██ ██   ██${R}\n"
+printf "${G}  █████   ██    ██ ██████  ███████${R}\n"
+printf "${G}  ██  ██  ██    ██ ██   ██ ██   ██${R}\n"
+printf "${G}  ██   ██  ██████  ██   ██ ██   ██${R}\n"
 echo ""
-printf "${G}  \"Greetings, Professor Falken. Shall we play a game?\"${R}\n"
+printf "${G}  Welcome to %s${R}\n" "${BRAND_NAME:-Kura}"

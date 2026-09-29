@@ -76,7 +76,7 @@ setup() {
     # Source os-config functions (with brand resolved and paths overridden)
     local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
     local tmp="${BATS_TEST_TMPDIR}/os-config-funcs.sh"
-    sed -e 's|__BRAND__|falken|g' \
+    sed -e 's|__BRAND__|kura|g' \
         -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
         -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
         -e '/^while true/,/^done$/d' \
@@ -109,7 +109,7 @@ setup() {
 
     local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
     local tmp="${BATS_TEST_TMPDIR}/os-config-funcs2.sh"
-    sed -e 's|__BRAND__|falken|g' \
+    sed -e 's|__BRAND__|kura|g' \
         -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
         -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
         -e '/^while true/,/^done$/d' \
@@ -152,7 +152,7 @@ JSON
 
     local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
     local tmp="${BATS_TEST_TMPDIR}/os-config-funcs3.sh"
-    sed -e 's|__BRAND__|falken|g' \
+    sed -e 's|__BRAND__|kura|g' \
         -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
         -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
         -e '/^while true/,/^done$/d' \
@@ -188,7 +188,7 @@ JSON
 
     local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
     local tmp="${BATS_TEST_TMPDIR}/os-config-funcs4.sh"
-    sed -e 's|__BRAND__|falken|g' \
+    sed -e 's|__BRAND__|kura|g' \
         -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
         -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
         -e '/^while true/,/^done$/d' \

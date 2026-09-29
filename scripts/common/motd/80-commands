@@ -1,10 +1,10 @@
 #!/bin/bash
 # 80-commands — Quick reference commands
 
-# Brand color from brand.env (fallback: #33ff00)
-BRAND_ENV="/etc/falken/brand.env"
+# Brand color from brand.env (fallback: #9146FF)
+BRAND_ENV="/etc/kura/brand.env"
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
-_c="${BRAND_COLOR:-#33ff00}"
+_c="${BRAND_COLOR:-#9146FF}"
 C=$(printf '\033[38;2;%d;%d;%dm' "0x${_c:1:2}" "0x${_c:3:2}" "0x${_c:5:2}")
 w=$'\033[0;37m'   # dim white    — body text, dots
 W=$'\033[1;37m'   # bold white   — command names
@@ -19,5 +19,4 @@ printf "  ${W}systemctl status${w} ............ All services${R}\n"
 printf "  ${W}journalctl -u <service>${w} .... Service logs${R}\n"
 printf "  ${W}ip addr show${w} ............... Network interfaces${R}\n"
 printf "  ${W}df -h${w} ...................... Disk usage${R}\n"
-printf "  ${W}games${w} ...................... Shall we play a game?${R}\n"
 echo ""

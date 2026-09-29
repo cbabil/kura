@@ -29,8 +29,8 @@ ln -sf /usr/lib/systemd/system/serial-getty@.service \
     "${ROOTFS}/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
 
 # ---- Firstboot service ----
-install -d "${ROOTFS}/usr/lib/${BRAND}os"
-cat > "${ROOTFS}/usr/lib/${BRAND}os/firstboot.sh" <<'FBEOF'
+install -d "${ROOTFS}/usr/lib/${BRAND}"
+cat > "${ROOTFS}/usr/lib/${BRAND}/firstboot.sh" <<'FBEOF'
 #!/bin/bash
 # __BRAND_NAME__ first-boot script (x86_64 ISO target)
 # Resizes root partition, installs Docker, generates SSH keys, cloud-init.
@@ -178,21 +178,21 @@ FBEOF
 
 # Replace placeholders in firstboot script with actual brand values
 sed -i "s|__BRAND_NAME__|${OS_NAME}|g; s|__BRAND__|${BRAND}|g" \
-    "${ROOTFS}/usr/lib/${BRAND}os/firstboot.sh"
-chmod 755 "${ROOTFS}/usr/lib/${BRAND}os/firstboot.sh"
+    "${ROOTFS}/usr/lib/${BRAND}/firstboot.sh"
+chmod 755 "${ROOTFS}/usr/lib/${BRAND}/firstboot.sh"
 
 # ---- Firstboot systemd service ----
-cat > "${ROOTFS}/usr/lib/systemd/system/${BRAND}os-firstboot.service" <<SVCEOF
+cat > "${ROOTFS}/usr/lib/systemd/system/${BRAND}-firstboot.service" <<SVCEOF
 [Unit]
 Description=${OS_NAME} First Boot Setup
 After=network-online.target
 Wants=network-online.target
-ConditionPathExists=!/var/lib/${BRAND}os/.firstboot-done
+ConditionPathExists=!/var/lib/${BRAND}/.firstboot-done
 
 [Service]
 Type=oneshot
 Environment=DEBIAN_FRONTEND=noninteractive
-ExecStart=/usr/lib/${BRAND}os/firstboot.sh
+ExecStart=/usr/lib/${BRAND}/firstboot.sh
 RemainAfterExit=yes
 TimeoutStartSec=600
 StandardOutput=journal+console
@@ -204,8 +204,8 @@ SVCEOF
 
 # Enable firstboot service
 install -d "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
-ln -sf "/usr/lib/systemd/system/${BRAND}os-firstboot.service" \
-    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${BRAND}os-firstboot.service"
+ln -sf "/usr/lib/systemd/system/${BRAND}-firstboot.service" \
+    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service"
 
 # ---- Strip unnecessary files to reduce ISO size ----
 echo "Stripping docs/man/locales/firmware..."

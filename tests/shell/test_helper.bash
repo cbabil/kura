@@ -3,13 +3,13 @@
 
 FIXTURES="${BATS_TEST_DIRNAME}/fixtures"
 
-# Source security lib with __BRAND__ resolved to "falken" for testing.
+# Source security lib with __BRAND__ resolved to "kura" for testing.
 # Each lib file is loaded via a temp copy with placeholders replaced.
 load_security_lib() {
     local lib_name="$1"
     local src="${BATS_TEST_DIRNAME}/../../packages/os-security/src/lib/${lib_name}.sh"
     local tmp="${BATS_TEST_TMPDIR}/${lib_name}.sh"
-    sed 's|__BRAND__|falken|g' "${src}" > "${tmp}"
+    sed 's|__BRAND__|kura|g' "${src}" > "${tmp}"
     # shellcheck disable=SC1090
     source "${tmp}"
 }
@@ -20,7 +20,7 @@ create_hardening_json() {
     cat > "${dest}" << 'JSON'
 {
     "network_security": {
-        "api_whitelist": ["api.falken.io", "updates.falken.io"],
+        "api_whitelist": ["api.kura.io", "updates.kura.io"],
         "firewall_preset": "strict"
     },
     "apparmor_profiles": [

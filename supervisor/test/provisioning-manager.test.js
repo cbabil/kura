@@ -65,8 +65,8 @@ describe('provisioning-manager', () => {
 
       const config = {
         applications: [
-          { name: 'app1', image: 'registry.falken.io/app1:1.0' },
-          { name: 'app2', image: 'registry.falken.io/app2:1.0' },
+          { name: 'app1', image: 'registry.kura.io/app1:1.0' },
+          { name: 'app2', image: 'registry.kura.io/app2:1.0' },
         ],
       };
 
@@ -156,13 +156,13 @@ describe('provisioning-manager', () => {
       const config = {
         applications: [
           { name: 'bad', image: 'evil.io/app:1' },
-          { name: 'good', image: 'registry.falken.io/app:1' },
+          { name: 'good', image: 'registry.kura.io/app:1' },
         ],
       };
 
       await provisioningManager.provision(config);
       expect(containerManager.pullImage).toHaveBeenCalledTimes(1);
-      expect(containerManager.pullImage).toHaveBeenCalledWith('registry.falken.io/app:1');
+      expect(containerManager.pullImage).toHaveBeenCalledWith('registry.kura.io/app:1');
     });
 
     it('updates container status after successful setup', async () => {

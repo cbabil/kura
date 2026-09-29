@@ -24,8 +24,8 @@ OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
 HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
 export ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
-LOGIN_USER="${OS_USER:-joshua}"
-export LOGIN_USER_PASSWD="${OS_USER_PASSWD:-joshua}"
+LOGIN_USER="${OS_USER:-admin}"
+export LOGIN_USER_PASSWD="${OS_USER_PASSWD:-admin}"
 VERSION="${OS_VERSION:-0.0.1}"
 DHCP_IFACE="${OS_DHCP_INTERFACE:-eth0}"
 API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
@@ -94,7 +94,7 @@ export LESS='-FRSXMKd'
 
 # Brand color (${COLOR}) applied to prompt and cursor
 if [ "\$TERM" = "linux" ]; then
-    PROMPT_COMMAND='printf "\033[1;32m"'
+    PROMPT_COMMAND='printf "\033[1;35m"'
 else
     PROMPT_COMMAND='printf "\033[38;2;${_cr};${_cg};${_cb}m"'
 fi
@@ -156,10 +156,10 @@ ExecStart=/usr/bin/nm-online -s -q --timeout=120
 NMEOF
 
 # ---- Generate brand.env (runtime brand discovery) ----
-# Always at /etc/falken/brand.env -- this is the bootstrap path that runtime
+# Always at /etc/kura/brand.env -- this is the bootstrap path that runtime
 # code uses to discover the brand. The path itself never changes.
-install -d "${ROOTFS}/etc/falken"
-cat > "${ROOTFS}/etc/falken/brand.env" <<BRANDEOF
+install -d "${ROOTFS}/etc/kura"
+cat > "${ROOTFS}/etc/kura/brand.env" <<BRANDEOF
 BRAND_NAME="${OS_NAME}"
 BRAND_PREFIX="${BRAND}"
 BRAND_COLOR="${COLOR}"
@@ -172,7 +172,7 @@ BRAND_WS_HEARTBEAT_TIMEOUT="${WS_HEARTBEAT_TIMEOUT}"
 BRAND_WS_RECONNECT_BASE="${WS_RECONNECT_BASE}"
 BRAND_WS_RECONNECT_MAX="${WS_RECONNECT_MAX}"
 BRANDEOF
-chmod 644 "${ROOTFS}/etc/falken/brand.env"
+chmod 644 "${ROOTFS}/etc/kura/brand.env"
 
 # ---- Patch config.json with env values ----
 if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
@@ -201,13 +201,13 @@ R="${ESC}[0m"
 # agetty passes raw ANSI bytes through; \r \m \l are agetty escapes
 cat > "${ROOTFS}/etc/issue" <<ISSUEEOF
 
-${B}  ███████  █████  ██      ██   ██ ███████ ███    ██
-  ██      ██   ██ ██      ██  ██  ██      ████   ██
-  █████   ███████ ██      █████   █████   ██ ██  ██
-  ██      ██   ██ ██      ██  ██  ██      ██  ██ ██
-  ██      ██   ██ ███████ ██   ██ ███████ ██   ████${R}
+${B}  ██   ██ ██    ██ ██████   █████
+  ██  ██  ██    ██ ██   ██ ██   ██
+  █████   ██    ██ ██████  ███████
+  ██  ██  ██    ██ ██   ██ ██   ██
+  ██   ██  ██████  ██   ██ ██   ██${R}
 
-${G}  "Greetings, Professor Falken. Shall we play a game?"${R}
+${G}  ${OS_ISSUE:-Welcome to ${OS_NAME}}${R}
 
 ISSUEEOF
 
@@ -223,11 +223,6 @@ done
 
 # Empty static motd (dynamic scripts handle everything)
 : > "${ROOTFS}/etc/motd"
-
-# ---- Install easter egg commands (WarGames, 1983) ----
-for egg in "${SCRIPT_DIR}/easter-eggs"/*; do
-    install -m 0755 "${egg}" "${ROOTFS}/usr/local/bin/$(basename "${egg}")"
-done
 
 # ---- Login user (SSH with password) ----
 # Create login user with home directory; password set via chroot later by build.sh

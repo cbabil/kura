@@ -2,19 +2,19 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/banner-dark.png">
     <source media="(prefers-color-scheme: light)" srcset=".github/banner-light.png">
-    <img src=".github/banner-dark.png" alt="FalkenOS" width="700">
+    <img src=".github/banner-dark.png" alt="Kura" width="700">
   </picture>
 </p>
 
 <p align="center">
-  <a href="https://github.com/cbabil/FalkenOS/actions/workflows/ci.yml"><img src="https://github.com/cbabil/FalkenOS/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI"></a>
+  <a href="https://github.com/cbabil/kura/actions/workflows/ci.yml"><img src="https://github.com/cbabil/kura/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI"></a>
   <img src="https://img.shields.io/badge/debian-trixie-A81D33?logo=debian" alt="Debian Trixie">
   <img src="https://img.shields.io/badge/platform-x86__64%20%7C%20arm64-blue" alt="Platform">
   <img src="https://img.shields.io/badge/license-GPL-green" alt="License">
-  <img src="https://img.shields.io/github/v/tag/cbabil/FalkenOS?label=version&color=orange" alt="Version">
+  <img src="https://img.shields.io/github/v/tag/cbabil/kura?label=version&color=orange" alt="Version">
 </p>
 
-# FalkenOS
+# Kura
 
 A custom operating system built on Debian 13 (Trixie) using mmdebstrap for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
 
@@ -82,7 +82,7 @@ cp .env.example .env
 ./build.sh setup
 
 # Optional: create a system-wide symlink for convenience
-sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/falkenos
+sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/kura
 ```
 
 ### 4. Build
@@ -93,7 +93,7 @@ sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/falkenos
 ./build.sh build rpi5       # Build RPi5 only (incremental)
 
 # Or with the symlink:
-falkenos build iso
+kura build iso
 ```
 
 **Note:** Docker images are created automatically with each build. On the ISO target, Docker itself is deferred to firstboot; on RPi5, Docker is included directly in the image.
@@ -136,7 +136,7 @@ All tunable build values live in `.env` at the project root. Copy the template o
 |----------|-------------|---------|
 | `OS_BRAND` | Lowercase prefix for paths, services, user/group | *(see brand-defaults.sh)* |
 | `OS_NAME` | Display name shown in banners, MOTD, logs | *(see brand-defaults.sh)* |
-| `OS_COLOR` | Brand accent color (hex) | `#33ff00` |
+| `OS_COLOR` | Brand accent color (hex) | `#9146FF` |
 | `OS_API_ENDPOINT` | API endpoint for connectivity checks | *(see brand-defaults.sh)* |
 | `OS_WS_ENDPOINT` | WebSocket endpoint for supervisor | *(derived from API endpoint)* |
 | `OS_REGISTRY` | Container registry for managed apps | *(see brand-defaults.sh)* |
@@ -155,9 +155,9 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OS_VERSION` | Release version baked into images | `0.0.1` |
-| `OS_HOSTNAME` | Default hostname | `${OS_BRAND}os` |
-| `OS_USER` | Login user (SSH password auth) | `joshua` |
-| `OS_USER_PASSWD` | Login user password (plaintext) | `joshua` |
+| `OS_HOSTNAME` | Default hostname | `kura` |
+| `OS_USER` | Login user (SSH password auth) | `admin` |
+| `OS_USER_PASSWD` | Login user password (plaintext) | `admin` |
 | `OS_ROOT_PASSWD` | Root password (plaintext, key-only SSH) | `${OS_BRAND}` |
 | `OS_ISSUE` | Login banner | `Welcome to ${OS_NAME}` |
 
@@ -184,7 +184,7 @@ All tunable build values live in `.env` at the project root. Copy the template o
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OS_TMP` | Temp directory for builds | `/home/${OS_BRAND}os/tmp` |
+| `OS_TMP` | Temp directory for builds | `/home/${OS_BRAND}/tmp` |
 
 ## Commands
 
@@ -226,8 +226,8 @@ release/<version>/
 
 | User | Password | SSH Access |
 |------|----------|------------|
-| `joshua` | `joshua` | Password auth |
-| `root` | `falken` | Key-only (no password SSH) |
+| `admin` | `admin` | Password auth |
+| `root` | `kura` | Key-only (no password SSH) |
 
 Change these in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building.
 
@@ -299,7 +299,7 @@ After changing these values, rebuild (`./build.sh build all`). The build system 
 
 **What stays static** (not affected by rebranding):
 - Source filenames in `packages/` (installed under branded names)
-- The bootstrap path `/etc/falken/brand.env` (hardcoded discovery point)
+- The bootstrap path `/etc/kura/brand.env` (hardcoded discovery point)
 
 ## License
 
