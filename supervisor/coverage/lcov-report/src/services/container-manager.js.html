@@ -39,7 +39,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>14/14</span>
+                <span class='fraction'>15/15</span>
             </div>
         
             
@@ -258,13 +258,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">14x</span>
-<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">7x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">8x</span>
+<span class="cline-any cline-yes">9x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">4x</span>
@@ -277,10 +279,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
@@ -311,7 +312,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -379,12 +379,12 @@ async function createContainer(config) {
 }
 &nbsp;
 /**
- * Returns the container only if the supervisor manages it.
- * Tomo's containers share this Docker daemon; cloud commands must never
- * start, stop, remove or read the logs of containers the supervisor did not
- * create.
+ * The only way to reach a container by ID: returns it only if the supervisor
+ * manages it. Tomo's containers share this Docker daemon; cloud commands must
+ * never inspect, start, stop, remove or read the logs of containers the
+ * supervisor did not create.
  * @param {string} id - Container ID or name
- * @returns {Promise&lt;object&gt;} dockerode container handle
+ * @returns {Promise&lt;{container: object, info: object}&gt;} handle and inspect data
  * @throws {Error} if the container lacks the managed label
  */
 async function getManagedContainer(id) {
@@ -393,24 +393,25 @@ async function getManagedContainer(id) {
   if (info?.Config?.Labels?.[LABELS.MANAGED] !== 'true') {
     throw new Error(`Container ${id} is not managed by the supervisor`);
   }
-  return container;
+  return { container, info };
 }
 &nbsp;
-async function startContainer(id) { await (await getManagedContainer(id)).start(); }
-async function stopContainer(id) { await (await getManagedContainer(id)).stop(); }
-async function restartContainer(id) { await (await getManagedContainer(id)).restart(); }
+async function managed(id) { return (await getManagedContainer(id)).container; }
+&nbsp;
+async function startContainer(id) { await (await managed(id)).start(); }
+async function stopContainer(id) { await (await managed(id)).stop(); }
+async function restartContainer(id) { await (await managed(id)).restart(); }
 &nbsp;
 async function removeContainer(id, force = false) {
-  await (await getManagedContainer(id)).remove({ force });
+  await (await managed(id)).remove({ force });
 }
 &nbsp;
 async function getLogs(id, tail = 100) {
-  const container = await getManagedContainer(id);
-  const logs = await container.logs({ stdout: true, stderr: true, tail });
+  const logs = await (await managed(id)).logs({ stdout: true, stderr: true, tail });
   return logs.toString('utf8');
 }
 &nbsp;
-async function inspectContainer(id) { return docker.getContainer(id).inspect(); }
+async function inspectContainer(id) { return (await getManagedContainer(id)).info; }
 &nbsp;
 async function healthCheck() {
   const containers = await docker.listContainers({ all: true, filters: MANAGED_FILTER });
@@ -441,7 +442,6 @@ async function pullImage(image) {
 }
 &nbsp;
 module.exports = {
-  getManagedContainer,
   listContainers,
   createContainer,
   startContainer,
@@ -460,7 +460,7 @@ module.exports = {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-09-29T12:23:09.906Z
+                at 2026-09-29T12:57:01.032Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

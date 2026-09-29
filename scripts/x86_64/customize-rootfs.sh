@@ -21,8 +21,6 @@ install -d "${ROOTFS}/etc/systemd/system/getty.target.wants"
 ln -sf /usr/lib/systemd/system/serial-getty@.service \
     "${ROOTFS}/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
 
-# First boot (every target) is installed by scripts/common/customize-rootfs.sh
-
 # ---- Strip unnecessary files to reduce ISO size ----
 echo "Stripping docs/man/locales/firmware..."
 rm -rf "${ROOTFS}/usr/share/doc"

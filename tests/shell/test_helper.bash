@@ -3,6 +3,33 @@
 
 FIXTURES="${BATS_TEST_DIRNAME}/fixtures"
 
+# ---- Assertions ----
+# bash 3.2 (macOS) ignores a failing [[ ]] that is not the last command in a
+# test, so pattern checks go through these functions (plain commands fail
+# correctly on every bash).
+output_has() { [[ "$output" == *"$1"* ]]; }
+matches() { [[ "$1" == $2 ]]; }
+file_has() { grep -qF -- "$2" "$1"; }
+
+# ---- Stubs ----
+# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path and
+# records the requested URL in ${BATS_TEST_TMPDIR}/curl-url.
+stub_curl_copy() {
+    CURL_SRC="$1"
+    curl() {
+        local out="" url=""
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                -o) out="$2"; shift ;;
+                http*) url="$1" ;;
+            esac
+            shift
+        done
+        echo "${url}" > "${BATS_TEST_TMPDIR}/curl-url"
+        cp "${CURL_SRC}" "${out}"
+    }
+}
+
 # Source security lib with __BRAND__ resolved to "kura" for testing.
 # Each lib file is loaded via a temp copy with placeholders replaced.
 load_security_lib() {

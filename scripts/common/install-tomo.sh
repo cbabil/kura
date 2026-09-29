@@ -11,6 +11,9 @@
 # Must run while build.sh's policy-rc.d is in place and apt lists are present.
 # Source this file; it defines functions only.
 
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/systemd-units.sh"
+
 TOMO_SYSTEMCTL_DIVERT="/usr/bin/systemctl.kura-real"
 TOMO_UNIT="/etc/systemd/system/tomod.service"
 TOMO_JWT="/opt/tomo/data/secrets/jwt"
@@ -36,7 +39,7 @@ _tomo_restore_systemctl() {
 # Installs Tomo, enables tomod at boot and removes the JWT secret the
 # package generated, so every device creates its own on first start.
 install_tomo() {
-    local rootfs="$1" deb="$2" status=0 wants
+    local rootfs="$1" deb="$2" status=0
 
     if [ ! -f "${deb}" ]; then
         echo "ERROR: Tomo package ${deb} not found" >&2
@@ -59,9 +62,7 @@ install_tomo() {
         return 1
     fi
 
-    wants="${rootfs}/etc/systemd/system/multi-user.target.wants"
-    install -d "${wants}"
-    ln -sf "${TOMO_UNIT}" "${wants}/tomod.service"
+    enable_unit "${rootfs}" multi-user.target "${TOMO_UNIT}"
     rm -f "${rootfs}${TOMO_JWT}"
     echo "Tomo installed."
 }

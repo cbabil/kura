@@ -4,12 +4,8 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
-# Plain-command assertions: bash 3.2 (macOS) ignores a failing [[ ]] that is
-# not the last command in a test, so pattern checks go through functions.
-output_has() { [[ "$output" == *"$1"* ]]; }
-matches() { [[ "$1" == $2 ]]; }
-
 setup() {
+    load test_helper
     unset OS_TOMO_VERSION OS_TOMO_SHA256_ARM64 OS_TOMO_SHA256_AMD64 OS_TOMO_DEB
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/fetch-tomo.sh"
@@ -17,22 +13,6 @@ setup() {
     FAKE_DEB="${BATS_TEST_TMPDIR}/fake.deb"
     printf 'not really a deb\n' > "${FAKE_DEB}"
     FAKE_SHA=$(file_sha256 "${FAKE_DEB}")
-}
-
-# Stub curl: "download" FAKE_DEB to the -o destination, record the URL.
-stub_curl_ok() {
-    curl() {
-        local out="" url=""
-        while [ $# -gt 0 ]; do
-            case "$1" in
-                -o) out="$2"; shift ;;
-                http*) url="$1" ;;
-            esac
-            shift
-        done
-        echo "${url}" > "${BATS_TEST_TMPDIR}/curl-url"
-        cp "${FAKE_DEB}" "${out}"
-    }
 }
 
 # ---- tomo_deb_url ----
@@ -80,7 +60,7 @@ stub_curl_ok() {
 # ---- fetch_tomo_deb ----
 
 @test "fetch_tomo_deb: downloads the pinned URL and verifies it" {
-    stub_curl_ok
+    stub_curl_copy "${FAKE_DEB}"
     OS_TOMO_VERSION="0.0.99"
     OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
     run fetch_tomo_deb arm64 "${CACHE}"
@@ -91,7 +71,7 @@ stub_curl_ok() {
 }
 
 @test "fetch_tomo_deb: rejects a download with the wrong checksum" {
-    stub_curl_ok
+    stub_curl_copy "${FAKE_DEB}"
     OS_TOMO_VERSION="0.0.99"
     OS_TOMO_SHA256_ARM64="$(printf '0%.0s' {1..64})"
     run fetch_tomo_deb arm64 "${CACHE}"

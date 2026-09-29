@@ -3,6 +3,9 @@
 # Build-time helpers that prepare an image to become a unique device on its
 # first boot. Source this file; it defines functions only.
 
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/systemd-units.sh"
+
 # install_firstboot <rootfs> <brand> <os-name> <firstboot-script>
 # Installs the first-boot script and two units:
 #   <brand>-ssh-keygen.service  generates SSH host keys before sshd starts.
@@ -13,9 +16,8 @@
 install_firstboot() {
     local rootfs="$1" brand="$2" name="$3" src="$4"
     local units="${rootfs}/usr/lib/systemd/system"
-    local wants="${rootfs}/etc/systemd/system/multi-user.target.wants"
 
-    install -d "${rootfs}/usr/lib/${brand}" "${units}" "${wants}"
+    install -d "${rootfs}/usr/lib/${brand}" "${units}"
     sed "s|__BRAND_NAME__|${name}|g; s|__BRAND__|${brand}|g" "${src}" \
         > "${rootfs}/usr/lib/${brand}/firstboot.sh"
     chmod 0755 "${rootfs}/usr/lib/${brand}/firstboot.sh"
@@ -59,10 +61,8 @@ StandardError=journal+console
 WantedBy=multi-user.target
 EOF
 
-    ln -sf "/usr/lib/systemd/system/${brand}-ssh-keygen.service" \
-        "${wants}/${brand}-ssh-keygen.service"
-    ln -sf "/usr/lib/systemd/system/${brand}-firstboot.service" \
-        "${wants}/${brand}-firstboot.service"
+    enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-ssh-keygen.service"
+    enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-firstboot.service"
 }
 
 # reset_device_identity <rootfs>

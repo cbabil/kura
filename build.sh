@@ -364,11 +364,13 @@ POLICYEOF
         chroot "${ROOTFS}" apt-get install -y -qq --no-install-recommends ${PACKAGES}
     fi
 
-    # Tomo platform, from its pinned release .deb (needs apt lists + policy-rc.d)
+    # Tomo platform, from its pinned release .deb (needs apt lists + policy-rc.d),
+    # plus the container images it needs at first start (offline boot)
     print_status "Installing Tomo..."
     local TOMO_DEB
     TOMO_DEB=$(fetch_tomo_deb "${DEB_ARCH}" "${OS_TMP}/cache/tomo")
     install_tomo "${ROOTFS}" "${TOMO_DEB}"
+    save_tomo_images "${ROOTFS}" "${BRAND}" "${DEB_ARCH}" "${OS_TMP}/cache/images"
 
     # Purge build-only packages no longer needed at runtime
     print_status "Purging build-only packages..."
@@ -820,13 +822,13 @@ build_target() {
         return 0
     fi
 
-    local ARCH="amd64"
-    [ "${TARGET}" = "rpi5" ] && ARCH="arm64"
-
-    # Map target name to directory name used for scripts/config/overlay paths
-    # "iso" target uses "x86_64" directories, "rpi5" uses "rpi5"
-    local TARGET_DIRNAME="${TARGET}"
-    [ "${TARGET}" = "iso" ] && TARGET_DIRNAME="x86_64"
+    # Debian architecture, and the directory name used for the target's
+    # scripts, package list and overlay
+    local ARCH TARGET_DIRNAME
+    case "${TARGET}" in
+        rpi5) ARCH="arm64"; TARGET_DIRNAME="rpi5" ;;
+        iso)  ARCH="amd64"; TARGET_DIRNAME="x86_64" ;;
+    esac
 
     local ROOTFS="${OS_TMP}/${ARTIFACT_PREFIX}-rootfs-${TARGET}"
 
@@ -847,7 +849,6 @@ build_target() {
     print_status "[2/7] Installing Debian packages (common + ${TARGET_DIRNAME})..."
     print_status "  Package lists: ${CONFIG_DIR}/packages-common.list, ${CONFIG_DIR}/packages-${TARGET_DIRNAME}.list"
     install_packages "${ROOTFS}" "${TARGET_DIRNAME}" "${ARCH}"
-    save_tomo_images "${ROOTFS}" "${BRAND}" "${ARCH}" "${OS_TMP}/cache/images"
 
     # Phase 3: Install OS packages
     print_status "[3/7] Installing OS packages..."

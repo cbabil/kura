@@ -50,8 +50,10 @@ tomo_version() {
 # Prints the expected sha256 for the selected version and architecture.
 # A version other than the pinned default must come with its own checksum.
 tomo_expected_sha() {
-    local arch="$1" var sha version
-    var="OS_TOMO_SHA256_$(echo "${arch}" | tr '[:lower:]' '[:upper:]')"
+    local arch="$1" suffix var default sha version
+    suffix=$(echo "${arch}" | tr '[:lower:]' '[:upper:]')
+    var="OS_TOMO_SHA256_${suffix}"
+    default="TOMO_DEFAULT_SHA256_${suffix}"
     version=$(tomo_version) || return 1
     sha="${!var:-}"
     if [ -z "${sha}" ]; then
@@ -59,10 +61,7 @@ tomo_expected_sha() {
             echo "ERROR: OS_TOMO_VERSION=${version} requires ${var}" >&2
             return 1
         fi
-        case "${arch}" in
-            arm64) sha="${TOMO_DEFAULT_SHA256_ARM64}" ;;
-            amd64) sha="${TOMO_DEFAULT_SHA256_AMD64}" ;;
-        esac
+        sha="${!default:-}"
     fi
     if ! [[ "${sha}" =~ ^[0-9a-f]{64}$ ]]; then
         echo "ERROR: invalid ${var} '${sha}' (expected 64 lowercase hex chars)" >&2

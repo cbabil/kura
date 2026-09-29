@@ -4,60 +4,43 @@
 # build time, so docker-ce can be installed from the package list and every
 # image boots with Docker already present (no network needed at first boot).
 #
-# The signing key is downloaded on the host and its fingerprint is checked
-# against a pinned value before apt inside the chroot is allowed to trust it.
+# The signing key is downloaded on the host and only the key matching a
+# pinned fingerprint is given to apt inside the chroot.
 #
 # Source this file; it defines functions only.
 
 # shellcheck disable=SC2034
 DOCKER_APT_URL="https://download.docker.com/linux/debian"
 DOCKER_GPG_URL="${DOCKER_APT_URL}/gpg"
-# Docker Release (CE deb) signing key — same pin as the x86_64 firstboot.
+# Docker Release (CE deb) signing key
 DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 DOCKER_KEYRING_PATH="etc/apt/keyrings/docker.asc"
 DOCKER_SOURCE_PATH="etc/apt/sources.list.d/docker.list"
 
-# docker_key_fingerprint <key-file>
-# Prints the primary key fingerprint of an armored key file (empty if unreadable).
-# Uses a throwaway GNUPGHOME so the build user's keyring is never touched.
-docker_key_fingerprint() {
-    local key="$1" home fpr
-    home=$(mktemp -d)
-    fpr=$(GNUPGHOME="${home}" gpg --batch --show-keys --with-colons "${key}" 2>/dev/null \
-        | awk -F: '/^fpr:/{print $10; exit}')
-    rm -rf "${home}"
-    echo "${fpr}"
-}
-
-# verify_docker_key <key-file>
-# Returns 0 only if the key's fingerprint matches DOCKER_GPG_FINGERPRINT.
-verify_docker_key() {
-    local key="$1" actual
+# pinned_docker_key <key-file> <out-file>
+# Writes only the key whose fingerprint is DOCKER_GPG_FINGERPRINT, armored.
+# Fails if the file doesn't contain it, so extra keys appended to a download
+# are never trusted by apt. Uses a throwaway GNUPGHOME so the build user's
+# keyring is never touched.
+pinned_docker_key() {
+    local key="$1" out="$2" home status=0
     if ! command -v gpg >/dev/null 2>&1; then
         echo "ERROR: gpg is required to verify the Docker signing key" >&2
         return 1
     fi
-    actual=$(docker_key_fingerprint "${key}")
-    if [ -z "${actual}" ]; then
-        echo "ERROR: could not read a fingerprint from ${key}" >&2
-        return 1
-    fi
-    if [ "${actual}" != "${DOCKER_GPG_FINGERPRINT}" ]; then
-        echo "ERROR: Docker GPG key fingerprint mismatch: ${actual}" >&2
-        return 1
-    fi
-}
-
-# export_pinned_key <key-file> <out-file>
-# Writes only the key whose fingerprint is DOCKER_GPG_FINGERPRINT (armored),
-# so extra keys appended to the download are never trusted by apt.
-export_pinned_key() {
-    local key="$1" out="$2" home
     home=$(mktemp -d)
-    GNUPGHOME="${home}" gpg --batch --quiet --import "${key}" 2>/dev/null
-    GNUPGHOME="${home}" gpg --batch --armor --export "${DOCKER_GPG_FINGERPRINT}" > "${out}"
+    if ! GNUPGHOME="${home}" gpg --batch --quiet --import "${key}" 2>/dev/null; then
+        echo "ERROR: could not read a key from ${key}" >&2
+        status=1
+    elif ! GNUPGHOME="${home}" gpg --batch --list-keys "${DOCKER_GPG_FINGERPRINT}" \
+            >/dev/null 2>&1; then
+        echo "ERROR: Docker GPG key fingerprint mismatch: pinned key not in download" >&2
+        status=1
+    else
+        GNUPGHOME="${home}" gpg --batch --armor --export "${DOCKER_GPG_FINGERPRINT}" > "${out}"
+    fi
     rm -rf "${home}"
-    [ -s "${out}" ]
+    return "${status}"
 }
 
 # rootfs_codename <rootfs-dir>
@@ -78,46 +61,26 @@ docker_apt_source_line() {
 # install_docker_repo <rootfs-dir> <arch>
 # Downloads + verifies the Docker key and writes the APT source into the rootfs.
 install_docker_repo() {
-    local rootfs="$1" arch="$2" codename tmpkey
+    local rootfs="$1" arch="$2" codename tmp status=0
     codename=$(rootfs_codename "${rootfs}")
     if [ -z "${codename}" ]; then
         echo "ERROR: cannot determine Debian codename from ${rootfs}/etc/os-release" >&2
         return 1
     fi
 
-    tmpkey=$(mktemp)
-    if ! curl -fsSL --connect-timeout 10 --max-time 60 "${DOCKER_GPG_URL}" -o "${tmpkey}"; then
+    tmp=$(mktemp -d)
+    if ! curl -fsSL --connect-timeout 10 --max-time 60 "${DOCKER_GPG_URL}" -o "${tmp}/key"; then
         echo "ERROR: failed to download Docker GPG key from ${DOCKER_GPG_URL}" >&2
-        rm -f "${tmpkey}"
-        return 1
+        status=1
+    elif pinned_docker_key "${tmp}/key" "${tmp}/pinned"; then
+        install -d -m 0755 "${rootfs}/$(dirname "${DOCKER_KEYRING_PATH}")" \
+            "${rootfs}/$(dirname "${DOCKER_SOURCE_PATH}")"
+        install -m 0644 "${tmp}/pinned" "${rootfs}/${DOCKER_KEYRING_PATH}"
+        docker_apt_source_line "${arch}" "${codename}" > "${rootfs}/${DOCKER_SOURCE_PATH}"
+        echo "Docker APT repository added (${arch}, ${codename})."
+    else
+        status=1
     fi
-    if ! verify_docker_key "${tmpkey}"; then
-        rm -f "${tmpkey}"
-        return 1
-    fi
-
-    install -d -m 0755 "${rootfs}/$(dirname "${DOCKER_KEYRING_PATH}")" \
-        "${rootfs}/$(dirname "${DOCKER_SOURCE_PATH}")"
-    if ! export_pinned_key "${tmpkey}" "${tmpkey}.pinned"; then
-        echo "ERROR: could not extract the pinned Docker key" >&2
-        rm -f "${tmpkey}" "${tmpkey}.pinned"
-        return 1
-    fi
-    install -m 0644 "${tmpkey}.pinned" "${rootfs}/${DOCKER_KEYRING_PATH}"
-    rm -f "${tmpkey}" "${tmpkey}.pinned"
-    docker_apt_source_line "${arch}" "${codename}" > "${rootfs}/${DOCKER_SOURCE_PATH}"
-    echo "Docker APT repository added (${arch}, ${codename})."
-}
-
-# enable_docker_units <rootfs-dir>
-# Enables docker and containerd at boot. Package postinst normally does this;
-# set the links explicitly so the image never depends on deb-systemd-helper
-# behaviour inside a chroot.
-enable_docker_units() {
-    local rootfs="$1" wants unit
-    wants="${rootfs}/etc/systemd/system/multi-user.target.wants"
-    install -d "${wants}"
-    for unit in docker.service containerd.service; do
-        ln -sf "/usr/lib/systemd/system/${unit}" "${wants}/${unit}"
-    done
+    rm -rf "${tmp}"
+    return "${status}"
 }

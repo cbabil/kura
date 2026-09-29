@@ -4,9 +4,8 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
-output_has() { [[ "$output" == *"$1"* ]]; }
-
 setup() {
+    load test_helper
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/verify-rootfs.sh"
     ROOTFS="${BATS_TEST_TMPDIR}/rootfs"

@@ -319,6 +319,7 @@ describe('container-manager', () => {
       ['restartContainer', () => containerManager.restartContainer('tomo-proxy'), mockRestart],
       ['removeContainer', () => containerManager.removeContainer('tomo-proxy', true), mockRemove],
       ['getLogs', () => containerManager.getLogs('tomo-proxy'), mockLogs],
+      ['inspectContainer', () => containerManager.inspectContainer('tomo-proxy'), jest.fn()],
     ])('%s refuses an unmanaged container', async (_name, call, action) => {
       mockInspect.mockResolvedValueOnce(unmanaged);
       await expect(call()).rejects.toThrow('not managed');

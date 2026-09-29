@@ -4,9 +4,8 @@
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 MiB=$((1024 * 1024))
 
-output_has() { [[ "$output" == *"$1"* ]]; }
-
 setup() {
+    load test_helper
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/image-size.sh"
 }

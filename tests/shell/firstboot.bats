@@ -5,12 +5,8 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
-# Plain-command assertions: bash 3.2 (macOS) ignores a failing [[ ]] that is
-# not the last command in a test, so pattern checks go through functions.
-output_has() { [[ "$output" == *"$1"* ]]; }
-file_has() { grep -qF -- "$2" "$1"; }
-
 setup() {
+    load test_helper
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/firstboot.sh"
     # shellcheck disable=SC1091

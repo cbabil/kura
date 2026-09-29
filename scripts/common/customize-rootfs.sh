@@ -14,7 +14,7 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/brand-defaults.sh"
 # shellcheck disable=SC1091
-source "$(dirname "$0")/docker-repo.sh"
+source "$(dirname "$0")/systemd-units.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/install-firstboot.sh"
 
@@ -120,21 +120,19 @@ SYSEOF
 
 # ---- Enable systemd services ----
 # Docker is baked into every image (packages-common.list)
-enable_docker_units "${ROOTFS}"
+enable_unit "${ROOTFS}" multi-user.target /usr/lib/systemd/system/docker.service
+enable_unit "${ROOTFS}" multi-user.target /usr/lib/systemd/system/containerd.service
 
 # First boot: SSH host keys, root partition growth, saved images, tomod network
 install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")/firstboot.sh"
 
 # multi-user.target (service names use ${BRAND} prefix)
 for svc in ${BRAND}-supervisor ${BRAND}-config; do
-    ln -sf "/usr/lib/systemd/system/${svc}.service" \
-        "${ROOTFS}/etc/systemd/system/multi-user.target.wants/${svc}.service"
+    enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${svc}.service"
 done
 
 # sysinit.target (security runs early)
-install -d "${ROOTFS}/etc/systemd/system/sysinit.target.wants"
-ln -sf "/usr/lib/systemd/system/${BRAND}-security.service" \
-    "${ROOTFS}/etc/systemd/system/sysinit.target.wants/${BRAND}-security.service"
+enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-security.service"
 
 # /etc/environment — read by PAM (pam_env) for ALL sessions before any shell.
 # -d flag suppresses "terminal is not fully functional" from less (ncurses 6.x

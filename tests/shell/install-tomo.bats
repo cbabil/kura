@@ -7,12 +7,8 @@
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
-# Plain-command assertions: bash 3.2 (macOS) ignores a failing [[ ]] that is
-# not the last command in a test, so pattern checks go through functions.
-output_has() { [[ "$output" == *"$1"* ]]; }
-matches() { [[ "$1" == $2 ]]; }
-
 setup() {
+    load test_helper
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/install-tomo.sh"
     ROOTFS="${BATS_TEST_TMPDIR}/rootfs"
@@ -22,7 +18,8 @@ setup() {
     DEB="${BATS_TEST_TMPDIR}/tomo_0.0.76_arm64.deb"
     echo "deb" > "${DEB}"
     APT_EXIT=0
-    export ROOTFS CALLS APT_EXIT
+    APT_SKIP_UNIT=0   # 1: the package "installs" but ships no tomod unit
+    export ROOTFS CALLS APT_EXIT APT_SKIP_UNIT
 }
 
 # chroot <rootfs> <cmd...>: log the command, emulate its effect on the rootfs.
@@ -44,7 +41,7 @@ chroot() {
             [ "${APT_EXIT}" -eq 0 ] || return "${APT_EXIT}"
             mkdir -p "${root}/opt/tomo/data/secrets" "${root}/etc/systemd/system"
             echo "baked-secret" > "${root}/opt/tomo/data/secrets/jwt"
-            echo "[Unit]" > "${root}/etc/systemd/system/tomod.service"
+            [ "${APT_SKIP_UNIT}" -eq 1 ] || echo "[Unit]" > "${root}/etc/systemd/system/tomod.service"
             ;;
     esac
 }
@@ -90,20 +87,7 @@ chroot() {
 }
 
 @test "install_tomo: fails when the package does not install its unit" {
-    # shellcheck disable=SC2329  # replaces the stub for this test
-    chroot() {
-        local root="$1"; shift
-        case "$1" in
-            dpkg-divert)
-                if [[ " $* " == *" --add "* ]]; then
-                    mv "${root}/usr/bin/systemctl" "${root}/usr/bin/systemctl.kura-real"
-                else
-                    rm -f "${root}/usr/bin/systemctl"
-                    mv "${root}/usr/bin/systemctl.kura-real" "${root}/usr/bin/systemctl"
-                fi
-                ;;
-        esac
-    }
+    APT_SKIP_UNIT=1
     run install_tomo "${ROOTFS}" "${DEB}"
     [ "$status" -ne 0 ]
     output_has "tomod.service"
