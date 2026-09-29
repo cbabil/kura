@@ -59,7 +59,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
-            mmdebstrap qemu-user-static binfmt-support debootstrap rsync \
+            mmdebstrap debian-archive-keyring arch-test \
+            qemu-user-static binfmt-support debootstrap rsync \
             xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
             squashfs-tools e2fsprogs gdisk curl gnupg skopeo zstd unzip
           sudo modprobe loop || true

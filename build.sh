@@ -236,6 +236,8 @@ setup_host() {
 
     local REQUIRED_PKGS="
         mmdebstrap
+        debian-archive-keyring
+        arch-test
         qemu-user-static
         binfmt-support
         debootstrap
@@ -292,6 +294,14 @@ bootstrap_rootfs() {
         "--arch=${ARCH}"
         --quiet
     )
+
+    # Verify the Debian archive with Debian's keyring explicitly. Without it,
+    # mmdebstrap trusts only the host's apt keys, which on a non-Debian host
+    # (e.g. Ubuntu, as on GitHub runners) don't include Debian's, so apt fails.
+    local DEBIAN_KEYRING="/usr/share/keyrings/debian-archive-keyring.gpg"
+    if [ -f "${DEBIAN_KEYRING}" ]; then
+        MMDEBSTRAP_OPTS+=("--keyring=${DEBIAN_KEYRING}")
+    fi
 
     # Cross-build detection
     local HOST_ARCH
