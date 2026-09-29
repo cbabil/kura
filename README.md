@@ -101,6 +101,20 @@ kura build iso
 
 **Note:** Every image boots with Docker and Tomo ready, and works offline. Building needs internet: Debian and Docker packages, the Tomo release from GitHub, and the Traefik image (fetched with `skopeo`, installed by `./build.sh setup`). Downloads are cached in `${OS_TMP}/cache/`.
 
+### CI builds
+
+GitHub Actions builds both images on every push to `dev` that changes build inputs, and on manual runs (**Actions → Images → Run workflow**). The x86 ISO is also booted headless **without internet** to check that:
+- first boot finishes;
+- the Tomo desktop is served;
+- the core services are running;
+- two boots of the same image get different SSH host keys, machine IDs and Tomo secrets.
+
+Download the images from the run's artifacts (`kura-iso-<sha>`, `kura-rpi5-<sha>`, kept 7 days). They are **test builds** with `.env.example`'s default credentials, not for distribution. To run the boot test locally on Linux with QEMU:
+
+```bash
+tests/boot/iso-boot-test.sh release/<version>/iso/kura-*.iso boot-a
+```
+
 ## Configuration
 
 All tunable build values live in `.env` at the project root. Copy the template on first setup (`cp .env.example .env`), edit values, and rebuild.
