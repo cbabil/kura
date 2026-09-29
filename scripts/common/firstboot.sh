@@ -11,6 +11,7 @@
 FIRSTBOOT_DONE="/var/lib/__BRAND__/.firstboot-done"
 IMAGES_DIR="/usr/share/__BRAND__/images"
 TOMO_NETWORK="tomo_main"
+TOMO_BRIDGE="tomo0"   # fixed bridge name; the firewall opens tomod's port on it only
 
 # resize_root: grow the root partition and filesystem to fill the disk.
 # The Pi image ships a small root partition; x86 disks vary. Skipped on the
@@ -41,10 +42,11 @@ load_images() {
     return "${status}"
 }
 
-# ensure_network <name>: create the Docker network tomod expects.
+# ensure_network <name> <bridge>: create the Docker network tomod expects, on
+# a bridge interface with a fixed name so the firewall can target it.
 ensure_network() {
     docker network inspect "$1" >/dev/null 2>&1 && return 0
-    docker network create "$1" >/dev/null
+    docker network create -o "com.docker.network.bridge.name=$2" "$1" >/dev/null
 }
 
 # apply_cloud_hostname: set the hostname from cloud-init style user-data on
@@ -74,7 +76,7 @@ run_firstboot() {
 
     resize_root || { echo "WARNING: root partition resize failed" >&2; status=1; }
     load_images "${images}" || status=1
-    ensure_network "${TOMO_NETWORK}" || { echo "ERROR: could not create ${TOMO_NETWORK}" >&2; status=1; }
+    ensure_network "${TOMO_NETWORK}" "${TOMO_BRIDGE}" || { echo "ERROR: could not create ${TOMO_NETWORK}" >&2; status=1; }
     apply_cloud_hostname
 
     if [ "${status}" -ne 0 ]; then

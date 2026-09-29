@@ -56,6 +56,8 @@ source "${PROJECT_DIR}/scripts/common/fetch-tomo.sh"
 source "${PROJECT_DIR}/scripts/common/install-tomo.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/install-firstboot.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/verify-rootfs.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
@@ -314,7 +316,8 @@ bootstrap_rootfs() {
 
 install_packages() {
     local ROOTFS="$1"
-    local TARGET="$2"
+    local TARGET="$2"      # script directory name: rpi5 | x86_64
+    local DEB_ARCH="$3"    # Debian architecture: arm64 | amd64
 
     # Mount virtual filesystems for chroot
     mount_chroot "${ROOTFS}"
@@ -352,8 +355,6 @@ POLICYEOF
     fi
 
     # Docker's APT repo (key fingerprint verified on the host) for every target
-    local DEB_ARCH
-    DEB_ARCH=$(target_deb_arch "${TARGET}")
     install_docker_repo "${ROOTFS}" "${DEB_ARCH}"
 
     if [ -n "${PACKAGES}" ]; then
@@ -845,9 +846,8 @@ build_target() {
     # Phase 2: Install Debian packages
     print_status "[2/7] Installing Debian packages (common + ${TARGET_DIRNAME})..."
     print_status "  Package lists: ${CONFIG_DIR}/packages-common.list, ${CONFIG_DIR}/packages-${TARGET_DIRNAME}.list"
-    install_packages "${ROOTFS}" "${TARGET_DIRNAME}"
-    save_tomo_images "${ROOTFS}" "${BRAND}" \
-        "$(target_deb_arch "${TARGET}")" "${OS_TMP}/cache/images"
+    install_packages "${ROOTFS}" "${TARGET_DIRNAME}" "${ARCH}"
+    save_tomo_images "${ROOTFS}" "${BRAND}" "${ARCH}" "${OS_TMP}/cache/images"
 
     # Phase 3: Install OS packages
     print_status "[3/7] Installing OS packages..."
@@ -866,70 +866,9 @@ build_target() {
     # Each flashed device must get its own SSH host keys and machine ID
     reset_device_identity "${ROOTFS}"
 
-    # Verify critical files before creating the artifact
-    # Note: enable symlinks are absolute paths (e.g. -> /usr/lib/systemd/...)
-    # so we use -L (is-symlink) for those since -e follows the symlink to the
-    # host filesystem where the target doesn't exist.
+    # Verify critical files, enable links and device identity (fail fast)
     print_status "Verifying rootfs..."
-    local VERIFY_FAIL=0
-    # Target-specific files to verify
-    # Docker is baked into every image (packages-common.list)
-    for f in \
-        "usr/bin/docker" \
-        "usr/bin/dockerd" \
-        "usr/bin/containerd" \
-        "usr/libexec/docker/cli-plugins/docker-compose" \
-        "usr/lib/systemd/system/docker.service" \
-        "usr/lib/systemd/system/containerd.service" \
-        "usr/bin/node" \
-        "opt/tomo/dist/index.js" \
-        "opt/tomo/public/index.html" \
-        "etc/systemd/system/tomod.service" \
-        "usr/share/${BRAND}/images/traefik.tar" \
-        "usr/local/bin/bun" \
-        "usr/bin/${BRAND}-config" \
-        "usr/bin/${BRAND}-security" \
-        "usr/lib/systemd/system/${BRAND}-supervisor.service" \
-        "usr/lib/systemd/system/${BRAND}-config.service" \
-        "usr/lib/systemd/system/${BRAND}-security.service" \
-        "opt/${BRAND}-supervisor/src/index.js" \
-        "opt/${BRAND}-supervisor/node_modules" \
-        "usr/lib/${BRAND}/firstboot.sh" \
-        "usr/lib/systemd/system/${BRAND}-firstboot.service" \
-        "usr/lib/systemd/system/${BRAND}-ssh-keygen.service" \
-    ; do
-        if [ ! -e "${ROOTFS}/${f}" ]; then
-            print_error "  MISSING: /${f}"
-            VERIFY_FAIL=1
-        fi
-    done
-    # Symlinks (absolute targets — use -L not -e)
-    for f in \
-        "etc/systemd/system/multi-user.target.wants/docker.service" \
-        "etc/systemd/system/multi-user.target.wants/containerd.service" \
-        "etc/systemd/system/multi-user.target.wants/tomod.service" \
-        "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \
-        "etc/systemd/system/multi-user.target.wants/${BRAND}-config.service" \
-        "etc/systemd/system/sysinit.target.wants/${BRAND}-security.service" \
-        "etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service" \
-        "etc/systemd/system/multi-user.target.wants/${BRAND}-firstboot.service" \
-        "etc/systemd/system/multi-user.target.wants/${BRAND}-ssh-keygen.service" \
-    ; do
-        if [ ! -L "${ROOTFS}/${f}" ]; then
-            print_error "  MISSING symlink: /${f}"
-            VERIFY_FAIL=1
-        fi
-    done
-    # Device identity must be generated on the device, never baked in
-    if compgen -G "${ROOTFS}/etc/ssh/ssh_host_*" >/dev/null; then
-        print_error "  SSH host keys baked into the image"
-        VERIFY_FAIL=1
-    fi
-    if [ -s "${ROOTFS}/etc/machine-id" ]; then
-        print_error "  /etc/machine-id is not empty"
-        VERIFY_FAIL=1
-    fi
-    if [ "${VERIFY_FAIL}" -eq 1 ]; then
+    if ! verify_rootfs "${ROOTFS}" "${BRAND}"; then
         print_error "Rootfs verification failed — aborting"
         exit 1
     fi

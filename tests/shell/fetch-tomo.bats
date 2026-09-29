@@ -35,30 +35,6 @@ stub_curl_ok() {
     }
 }
 
-# ---- target_deb_arch ----
-
-@test "target_deb_arch: rpi5 is arm64" {
-    run target_deb_arch rpi5
-    [ "$output" = "arm64" ]
-}
-
-@test "target_deb_arch: iso is amd64" {
-    run target_deb_arch iso
-    [ "$output" = "amd64" ]
-}
-
-@test "target_deb_arch: accepts the x86_64 directory name used by install_packages" {
-    run target_deb_arch x86_64
-    [ "$status" -eq 0 ]
-    [ "$output" = "amd64" ]
-}
-
-@test "target_deb_arch: rejects unknown target" {
-    run target_deb_arch docker
-    [ "$status" -eq 1 ]
-    output_has "no Tomo package"
-}
-
 # ---- tomo_deb_url ----
 
 @test "tomo_deb_url: GitHub release asset URL" {
