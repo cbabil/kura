@@ -16,15 +16,18 @@
 
 # Kura
 
-A custom operating system built on Debian 13 (Trixie) using mmdebstrap for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
+A lightweight home-server OS built on Debian 13 (Trixie) for the Raspberry Pi 5 and x86_64. Flash it, boot it, and open `http://kura.local` to reach the [Tomo](https://github.com/cbabil/tomo) desktop, even without internet on first boot.
 
 ## Features
 
 - **Debian-based**: Built on Debian 13 (Trixie) for broad hardware and package support
 - **mmdebstrap rootfs**: Reproducible, minimal root filesystem generation
-- **Three targets**: RPi5 SD card image, x86_64 ISO, and Docker containers
-- **Container Support**: Integrated Docker runtime
-- **Security**: Security hardening and monitoring tools
+- **Tomo built in**: the pinned Tomo release `.deb` is installed at build time (checksum verified), with its Traefik image saved for offline first boot
+- **Docker built in**: Docker Engine and Compose from Docker's APT repository (signing key fingerprint pinned)
+- **First boot**: grows the root partition to fill the disk, generates this device's own SSH host keys and machine ID, and prepares Tomo
+- **Cloud supervisor**: optional device agent that connects to a cloud backend over WebSocket; it runs alongside Tomo and can only touch containers it created
+- **Three targets**: RPi5 SD card image, x86_64 live ISO (demo: data is lost at reboot), and a Docker rootfs
+- **Security**: hardening at boot (kernel, AppArmor, seccomp, SSH, firewall)
 - **Network Management**: NetworkManager for flexible configuration
 - **Rebrandable**: All user-visible branding controlled via `.env` variables
 
@@ -96,7 +99,7 @@ sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/kura
 kura build iso
 ```
 
-**Note:** Docker images are created automatically with each build. On the ISO target, the Docker engine is installed at first boot (requires network). On RPi5, `docker-ce`, `docker-ce-cli` and `containerd.io` are installed at build time from Docker's APT repository (signing key fingerprint pinned), so the image boots with Docker ready and works offline.
+**Note:** Every image boots with Docker and Tomo ready, and works offline. Building needs internet: Debian and Docker packages, the Tomo release from GitHub, and the Traefik image (fetched with `skopeo`, installed by `./build.sh setup`). Downloads are cached in `${OS_TMP}/cache/`.
 
 ## Configuration
 
@@ -115,6 +118,17 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | `OS_DEBIAN_SUITE` | Debian suite for mmdebstrap | `trixie` |
 | `OS_DEBIAN_MIRROR` | APT mirror URL | `http://deb.debian.org/debian` |
 | `OS_CROSS_BUILD` | Cross-compilation mode | `auto` (auto\|yes\|no) |
+
+**Tomo platform**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OS_TOMO_VERSION` | Tomo release installed into the image | `0.0.76` (pinned in `scripts/common/fetch-tomo.sh`) |
+| `OS_TOMO_SHA256_ARM64` | sha256 of `tomo_<ver>_arm64.deb`; required when changing the version | pinned |
+| `OS_TOMO_SHA256_AMD64` | sha256 of `tomo_<ver>_amd64.deb`; required when changing the version | pinned |
+| `OS_TOMO_DEB` | Local `.deb` to install instead (development; skips download and checksum) | *(unset)* |
+
+The Traefik version is read from the installed Tomo release, so it always matches.
 
 **Parallelism**
 
@@ -206,19 +220,19 @@ All tunable build values live in `.env` at the project root. Copy the template o
 ```
 release/<version>/
 ├── arm64/
-│   └── <brand>os-<version>-rpi5-arm64-YYYYMMDD-NNNN.img
+│   └── <brand>-<version>-rpi5-arm64-YYYYMMDD-NNNN.img
 ├── iso/
-│   └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-NNNN.iso
+│   └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.iso
 └── docker/
-    ├── <brand>os-<version>-rpi5-arm64-YYYYMMDD-NNNN.tar
-    └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-NNNN.tar
+    ├── <brand>-<version>-rpi5-arm64-YYYYMMDD-NNNN.tar
+    └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.tar
 ```
 
 `NNNN` is an auto-incremented build sequence number (zero-padded, stored in `.build-number`).
 
 **Docker images:**
-- `<brand>os:latest-arm64` - RPi5 build
-- `<brand>os:latest-amd64` - x86_64 build
+- `kura:latest-arm64` - RPi5 build
+- `kura:latest-amd64` - x86_64 build
 
 ## Deploying
 
@@ -234,18 +248,22 @@ Change these in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before bu
 ### RPi5 - Flash SD Card
 
 ```bash
-sudo dd if=release/<version>/arm64/<brand>os-*.img of=/dev/sdX bs=4M status=progress
+sudo dd if=release/<version>/arm64/kura-*.img of=/dev/sdX bs=4M status=progress
 sync
 ```
 
+Boot the Pi on your network, wait for first boot to finish (it grows the root partition and prepares Tomo), then open `http://kura.local`. If the root partition is too small for the image, the build stops and names the `OS_ROOTFS_SIZE` to set.
+
 ### x86_64 - Boot ISO in VM
+
+The ISO is a live system that runs from RAM: Tomo works, but apps and data are lost at every reboot. Use it to try Kura; a persistent x86 disk image is planned.
 
 ```bash
 # QEMU
-qemu-system-x86_64 -cdrom release/<version>/iso/<brand>os-*.iso -m 2048 -enable-kvm
+qemu-system-x86_64 -cdrom release/<version>/iso/kura-*.iso -m 2048 -enable-kvm
 
 # Proxmox - Upload ISO and create VM via web UI
-scp release/<version>/iso/<brand>os-*.iso root@proxmox:/var/lib/vz/template/iso/
+scp release/<version>/iso/kura-*.iso root@proxmox:/var/lib/vz/template/iso/
 ```
 
 ### Docker
@@ -254,12 +272,12 @@ Docker images are created automatically with each build and imported into the lo
 
 ```bash
 # Run a built image
-docker run -it <brand>os:latest-amd64 /bin/bash   # x86_64
-docker run -it <brand>os:latest-arm64 /bin/bash   # RPi5/ARM64
+docker run -it kura:latest-amd64 /bin/bash   # x86_64
+docker run -it kura:latest-arm64 /bin/bash   # RPi5/ARM64
 
 # Import from tarball (e.g. on another machine)
-docker import release/<version>/docker/<brand>os-*-amd64-*.tar <brand>os:latest-amd64
-docker import release/<version>/docker/<brand>os-*-arm64-*.tar <brand>os:latest-arm64
+docker import release/<version>/docker/kura-*-amd64-*.tar kura:latest-amd64
+docker import release/<version>/docker/kura-*-arm64-*.tar kura:latest-arm64
 ```
 
 ## Project Structure
