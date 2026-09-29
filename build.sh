@@ -292,6 +292,9 @@ bootstrap_rootfs() {
     local MMDEBSTRAP_OPTS=(
         --variant=minbase
         "--arch=${ARCH}"
+        # CA certificates from the start: install_packages adds Docker's HTTPS
+        # repo and runs apt-get update before the package list is installed.
+        --include=ca-certificates
         --quiet
     )
 
