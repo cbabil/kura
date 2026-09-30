@@ -148,9 +148,9 @@ verify_tomo_bundle() {
         echo "WARNING: Tomo ${version} is not signed (no Sigstore bundle); relying on the sha256 pin" >&2
         return 0
     }
-    local ok=0
-    sigstore_verify "${deb}" "${bundle}" "${TOMO_REPO}" "${TOMO_RELEASE_WORKFLOW}" "v${version}" || ok=1
+    local rc=0
+    sigstore_verify "${deb}" "${bundle}" "${TOMO_REPO}" "${TOMO_RELEASE_WORKFLOW}" "v${version}" || rc=$?
     rm -f "${bundle}"
-    [ "${ok}" -eq 0 ] || return 1
+    [ "${rc}" -eq 0 ] || return 1
     echo "Tomo ${version} signature verified (${TOMO_REPO} ${TOMO_RELEASE_WORKFLOW}@v${version})." >&2
 }
