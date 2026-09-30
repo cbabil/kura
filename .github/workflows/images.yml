@@ -96,8 +96,11 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
+      # The build runs as root; the steps below (zstd, staging) run as the runner
       - name: Build ${{ matrix.target }}
-        run: sudo -E env "PATH=${PATH}" ./build.sh build ${{ matrix.target }}
+        run: |
+          sudo -E env "PATH=${PATH}" ./build.sh build ${{ matrix.target }}
+          sudo chown -R "$(id -u):$(id -g)" release
 
       # The raw Pi image is mostly empty space: for a release, ship it as .img.zst
       - name: Compress Pi image for release
