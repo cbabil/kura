@@ -192,10 +192,13 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
         "${ROOTFS}/etc/${BRAND}/config.json"
     sed -i "s/\"interface\": \"[^\"]*\"/\"interface\": \"${DHCP_IFACE}\"/" \
         "${ROOTFS}/etc/${BRAND}/config.json"
-    sed -i "s|\"path\": \"[^\"]*\"|\"path\": \"/var/log/${BRAND}\"|" \
-        "${ROOTFS}/etc/${BRAND}/config.json"
     chown 999:999 "${ROOTFS}/etc/${BRAND}/config.json"
     chmod 600 "${ROOTFS}/etc/${BRAND}/config.json"
+fi
+# The supervisor (uid 999) reads its own config; keep it private like config.json
+if [ -f "${ROOTFS}/etc/${BRAND}/supervisor-config.json" ]; then
+    chown 999:999 "${ROOTFS}/etc/${BRAND}/supervisor-config.json"
+    chmod 600 "${ROOTFS}/etc/${BRAND}/supervisor-config.json"
 fi
 
 # ---- ANSI color definitions (from brand color) ----

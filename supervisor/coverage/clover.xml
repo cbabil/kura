@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1790686621043" clover="3.2.0">
-  <project timestamp="1790686621043" name="All files">
+<coverage generated="1790733518667" clover="3.2.0">
+  <project timestamp="1790733518667" name="All files">
     <metrics statements="661" coveredstatements="639" conditionals="358" coveredconditionals="305" methods="132" coveredmethods="126" elements="1151" coveredelements="1070" complexity="0" loc="661" ncloc="661" packages="5" files="16" classes="16"/>
     <package name="src">
       <metrics statements="25" coveredstatements="12" conditionals="18" coveredconditionals="1" methods="2" coveredmethods="1"/>
@@ -396,12 +396,12 @@
       <metrics statements="29" coveredstatements="29" conditionals="15" coveredconditionals="14" methods="1" coveredmethods="1"/>
       <file name="brand.js" path="/Users/christophebabilotte/source/web_app/FalkenOS/supervisor/src/utils/brand.js">
         <metrics statements="20" coveredstatements="20" conditionals="15" coveredconditionals="14" methods="1" coveredmethods="1"/>
-        <line num="3" count="32" type="stmt"/>
-        <line num="5" count="32" type="stmt"/>
-        <line num="8" count="32" type="stmt"/>
-        <line num="22" count="40" type="stmt"/>
-        <line num="24" count="40" type="stmt"/>
-        <line num="25" count="40" type="stmt"/>
+        <line num="3" count="33" type="stmt"/>
+        <line num="5" count="33" type="stmt"/>
+        <line num="8" count="33" type="stmt"/>
+        <line num="22" count="41" type="stmt"/>
+        <line num="24" count="41" type="stmt"/>
+        <line num="25" count="41" type="stmt"/>
         <line num="26" count="6" type="stmt"/>
         <line num="27" count="23" type="stmt"/>
         <line num="28" count="23" type="cond" truecount="4" falsecount="0"/>
@@ -413,21 +413,21 @@
         <line num="36" count="15" type="stmt"/>
         <line num="38" count="16" type="cond" truecount="2" falsecount="0"/>
         <line num="39" count="15" type="stmt"/>
-        <line num="46" count="40" type="stmt"/>
-        <line num="49" count="32" type="stmt"/>
-        <line num="51" count="32" type="stmt"/>
+        <line num="46" count="41" type="stmt"/>
+        <line num="49" count="33" type="stmt"/>
+        <line num="51" count="33" type="stmt"/>
       </file>
       <file name="constants.js" path="/Users/christophebabilotte/source/web_app/FalkenOS/supervisor/src/utils/constants.js">
         <metrics statements="9" coveredstatements="9" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
-        <line num="3" count="31" type="stmt"/>
-        <line num="5" count="31" type="stmt"/>
-        <line num="7" count="31" type="stmt"/>
-        <line num="18" count="31" type="stmt"/>
-        <line num="30" count="31" type="stmt"/>
-        <line num="36" count="31" type="stmt"/>
-        <line num="45" count="31" type="stmt"/>
-        <line num="47" count="31" type="stmt"/>
-        <line num="57" count="31" type="stmt"/>
+        <line num="3" count="32" type="stmt"/>
+        <line num="5" count="32" type="stmt"/>
+        <line num="7" count="32" type="stmt"/>
+        <line num="20" count="32" type="stmt"/>
+        <line num="32" count="32" type="stmt"/>
+        <line num="38" count="32" type="stmt"/>
+        <line num="47" count="32" type="stmt"/>
+        <line num="49" count="32" type="stmt"/>
+        <line num="59" count="32" type="stmt"/>
       </file>
     </package>
     <package name="src.ws">

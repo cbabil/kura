@@ -27,6 +27,8 @@ usr/lib/systemd/system/${b}-config.service
 usr/lib/systemd/system/${b}-security.service
 opt/${b}-supervisor/src/index.js
 opt/${b}-supervisor/node_modules
+etc/${b}/supervisor-config.json
+etc/${b}/security/hardening.json
 usr/lib/${b}/firstboot.sh
 usr/lib/systemd/system/${b}-firstboot.service
 usr/lib/systemd/system/${b}-ssh-keygen.service
