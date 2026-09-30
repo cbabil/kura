@@ -63,6 +63,7 @@ setup() {
 
 @test "fetch_tomo_deb: downloads the pinned URL and verifies it" {
     stub_curl_copy "${FAKE_DEB}"
+    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"; echo '{}' > "${CURL_BUNDLE_SRC}"
     OS_TOMO_VERSION="0.0.99"
     OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
     run fetch_tomo_deb arm64 "${CACHE}"
@@ -151,9 +152,8 @@ setup() {
     [ ! -e "${CACHE}/tomo_0.0.99_arm64.deb" ]
 }
 
-@test "fetch_tomo_deb: a missing bundle is fatal once the pin is a signed release" {
+@test "fetch_tomo_deb: a missing bundle is fatal for any version but the unsigned pinned default" {
     stub_curl_copy "${FAKE_DEB}"
-    TOMO_DEFAULT_SIGNED="true"
     OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -ne 0 ]
@@ -173,14 +173,13 @@ setup() {
     [ ! -e "${CACHE}/tomo_0.0.99_arm64.deb.partial" ]
 }
 
-@test "fetch_tomo_deb: warns and relies on the sha256 pin while the pin is an unsigned release" {
+@test "fetch_tomo_deb: the pinned default predates signing: warns and relies on the sha256 pin" {
     stub_curl_copy "${FAKE_DEB}"
-    TOMO_DEFAULT_SIGNED="false"
     # shellcheck disable=SC2329  # must not be called
     sigstore_verify() { echo "must not verify" >&2; return 1; }
-    OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
+    OS_TOMO_SHA256_ARM64="${FAKE_SHA}"   # the pinned version, our fake bytes
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 0 ]
     output_has "not signed"
-    [ -f "${CACHE}/tomo_0.0.99_arm64.deb" ]
+    [ -f "${CACHE}/tomo_${TOMO_DEFAULT_VERSION}_arm64.deb" ]
 }

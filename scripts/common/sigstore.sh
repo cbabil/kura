@@ -9,15 +9,12 @@
 
 SIGSTORE_ISSUER="https://token.actions.githubusercontent.com"
 
-# sigstore_identity <owner/repo> <workflow-file> <tag>
-# The certificate identity GitHub gives a workflow run on a tag.
-sigstore_identity() {
-    echo "https://github.com/$1/.github/workflows/$2@refs/tags/$3"
-}
-
 # sigstore_verify <asset> <bundle> <owner/repo> <workflow-file> <tag>
+# Accepts only the certificate identity GitHub gives that workflow's run on
+# that tag.
 sigstore_verify() {
     local asset="$1" bundle="$2" repo="$3" workflow="$4" tag="${5:?sigstore_verify needs a tag}"
+    local identity="https://github.com/${repo}/.github/workflows/${workflow}@refs/tags/${tag}"
 
     if ! command -v cosign >/dev/null 2>&1; then
         echo "ERROR: cosign is required to verify release signatures" >&2
@@ -31,7 +28,7 @@ sigstore_verify() {
     # cosign's output goes to stderr: callers capture stdout for paths
     if ! cosign verify-blob --bundle "${bundle}" \
             --certificate-oidc-issuer "${SIGSTORE_ISSUER}" \
-            --certificate-identity "$(sigstore_identity "${repo}" "${workflow}" "${tag}")" \
+            --certificate-identity "${identity}" \
             "${asset}" >&2; then
         echo "ERROR: signature verification failed for ${asset}" >&2
         return 1

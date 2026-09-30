@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-ASSET="${1:?Usage: $0 <asset> <tag>}"
-TAG="${2:?Usage: $0 <asset> <tag>}"
+[ $# -eq 2 ] || { echo "Usage: $0 <asset> <tag>" >&2; exit 2; }
+ASSET="$1" TAG="$2"
 REPO="${KURA_RELEASE_REPO:-cbabil/kura}"
 WORKFLOW="release.yml"
 

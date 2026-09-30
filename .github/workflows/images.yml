@@ -87,15 +87,13 @@ jobs:
           VERSION: ${{ inputs.version }}
 
       - name: Cache downloads (Tomo release, container images)
-        id: downloads
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/kura/cache
           key: downloads-${{ matrix.target }}-${{ hashFiles('scripts/common/fetch-tomo.sh') }}
 
-      # Verifies the pinned Tomo release's Sigstore bundle when it is downloaded
+      # Verifies the pinned Tomo release's Sigstore bundle during the build
       - name: Install cosign
-        if: steps.downloads.outputs.cache-hit != 'true'
         uses: sigstore/cosign-installer@v3
 
       - name: Build ${{ matrix.target }}
@@ -106,11 +104,19 @@ jobs:
         if: inputs.version && matrix.target == 'rpi5'
         run: zstd -T0 -15 --rm release/*/arm64/*.img
 
+      # One flat directory: upload-artifact would otherwise keep <version>/<dir>/.
+      # SHA512SUMS stays behind: release.yml writes its own over the final assets.
+      - name: Stage artifact
+        run: |
+          mkdir artifact
+          find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f ! -name SHA512SUMS -exec ln -t artifact {} +
+          ls -l artifact
+
       - name: Upload image
         uses: actions/upload-artifact@v4
         with:
           name: kura-${{ matrix.target }}-${{ github.sha }}
-          path: release/*/${{ matrix.release_dir }}/*
+          path: artifact/*
           retention-days: 7
           if-no-files-found: error
           # release assets are already compressed; zipping them again only costs time

@@ -8,10 +8,8 @@
 
 set -euo pipefail
 
-TAG="${1:?Usage: $0 <tag> <owner/repo> <pi-image> <iso>}"
-REPO="${2:?Usage: $0 <tag> <owner/repo> <pi-image> <iso>}"
-PI_IMAGE="${3:?Usage: $0 <tag> <owner/repo> <pi-image> <iso>}"
-ISO="${4:?Usage: $0 <tag> <owner/repo> <pi-image> <iso>}"
+[ $# -eq 4 ] || { echo "Usage: $0 <tag> <owner/repo> <pi-image> <iso>" >&2; exit 2; }
+TAG="$1" REPO="$2" PI_IMAGE="$3" ISO="$4"
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/hash.sh"

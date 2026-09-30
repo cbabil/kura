@@ -54,9 +54,6 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # upload-artifact keeps the path after its first wildcard (<version>/<dir>/)
-          find . -mindepth 2 -type f ! -name SHA512SUMS -exec mv -t . {} +
-          ls -l
           sha512sum ./*.img.zst ./*.iso > SHA512SUMS
           ../scripts/release/make-manifest.sh "${TAG}" "${REPO}" ./*.img.zst ./*.iso > manifest.json
           cat manifest.json

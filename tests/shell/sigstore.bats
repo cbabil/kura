@@ -19,11 +19,6 @@ setup() {
 
 stub_cosign() { cosign() { echo "$*" >> "${CALLS}"; return "${COSIGN_EXIT:-0}"; }; }
 
-@test "sigstore_identity: the release workflow of a repo at an exact tag" {
-    run sigstore_identity cbabil/tomo release.yml v0.0.77
-    [ "$output" = "https://github.com/cbabil/tomo/.github/workflows/release.yml@refs/tags/v0.0.77" ]
-}
-
 @test "sigstore_verify: pins the issuer and the exact identity at the tag" {
     stub_cosign
     run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura release.yml v0.1.0
