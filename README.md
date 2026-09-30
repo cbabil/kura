@@ -115,6 +115,16 @@ Download the images from the run's artifacts (`kura-iso-<sha>`, `kura-rpi5-<sha>
 tests/boot/iso-boot-test.sh release/<version>/iso/kura-*.iso boot-a
 ```
 
+### Releases
+
+Pushing a `v*` tag builds both images and publishes a GitHub Release with the Pi image (`.img.zst`), the ISO, `SHA512SUMS` and `manifest.json`. Every asset is signed keylessly with [Sigstore](https://www.sigstore.dev/) by the release workflow itself, so there is no signing key to manage; each asset ships with a `<asset>.sigstore.json` bundle. To verify a download (needs [cosign](https://github.com/sigstore/cosign)):
+
+```bash
+scripts/release/verify-release.sh kura-0.1.0-rpi5-arm64-20260929-0001.img.zst v0.1.0
+```
+
+Release images still use `.env.example`'s default credentials until first-boot password setup exists (roadmap P5).
+
 ## Configuration
 
 All tunable build values live in `.env` at the project root. Copy the template on first setup (`cp .env.example .env`), edit values, and rebuild.
