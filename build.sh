@@ -255,6 +255,7 @@ setup_host() {
         curl
         gnupg
         skopeo
+        cosign
         docker.io
         containerd
         zstd
@@ -566,23 +567,11 @@ package_release() {
 
     print_status "Generating checksums for ${TARGET}..."
 
+    # Local builds are unsigned dev builds. Releases are signed keylessly by
+    # the release job in .github/workflows/images.yml (Sigstore, ADR-012).
     (
         cd "${TARGET_DIR}"
         sha512sum ${ARTIFACT_PREFIX}-"${VERSION}"-* > SHA512SUMS 2>/dev/null || true
-
-        # GPG sign if key is available
-        local HAS_GPG_KEY=false
-        if command -v gpg >/dev/null 2>&1; then
-            gpg --list-secret-keys 2>/dev/null | grep -q "sec" && HAS_GPG_KEY=true
-        fi
-        if [ "${HAS_GPG_KEY}" = "true" ]; then
-            for file in ${ARTIFACT_PREFIX}-"${VERSION}"-*; do
-                if [ -f "${file}" ] && [[ ! "${file}" =~ \.sign$ ]]; then
-                    gpg --yes --detach-sign -o "${file}.sign" "${file}" 2>/dev/null || true
-                fi
-            done
-            gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null || true
-        fi
     ) || true
 }
 

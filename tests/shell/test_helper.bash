@@ -13,7 +13,7 @@ file_has() { grep -qF -- "$2" "$1"; }
 
 # ---- Stubs ----
 # stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path and
-# records the requested URL in ${BATS_TEST_TMPDIR}/curl-url.
+# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url.
 stub_curl_copy() {
     CURL_SRC="$1"
     curl() {
@@ -25,7 +25,7 @@ stub_curl_copy() {
             esac
             shift
         done
-        echo "${url}" > "${BATS_TEST_TMPDIR}/curl-url"
+        echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-url"
         cp "${CURL_SRC}" "${out}"
     }
 }

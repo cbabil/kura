@@ -13,10 +13,18 @@
 #
 # Source this file; it defines functions only.
 
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/sigstore.sh"
+
+TOMO_REPO="cbabil/tomo"
+TOMO_RELEASE_WORKFLOW="release.yml"
+
 # Pinned release. Checksums match checksums.sha256 published with the release.
 # shellcheck disable=SC2034
 TOMO_DEFAULT_VERSION="0.0.76"
+# shellcheck disable=SC2034  # read indirectly by tomo_expected_sha
 TOMO_DEFAULT_SHA256_ARM64="98ac606bbe0529843e1b3b9c2bd72901eb8e4e958e4c07df8d79ae06ec926aef"
+# shellcheck disable=SC2034
 TOMO_DEFAULT_SHA256_AMD64="3cc04b78ed567b96bfc7383641119cd75affcbe0556e2c53ad9604ac6c019ac2"
 TOMO_RELEASE_BASE="https://github.com/cbabil/tomo/releases/download"
 
@@ -108,7 +116,27 @@ fetch_tomo_deb() {
         rm -f "${tmp}"
         return 1
     fi
+    if ! verify_tomo_bundle "${tmp}" "$(tomo_deb_url "${version}" "${arch}")" "${version}" "${dest}"; then
+        rm -f "${tmp}" "${dest}.sigstore.json"
+        return 1
+    fi
     mv "${tmp}" "${dest}"
     echo "Downloaded Tomo ${version} (${arch})." >&2
     echo "${dest}"
+}
+
+# verify_tomo_bundle <deb> <deb-url> <version> <dest>
+# Signed Tomo releases publish <deb>.sigstore.json; verify it against Tomo's
+# release workflow at that version's tag. Releases from before signing have
+# no bundle: warn, and rely on the sha256 pin alone.
+verify_tomo_bundle() {
+    local deb="$1" url="$2" version="$3" dest="$4"
+    local bundle="${dest}.sigstore.json"
+    if ! curl -fsSL --connect-timeout 10 --max-time 60 "${url}.sigstore.json" -o "${bundle}"; then
+        rm -f "${bundle}"
+        echo "WARNING: Tomo ${version} is not signed (no Sigstore bundle); relying on the sha256 pin" >&2
+        return 0
+    fi
+    sigstore_verify "${deb}" "${bundle}" "${TOMO_REPO}" "${TOMO_RELEASE_WORKFLOW}" "v${version}" || return 1
+    echo "Tomo ${version} signature verified (${TOMO_REPO} ${TOMO_RELEASE_WORKFLOW}@v${version})." >&2
 }

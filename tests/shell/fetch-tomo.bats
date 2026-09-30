@@ -13,6 +13,8 @@ setup() {
     FAKE_DEB="${BATS_TEST_TMPDIR}/fake.deb"
     printf 'not really a deb\n' > "${FAKE_DEB}"
     FAKE_SHA=$(file_sha256 "${FAKE_DEB}")
+    # Signature checks are covered by sigstore.bats and the bundle tests below
+    sigstore_verify() { :; }
 }
 
 # ---- tomo_deb_url ----
@@ -66,7 +68,7 @@ setup() {
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 0 ]
     [ "${lines[${#lines[@]}-1]}" = "${CACHE}/tomo_0.0.99_arm64.deb" ]
-    [ "$(cat "${BATS_TEST_TMPDIR}/curl-url")" = \
+    [ "$(head -1 "${BATS_TEST_TMPDIR}/curl-url")" = \
       "https://github.com/cbabil/tomo/releases/download/v0.0.99/tomo_0.0.99_arm64.deb" ]
 }
 
@@ -117,4 +119,56 @@ setup() {
     run fetch_tomo_deb arm64 "${CACHE}"
     [ "$status" -eq 1 ]
     output_has "not found"
+}
+
+# ---- Sigstore bundle (signed Tomo releases) ----
+
+# curl stub that serves the deb and, if BUNDLE_SRC is set, its bundle;
+# a 404 (exit 22) otherwise.
+stub_curl_release() {
+    curl() {
+        local out="" url=""
+        while [ $# -gt 0 ]; do
+            case "$1" in -o) out="$2"; shift ;; http*) url="$1" ;; esac; shift
+        done
+        echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-urls"
+        case "${url}" in
+            *.sigstore.json) [ -n "${BUNDLE_SRC:-}" ] || return 22; cp "${BUNDLE_SRC}" "${out}" ;;
+            *) cp "${FAKE_DEB}" "${out}" ;;
+        esac
+    }
+}
+
+@test "fetch_tomo_deb: verifies the release's Sigstore bundle when it exists" {
+    stub_curl_release
+    BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"; echo '{}' > "${BUNDLE_SRC}"
+    sigstore_verify() { echo "verify $*" >> "${BATS_TEST_TMPDIR}/verify-calls"; }
+    OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
+    run fetch_tomo_deb arm64 "${CACHE}"
+    [ "$status" -eq 0 ]
+    matches "$(cat "${BATS_TEST_TMPDIR}/verify-calls")" \
+        "verify ${CACHE}/tomo_0.0.99_arm64.deb.partial ${CACHE}/tomo_0.0.99_arm64.deb.sigstore.json cbabil/tomo release.yml v0.0.99"
+    output_has "signature verified"
+}
+
+@test "fetch_tomo_deb: refuses a release whose bundle does not verify" {
+    stub_curl_release
+    BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"; echo '{}' > "${BUNDLE_SRC}"
+    # shellcheck disable=SC2329  # invoked by fetch_tomo_deb
+    sigstore_verify() { return 1; }
+    OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
+    run fetch_tomo_deb arm64 "${CACHE}"
+    [ "$status" -ne 0 ]
+    [ ! -e "${CACHE}/tomo_0.0.99_arm64.deb" ]
+}
+
+@test "fetch_tomo_deb: warns and relies on the sha256 pin when the release has no bundle" {
+    stub_curl_release
+    # shellcheck disable=SC2329  # must not be called
+    sigstore_verify() { echo "must not verify" >&2; return 1; }
+    OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
+    run fetch_tomo_deb arm64 "${CACHE}"
+    [ "$status" -eq 0 ]
+    output_has "not signed"
+    [ -f "${CACHE}/tomo_0.0.99_arm64.deb" ]
 }
