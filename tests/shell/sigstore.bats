@@ -2,6 +2,8 @@
 # tests/shell/sigstore.bats — tests for scripts/common/sigstore.sh (keyless
 # Sigstore verification of release assets, pinned to a repo's release workflow)
 
+bats_require_minimum_version 1.5.0   # run --separate-stderr
+
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 ISSUER="https://token.actions.githubusercontent.com"
 
