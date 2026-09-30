@@ -14,11 +14,14 @@ file_has() { grep -qF -- "$2" "$1"; }
 # ---- Stubs ----
 # stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path,
 # appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url, and answers
-# -w '%{http_code}' with 200 (as real curl prints it on stdout).
+# -w '%{http_code}' the way real curl prints it on stdout (200).
+# A URL ending in .sigstore.json (a release's signature bundle) gets
+# CURL_BUNDLE_SRC when set, else an error page with HTTP CURL_BUNDLE_CODE
+# (default 404: an unsigned release).
 stub_curl_copy() {
     CURL_SRC="$1"
     curl() {
-        local out="" url="" want_code=0
+        local out="" url="" want_code=0 src="${CURL_SRC}" code=200
         while [ $# -gt 0 ]; do
             case "$1" in
                 -o) out="$2"; shift ;;
@@ -28,8 +31,12 @@ stub_curl_copy() {
             shift
         done
         echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-url"
-        cp "${CURL_SRC}" "${out}"
-        [ "${want_code}" -eq 1 ] && printf '200'
+        if [[ "${url}" == *.sigstore.json ]]; then
+            src="${CURL_BUNDLE_SRC:-}"
+            [ -n "${src}" ] || code="${CURL_BUNDLE_CODE:-404}"
+        fi
+        if [ -n "${src}" ]; then cp "${src}" "${out}"; else echo "error page" > "${out}"; fi
+        [ "${want_code}" -eq 1 ] && printf '%s' "${code}"
         return 0
     }
 }

@@ -38,16 +38,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download Pi image
+      - name: Download the images built by images.yml
         uses: actions/download-artifact@v4
         with:
-          name: kura-rpi5-${{ github.sha }}
+          pattern: kura-*-${{ github.sha }}
           path: dist
-      - name: Download ISO
-        uses: actions/download-artifact@v4
-        with:
-          name: kura-iso-${{ github.sha }}
-          path: dist
+          merge-multiple: true
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
@@ -58,20 +54,11 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          zstd -T0 -19 --rm ./*.img          # the raw Pi image is mostly empty space
-          rm -f SHA512SUMS && sha512sum ./*.img.zst ./*.iso > SHA512SUMS
-          bundle() {  # <file>: url/sha256/size of one release asset
-            jq -n --arg url "https://github.com/${REPO}/releases/download/${TAG}/$1" \
-                  --arg sha "$(sha256sum "$1" | cut -d' ' -f1)" \
-                  --argjson size "$(stat -c %s "$1")" \
-                  '{url: $url, sha256: $sha, size: $size}'
-          }
-          jq -n --arg version "${TAG#v}" \
-                --arg released "$(date -u +%Y-%m-%d)" \
-                --argjson rpi "$(bundle "$(basename ./*.img.zst)")" \
-                --argjson x86 "$(bundle "$(basename ./*.iso)")" \
-                '{version: $version, channel: "stable", released: $released,
-                  bundles: {"rpi5-arm64": $rpi, "x86_64": $x86}}' > manifest.json
+          # upload-artifact keeps the path after its first wildcard (<version>/<dir>/)
+          find . -mindepth 2 -type f ! -name SHA512SUMS -exec mv -t . {} +
+          ls -l
+          sha512sum ./*.img.zst ./*.iso > SHA512SUMS
+          ../scripts/release/make-manifest.sh "${TAG}" "${REPO}" ./*.img.zst ./*.iso > manifest.json
           cat manifest.json
           # The one list of assets that get signed and published
           ls ./*.img.zst ./*.iso SHA512SUMS manifest.json > ASSETS

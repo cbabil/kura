@@ -2,9 +2,9 @@ name: Images
 
 # Builds the Kura images (Pi 5 SD card image and x86_64 ISO) and boots the ISO
 # headless without internet to check first boot, Tomo and device identity.
-# Artifacts are test builds with .env.example's default credentials: not for
-# distribution. release.yml calls this workflow on v* tags, then signs and
-# publishes the images it built.
+# Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
+# On dev pushes the images are 7-day test artifacts; release.yml calls this
+# workflow on v* tags, then signs and publishes the images it built.
 
 on:
   workflow_call:
@@ -86,18 +86,25 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
 
-      # Verifies the pinned Tomo release's Sigstore bundle during the build
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
       - name: Cache downloads (Tomo release, container images)
+        id: downloads
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/kura/cache
           key: downloads-${{ matrix.target }}-${{ hashFiles('scripts/common/fetch-tomo.sh') }}
 
+      # Verifies the pinned Tomo release's Sigstore bundle when it is downloaded
+      - name: Install cosign
+        if: steps.downloads.outputs.cache-hit != 'true'
+        uses: sigstore/cosign-installer@v3
+
       - name: Build ${{ matrix.target }}
         run: sudo -E env "PATH=${PATH}" ./build.sh build ${{ matrix.target }}
+
+      # The raw Pi image is mostly empty space: for a release, ship it as .img.zst
+      - name: Compress Pi image for release
+        if: inputs.version && matrix.target == 'rpi5'
+        run: zstd -T0 -15 --rm release/*/arm64/*.img
 
       - name: Upload image
         uses: actions/upload-artifact@v4
@@ -106,6 +113,8 @@ jobs:
           path: release/*/${{ matrix.release_dir }}/*
           retention-days: 7
           if-no-files-found: error
+          # release assets are already compressed; zipping them again only costs time
+          compression-level: ${{ inputs.version && '0' || '6' }}
 
       # ---- ISO boot test (x86 only; the Pi image needs Pi hardware) ----
 
@@ -147,4 +156,3 @@ jobs:
             boot-b/
           retention-days: 7
           if-no-files-found: ignore
-

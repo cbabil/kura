@@ -568,7 +568,7 @@ package_release() {
     print_status "Generating checksums for ${TARGET}..."
 
     # Local builds are unsigned dev builds. Releases are signed keylessly by
-    # the release job in .github/workflows/images.yml (Sigstore, ADR-012).
+    # .github/workflows/release.yml on v* tags (Sigstore, ADR-012).
     (
         cd "${TARGET_DIR}"
         sha512sum ${ARTIFACT_PREFIX}-"${VERSION}"-* > SHA512SUMS 2>/dev/null || true

@@ -14,13 +14,13 @@
 # Source this file; it defines functions only.
 
 # shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/hash.sh"
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/sigstore.sh"
 
 TOMO_REPO="cbabil/tomo"
 TOMO_RELEASE_WORKFLOW="release.yml"
-# First Tomo release signed by its release workflow (cbabil/tomo#51). From this
-# version on, a missing signature bundle fails the build instead of warning.
-TOMO_SIGNED_SINCE="${TOMO_SIGNED_SINCE:-0.0.77}"
+TOMO_RELEASE_BASE="https://github.com/${TOMO_REPO}/releases/download"
 
 # Pinned release. Checksums match checksums.sha256 published with the release.
 # shellcheck disable=SC2034
@@ -29,18 +29,10 @@ TOMO_DEFAULT_VERSION="0.0.76"
 TOMO_DEFAULT_SHA256_ARM64="98ac606bbe0529843e1b3b9c2bd72901eb8e4e958e4c07df8d79ae06ec926aef"
 # shellcheck disable=SC2034
 TOMO_DEFAULT_SHA256_AMD64="3cc04b78ed567b96bfc7383641119cd75affcbe0556e2c53ad9604ac6c019ac2"
-TOMO_RELEASE_BASE="https://github.com/cbabil/tomo/releases/download"
-
-# version_ge <a> <b>: true if dotted version a >= b (numeric per component).
-version_ge() {
-    local IFS=. i a=() b=()
-    read -r -a a <<< "$1"; read -r -a b <<< "$2"
-    for i in 0 1 2 3; do
-        [ "${a[i]:-0}" -gt "${b[i]:-0}" ] && return 0
-        [ "${a[i]:-0}" -lt "${b[i]:-0}" ] && return 1
-    done
-    return 0
-}
+# Whether the pinned release ships a Sigstore bundle. Tomo signs releases from
+# cbabil/tomo#51 on; set to true when the pin moves to the first signed
+# release, and a missing bundle fails the build instead of warning.
+TOMO_DEFAULT_SIGNED="false"
 
 # tomo_download <url> <dest>
 # Downloads to <dest>. Returns 0 on 200, 44 on 404 (dest removed), 1 on any
@@ -54,16 +46,6 @@ tomo_download() {
         404) rm -f "${dest}"; return 44 ;;
         *)   rm -f "${dest}"; echo "ERROR: could not download ${url} (HTTP ${code})" >&2; return 1 ;;
     esac
-}
-
-# file_sha256 <file>
-# Prints the sha256 of a file (sha256sum on Linux, shasum on macOS).
-file_sha256() {
-    if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$1" | awk '{print $1}'
-    else
-        shasum -a 256 "$1" | awk '{print $1}'
-    fi
 }
 
 # tomo_deb_url <version> <arch>
@@ -142,8 +124,8 @@ fetch_tomo_deb() {
         rm -f "${tmp}"
         return 1
     fi
-    if ! verify_tomo_bundle "${tmp}" "$(tomo_deb_url "${version}" "${arch}")" "${version}" "${dest}"; then
-        rm -f "${tmp}" "${dest}.sigstore.json"
+    if ! verify_tomo_bundle "${tmp}" "${version}" "${arch}"; then
+        rm -f "${tmp}"
         return 1
     fi
     mv "${tmp}" "${dest}"
@@ -151,26 +133,28 @@ fetch_tomo_deb() {
     echo "${dest}"
 }
 
-# verify_tomo_bundle <deb> <deb-url> <version> <dest>
+# verify_tomo_bundle <deb> <version> <arch>
 # Signed Tomo releases publish <deb>.sigstore.json; verify it against Tomo's
-# release workflow at that version's tag. A release from before
-# TOMO_SIGNED_SINCE may have no bundle: warn, and rely on the sha256 pin.
-# Any other download failure is fatal, so a network error can't silently
-# skip verification.
+# release workflow at that version's tag. A release from before Tomo signed
+# (TOMO_DEFAULT_SIGNED=false) may have no bundle: warn, and rely on the
+# sha256 pin. Any other download failure is fatal, so a network error can't
+# silently skip verification.
 verify_tomo_bundle() {
-    local deb="$1" url="$2" version="$3" dest="$4"
-    local bundle="${dest}.sigstore.json" status=0
-    tomo_download "${url}.sigstore.json" "${bundle}" || status=$?
-    if [ "${status}" -eq 44 ]; then
-        if version_ge "${version}" "${TOMO_SIGNED_SINCE}"; then
-            echo "ERROR: Tomo ${version} must be signed (releases since ${TOMO_SIGNED_SINCE} are), but has no Sigstore bundle" >&2
-            return 1
-        fi
-        echo "WARNING: Tomo ${version} is not signed (no Sigstore bundle); relying on the sha256 pin" >&2
-        return 0
-    elif [ "${status}" -ne 0 ]; then
-        return 1
-    fi
-    sigstore_verify "${deb}" "${bundle}" "${TOMO_REPO}" "${TOMO_RELEASE_WORKFLOW}" "v${version}" || return 1
+    local deb="$1" version="$2" arch="$3"
+    local bundle="${deb}.sigstore.json" status=0
+    tomo_download "$(tomo_deb_url "${version}" "${arch}").sigstore.json" "${bundle}" || status=$?
+    case "${status}" in
+        0)  ;;
+        44) if [ "${TOMO_DEFAULT_SIGNED}" = "true" ]; then
+                echo "ERROR: Tomo ${version} must be signed, but has no Sigstore bundle" >&2
+                return 1
+            fi
+            echo "WARNING: Tomo ${version} is not signed (no Sigstore bundle); relying on the sha256 pin" >&2
+            return 0 ;;
+        *)  return 1 ;;
+    esac
+    sigstore_verify "${deb}" "${bundle}" "${TOMO_REPO}" "${TOMO_RELEASE_WORKFLOW}" "v${version}" || status=$?
+    rm -f "${bundle}"
+    [ "${status}" -eq 0 ] || return 1
     echo "Tomo ${version} signature verified (${TOMO_REPO} ${TOMO_RELEASE_WORKFLOW}@v${version})." >&2
 }

@@ -24,10 +24,11 @@ setup() {
     file_has "${BATS_TEST_TMPDIR}/cosign-args" "--bundle ${ASSET}.sigstore.json"
 }
 
-@test "verify-release: accepts any v* release when no tag is given" {
+@test "verify-release: requires the tag, so an older release cannot pass as this one" {
     run "${SCRIPT}" "${ASSET}"
-    [ "$status" -eq 0 ]
-    file_has "${BATS_TEST_TMPDIR}/cosign-args" "--certificate-identity-regexp"
+    [ "$status" -ne 0 ]
+    output_has "Usage"
+    [ ! -e "${BATS_TEST_TMPDIR}/cosign-args" ]
 }
 
 @test "verify-release: fails when the signature is invalid" {
