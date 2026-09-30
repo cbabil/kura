@@ -3,16 +3,18 @@ name: Images
 # Builds the Kura images (Pi 5 SD card image and x86_64 ISO) and boots the ISO
 # headless without internet to check first boot, Tomo and device identity.
 # Artifacts are test builds with .env.example's default credentials: not for
-# distribution.
-#
-# On a v* tag it also publishes a GitHub Release: images, SHA512SUMS and
-# manifest.json, each signed keylessly with Sigstore (cosign) under this
-# workflow's identity (ADR-012). Verify with scripts/release/verify-release.sh.
+# distribution. release.yml calls this workflow on v* tags, then signs and
+# publishes the images it built.
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to build (a v* tag or x.y.z); default from .env.example
+        type: string
+        required: false
   push:
     branches: [dev]
-    tags: ['v*']
     paths:
       - build.sh
       - config/**
@@ -78,16 +80,15 @@ jobs:
         run: |
           cp .env.example .env
           echo "OS_TMP=\"${RUNNER_TEMP}/kura\"" >> .env
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "OS_VERSION=\"${GITHUB_REF_NAME#v}\"" >> .env
+          if [ -n "${VERSION}" ]; then
+            echo "OS_VERSION=\"${VERSION#v}\"" >> .env   # tag v0.1.0 -> 0.1.0
           fi
+        env:
+          VERSION: ${{ inputs.version }}
 
-      # Verifies the pinned Tomo release's Sigstore bundle during the build.
-      # The build runs under sudo, which resets PATH, so link it into /usr/local/bin.
+      # Verifies the pinned Tomo release's Sigstore bundle during the build
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
-      - name: Make cosign available to the build
-        run: sudo ln -sf "$(command -v cosign)" /usr/local/bin/cosign
 
       - name: Cache downloads (Tomo release, container images)
         uses: actions/cache@v4
@@ -96,7 +97,7 @@ jobs:
           key: downloads-${{ matrix.target }}-${{ hashFiles('scripts/common/fetch-tomo.sh') }}
 
       - name: Build ${{ matrix.target }}
-        run: sudo -E ./build.sh build ${{ matrix.target }}
+        run: sudo -E env "PATH=${PATH}" ./build.sh build ${{ matrix.target }}
 
       - name: Upload image
         uses: actions/upload-artifact@v4
@@ -147,80 +148,3 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  release:
-    name: publish release
-    if: github.ref_type == 'tag'
-    needs: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write   # create the GitHub Release
-      id-token: write   # keyless signing: this job's identity signs the assets
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Pi image
-        uses: actions/download-artifact@v4
-        with:
-          name: kura-rpi5-${{ github.sha }}
-          path: dist
-      - name: Download ISO
-        uses: actions/download-artifact@v4
-        with:
-          name: kura-iso-${{ github.sha }}
-          path: dist
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Prepare assets
-        working-directory: dist
-        env:
-          TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          zstd -T0 -19 --rm ./*.img          # the raw Pi image is mostly empty space
-          rm -f SHA512SUMS && sha512sum ./*.img.zst ./*.iso > SHA512SUMS
-          version="${TAG#v}"
-          bundle() {  # <arch-key> <file>
-            jq -n --arg url "https://github.com/${REPO}/releases/download/${TAG}/$2" \
-                  --arg sha "$(sha256sum "$2" | cut -d' ' -f1)" \
-                  --argjson size "$(stat -c %s "$2")" \
-                  '{url: $url, sha256: $sha, size: $size}'
-          }
-          jq -n --arg version "${version}" \
-                --arg released "$(date -u +%Y-%m-%d)" \
-                --argjson rpi "$(bundle rpi5-arm64 "$(basename ./*.img.zst)")" \
-                --argjson x86 "$(bundle x86_64 "$(basename ./*.iso)")" \
-                '{version: $version, channel: "stable", released: $released,
-                  bundles: {"rpi5-arm64": $rpi, "x86_64": $x86}}' > manifest.json
-          cat manifest.json
-
-      - name: Sign assets (Sigstore, keyless)
-        working-directory: dist
-        run: |
-          set -euo pipefail
-          for f in ./*.img.zst ./*.iso SHA512SUMS manifest.json; do
-            cosign sign-blob --yes --bundle "${f}.sigstore.json" "${f}"
-          done
-
-      - name: Verify our own signatures
-        env:
-          KURA_RELEASE_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          for f in dist/*.img.zst dist/*.iso dist/SHA512SUMS dist/manifest.json; do
-            scripts/release/verify-release.sh "${f}" "${TAG}"
-          done
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          gh release create "${TAG}" dist/*.img.zst dist/*.iso \
-            dist/SHA512SUMS dist/manifest.json dist/*.sigstore.json \
-            --title "Kura ${TAG}" --generate-notes

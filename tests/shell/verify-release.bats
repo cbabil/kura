@@ -16,11 +16,11 @@ setup() {
     export PATH="${BIN}:${PATH}"
 }
 
-@test "verify-release: pins Kura's images.yml workflow at the given tag" {
+@test "verify-release: pins Kura's release.yml workflow at the given tag" {
     run "${SCRIPT}" "${ASSET}" v0.1.0
     [ "$status" -eq 0 ]
     output_has "OK:"
-    file_has "${BATS_TEST_TMPDIR}/cosign-args" "--certificate-identity https://github.com/cbabil/kura/.github/workflows/images.yml@refs/tags/v0.1.0"
+    file_has "${BATS_TEST_TMPDIR}/cosign-args" "--certificate-identity https://github.com/cbabil/kura/.github/workflows/release.yml@refs/tags/v0.1.0"
     file_has "${BATS_TEST_TMPDIR}/cosign-args" "--bundle ${ASSET}.sigstore.json"
 }
 

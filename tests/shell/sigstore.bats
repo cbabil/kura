@@ -24,28 +24,35 @@ stub_cosign() { cosign() { echo "$*" >> "${CALLS}"; return "${COSIGN_EXIT:-0}"; 
 
 @test "sigstore_verify: pins issuer and exact identity when a tag is given" {
     stub_cosign
-    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura images.yml v0.1.0
+    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura release.yml v0.1.0
     [ "$status" -eq 0 ]
-    [ "$(cat "${CALLS}")" = "verify-blob --bundle ${BUNDLE} --certificate-oidc-issuer ${ISSUER} --certificate-identity https://github.com/cbabil/kura/.github/workflows/images.yml@refs/tags/v0.1.0 ${ASSET}" ]
+    [ "$(cat "${CALLS}")" = "verify-blob --bundle ${BUNDLE} --certificate-oidc-issuer ${ISSUER} --certificate-identity https://github.com/cbabil/kura/.github/workflows/release.yml@refs/tags/v0.1.0 ${ASSET}" ]
 }
 
 @test "sigstore_verify: accepts any v* tag of that workflow when no tag is given" {
     stub_cosign
-    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura images.yml
+    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura release.yml
     [ "$status" -eq 0 ]
-    file_has "${CALLS}" '--certificate-identity-regexp ^https://github\.com/cbabil/kura/\.github/workflows/images\.yml@refs/tags/v.*'
+    file_has "${CALLS}" '--certificate-identity-regexp ^https://github\.com/cbabil/kura/\.github/workflows/release\.yml@refs/tags/v.*'
+}
+
+@test "sigstore_verify: keeps cosign's stdout off stdout (callers capture paths there)" {
+    cosign() { echo "Verified OK"; }
+    run --separate-stderr sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura release.yml v0.1.0
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
 }
 
 @test "sigstore_verify: fails when cosign rejects the bundle" {
     stub_cosign; COSIGN_EXIT=1
-    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura images.yml v0.1.0
+    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura release.yml v0.1.0
     [ "$status" -ne 0 ]
     output_has "signature verification failed"
 }
 
 @test "sigstore_verify: fails when the bundle is missing" {
     stub_cosign
-    run sigstore_verify "${ASSET}" "${BATS_TEST_TMPDIR}/missing.json" cbabil/kura images.yml v0.1.0
+    run sigstore_verify "${ASSET}" "${BATS_TEST_TMPDIR}/missing.json" cbabil/kura release.yml v0.1.0
     [ "$status" -ne 0 ]
     output_has "bundle"
     [ ! -e "${CALLS}" ]
@@ -53,7 +60,7 @@ stub_cosign() { cosign() { echo "$*" >> "${CALLS}"; return "${COSIGN_EXIT:-0}"; 
 
 @test "sigstore_verify: fails clearly when cosign is not installed" {
     PATH="${BATS_TEST_TMPDIR}/nopath"
-    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura images.yml v0.1.0
+    run sigstore_verify "${ASSET}" "${BUNDLE}" cbabil/kura release.yml v0.1.0
     [ "$status" -ne 0 ]
     output_has "cosign"
 }

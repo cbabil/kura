@@ -37,9 +37,10 @@ sigstore_verify() {
         identity=(--certificate-identity-regexp "^https://github\\.com/${escaped}@refs/tags/v.*")
     fi
 
+    # cosign's output goes to stderr: callers capture stdout for paths
     if ! cosign verify-blob --bundle "${bundle}" \
             --certificate-oidc-issuer "${SIGSTORE_ISSUER}" \
-            "${identity[@]}" "${asset}"; then
+            "${identity[@]}" "${asset}" >&2; then
         echo "ERROR: signature verification failed for ${asset}" >&2
         return 1
     fi

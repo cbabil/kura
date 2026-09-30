@@ -12,21 +12,25 @@ matches() { [[ "$1" == $2 ]]; }
 file_has() { grep -qF -- "$2" "$1"; }
 
 # ---- Stubs ----
-# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path and
-# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url.
+# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path,
+# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url, and answers
+# -w '%{http_code}' with 200 (as real curl prints it on stdout).
 stub_curl_copy() {
     CURL_SRC="$1"
     curl() {
-        local out="" url=""
+        local out="" url="" want_code=0
         while [ $# -gt 0 ]; do
             case "$1" in
                 -o) out="$2"; shift ;;
+                -w) want_code=1; shift ;;
                 http*) url="$1" ;;
             esac
             shift
         done
         echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-url"
         cp "${CURL_SRC}" "${out}"
+        [ "${want_code}" -eq 1 ] && printf '200'
+        return 0
     }
 }
 

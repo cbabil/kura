@@ -12,7 +12,7 @@ set -euo pipefail
 ASSET="${1:?Usage: $0 <asset> [tag]}"
 TAG="${2:-}"
 REPO="${KURA_RELEASE_REPO:-cbabil/kura}"
-WORKFLOW="images.yml"
+WORKFLOW="release.yml"
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/sigstore.sh"
