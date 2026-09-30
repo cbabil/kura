@@ -63,7 +63,7 @@ setup() {
 
 @test "fetch_tomo_deb: downloads the pinned URL and verifies it" {
     stub_curl_copy "${FAKE_DEB}"
-    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"; echo '{}' > "${CURL_BUNDLE_SRC}"
+    stub_bundle
     OS_TOMO_VERSION="0.0.99"
     OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
     run fetch_tomo_deb arm64 "${CACHE}"
@@ -126,7 +126,7 @@ setup() {
 
 @test "fetch_tomo_deb: verifies the release's Sigstore bundle when it exists" {
     stub_curl_copy "${FAKE_DEB}"
-    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"; echo '{}' > "${CURL_BUNDLE_SRC}"
+    stub_bundle
     sigstore_verify() { echo "verify $*" >> "${BATS_TEST_TMPDIR}/verify-calls"; }
     OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"
     run fetch_tomo_deb arm64 "${CACHE}"
@@ -163,7 +163,7 @@ setup() {
 
 @test "fetch_tomo_deb: refuses a release whose bundle does not verify" {
     stub_curl_copy "${FAKE_DEB}"
-    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"; echo '{}' > "${CURL_BUNDLE_SRC}"
+    stub_bundle
     # shellcheck disable=SC2329  # invoked by fetch_tomo_deb
     sigstore_verify() { return 1; }
     OS_TOMO_VERSION="0.0.99"; OS_TOMO_SHA256_ARM64="${FAKE_SHA}"

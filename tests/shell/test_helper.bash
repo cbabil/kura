@@ -41,6 +41,12 @@ stub_curl_copy() {
     }
 }
 
+# stub_bundle: make stub_curl_copy serve a (fake) Sigstore bundle for the deb
+stub_bundle() {
+    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"
+    echo '{}' > "${CURL_BUNDLE_SRC}"
+}
+
 # Source security lib with __BRAND__ resolved to "kura" for testing.
 # Each lib file is loaded via a temp copy with placeholders replaced.
 load_security_lib() {

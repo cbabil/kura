@@ -104,13 +104,13 @@ jobs:
         if: inputs.version && matrix.target == 'rpi5'
         run: zstd -T0 -15 --rm release/*/arm64/*.img
 
-      # One flat directory: upload-artifact would otherwise keep <version>/<dir>/.
-      # SHA512SUMS stays behind: release.yml writes its own over the final assets.
+      # The images only, in one flat directory: upload-artifact would otherwise
+      # keep <version>/<dir>/, and release.yml writes its own checksums.
       - name: Stage artifact
         run: |
           mkdir artifact
-          find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f ! -name SHA512SUMS -exec ln -t artifact {} +
-          ls -l artifact
+          find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f \
+            \( -name '*.img' -o -name '*.img.zst' -o -name '*.iso' \) -exec ln -t artifact {} +
 
       - name: Upload image
         uses: actions/upload-artifact@v4
