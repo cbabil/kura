@@ -1,5 +1,7 @@
 'use strict';
 
+const { LABELS } = require('../../src/utils/constants');
+
 // Shared dockerode mock functions used by container-manager and any test
 // that transitively loads it. Defined once so all files share the same
 // references, avoiding cache vs mock ordering issues in Bun.
@@ -11,7 +13,7 @@ const mockRemove = jest.fn().mockResolvedValue();
 const mockLogs = jest.fn().mockResolvedValue(Buffer.from('log line 1\nlog line 2'));
 const mockInspect = jest.fn().mockResolvedValue({
   State: { Status: 'running', Running: true, Health: { Status: 'healthy' } },
-  Config: { Image: 'myapp:1.0' },
+  Config: { Image: 'myapp:1.0', Labels: { [LABELS.MANAGED]: 'true' } },
   Name: '/myapp',
 });
 const mockCreateContainer = jest.fn().mockResolvedValue({
@@ -32,16 +34,14 @@ const mockFollowProgress = jest.fn().mockImplementation((_stream, cb) => {
   cb(null, [{ status: 'done' }]);
 });
 
-const dockerodeMockFactory = () => ({
-  __esModule: true,
-  default: jest.fn().mockImplementation(() => ({
-    listContainers: mockListContainers,
-    createContainer: mockCreateContainer,
-    getContainer: mockGetContainer,
-    pull: mockPull,
-    modem: { followProgress: mockFollowProgress },
-  })),
-});
+// dockerode is CommonJS: require('dockerode') returns the constructor itself.
+const dockerodeMockFactory = () => jest.fn().mockImplementation(() => ({
+  listContainers: mockListContainers,
+  createContainer: mockCreateContainer,
+  getContainer: mockGetContainer,
+  pull: mockPull,
+  modem: { followProgress: mockFollowProgress },
+}));
 
 module.exports = {
   mockStart,

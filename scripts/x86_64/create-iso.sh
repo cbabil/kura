@@ -18,9 +18,9 @@ BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 VERSION="${OS_VERSION:-2.0}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ISO_DIR="${OS_TMP:-/tmp}/${BRAND}os-iso-$$"
+ISO_DIR="${OS_TMP:-/tmp}/${BRAND}-iso-$$"
 BUILD_SEQ="${OS_BUILD_SEQ:-0001}"
-ISO_NAME="${BRAND}os-${VERSION}-x86_64-amd64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.iso"
+ISO_NAME="${BRAND}-${VERSION}-x86_64-amd64-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.iso"
 VOLID=$(echo "${BRAND}OS" | tr '[:lower:]' '[:upper:]')
 
 # GRUB module paths (system packages at known locations)

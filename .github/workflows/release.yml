@@ -1,0 +1,82 @@
+name: Release
+
+# On a v* tag: build both images (images.yml, including the ISO boot test),
+# then publish a GitHub Release with the Pi image, the ISO, SHA512SUMS and
+# manifest.json, each signed keylessly with Sigstore (cosign) under THIS
+# workflow's identity (ADR-012). Verify downloads with
+# scripts/release/verify-release.sh.
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/images.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write   # create the GitHub Release
+      id-token: write   # keyless signing: this job's identity signs the assets
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download the images built by images.yml
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kura-*-${{ github.sha }}
+          path: dist
+          merge-multiple: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Prepare assets
+        working-directory: dist
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          sha512sum ./*.img.zst ./*.iso > SHA512SUMS
+          ../scripts/release/make-manifest.sh "${TAG}" "${REPO}" ./*.img.zst ./*.iso > manifest.json
+          cat manifest.json
+          # The one list of assets that get signed and published
+          ls ./*.img.zst ./*.iso SHA512SUMS manifest.json > ASSETS
+
+      - name: Sign assets (Sigstore, keyless) and verify our own signatures
+        working-directory: dist
+        env:
+          KURA_RELEASE_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          while read -r f; do
+            cosign sign-blob --yes --bundle "${f}.sigstore.json" "${f}"
+            ../scripts/release/verify-release.sh "${f}" "${TAG}"
+          done < ASSETS
+
+      - name: Create GitHub Release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2046
+          gh release create "${TAG}" $(cat ASSETS) $(sed 's/$/.sigstore.json/' ASSETS) \
+            --title "Kura ${TAG}" --generate-notes

@@ -19,9 +19,7 @@ const MockWebSocket = Object.assign(
   { OPEN: 1, CLOSED: 3, CONNECTING: 0 },
 );
 
-const wsMockFactory = () => ({
-  __esModule: true,
-  default: MockWebSocket,
-});
+// ws is CommonJS: require('ws') returns the constructor itself.
+const wsMockFactory = () => MockWebSocket;
 
 module.exports = { mockWsInstance, MockWebSocket, wsMockFactory };

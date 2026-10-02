@@ -3,13 +3,57 @@
 
 FIXTURES="${BATS_TEST_DIRNAME}/fixtures"
 
-# Source security lib with __BRAND__ resolved to "falken" for testing.
+# ---- Assertions ----
+# bash 3.2 (macOS) ignores a failing [[ ]] that is not the last command in a
+# test, so pattern checks go through these functions (plain commands fail
+# correctly on every bash).
+output_has() { [[ "$output" == *"$1"* ]]; }
+matches() { [[ "$1" == $2 ]]; }
+file_has() { grep -qF -- "$2" "$1"; }
+
+# ---- Stubs ----
+# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path,
+# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url, and answers
+# -w '%{http_code}' the way real curl prints it on stdout (200).
+# A URL ending in .sigstore.json (a release's signature bundle) gets
+# CURL_BUNDLE_SRC when set, else an error page with HTTP CURL_BUNDLE_CODE
+# (default 404: an unsigned release).
+stub_curl_copy() {
+    CURL_SRC="$1"
+    curl() {
+        local out="" url="" want_code=0 src="${CURL_SRC}" code=200
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                -o) out="$2"; shift ;;
+                -w) want_code=1; shift ;;
+                http*) url="$1" ;;
+            esac
+            shift
+        done
+        echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-url"
+        if [[ "${url}" == *.sigstore.json ]]; then
+            src="${CURL_BUNDLE_SRC:-}"
+            [ -n "${src}" ] || code="${CURL_BUNDLE_CODE:-404}"
+        fi
+        if [ -n "${src}" ]; then cp "${src}" "${out}"; else echo "error page" > "${out}"; fi
+        [ "${want_code}" -eq 1 ] && printf '%s' "${code}"
+        return 0
+    }
+}
+
+# stub_bundle: make stub_curl_copy serve a (fake) Sigstore bundle for the deb
+stub_bundle() {
+    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"
+    echo '{}' > "${CURL_BUNDLE_SRC}"
+}
+
+# Source security lib with __BRAND__ resolved to "kura" for testing.
 # Each lib file is loaded via a temp copy with placeholders replaced.
 load_security_lib() {
     local lib_name="$1"
     local src="${BATS_TEST_DIRNAME}/../../packages/os-security/src/lib/${lib_name}.sh"
     local tmp="${BATS_TEST_TMPDIR}/${lib_name}.sh"
-    sed 's|__BRAND__|falken|g' "${src}" > "${tmp}"
+    sed 's|__BRAND__|kura|g' "${src}" > "${tmp}"
     # shellcheck disable=SC1090
     source "${tmp}"
 }
@@ -20,7 +64,7 @@ create_hardening_json() {
     cat > "${dest}" << 'JSON'
 {
     "network_security": {
-        "api_whitelist": ["api.falken.io", "updates.falken.io"],
+        "api_whitelist": ["api.kura.io", "updates.kura.io"],
         "firewall_preset": "strict"
     },
     "apparmor_profiles": [

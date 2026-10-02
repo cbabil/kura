@@ -1,26 +1,33 @@
 <p align="center">
-  <img src=".github/banner.png" alt="FalkenOS" width="700">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset=".github/banner-light.png">
+    <img src=".github/banner-dark.png" alt="Kura" width="700">
+  </picture>
 </p>
 
 <p align="center">
-  <a href="https://github.com/cbabil/FalkenOS/actions/workflows/ci.yml"><img src="https://github.com/cbabil/FalkenOS/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI"></a>
+  <a href="https://github.com/cbabil/kura/actions/workflows/ci.yml"><img src="https://github.com/cbabil/kura/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI"></a>
   <img src="https://img.shields.io/badge/debian-trixie-A81D33?logo=debian" alt="Debian Trixie">
   <img src="https://img.shields.io/badge/platform-x86__64%20%7C%20arm64-blue" alt="Platform">
   <img src="https://img.shields.io/badge/license-GPL-green" alt="License">
-  <img src="https://img.shields.io/github/v/tag/cbabil/FalkenOS?label=version&color=orange" alt="Version">
+  <img src="https://img.shields.io/github/v/tag/cbabil/kura?label=version&color=orange" alt="Version">
 </p>
 
-# FalkenOS
+# Kura
 
-A custom operating system built on Debian 13 (Trixie) using mmdebstrap for Raspberry Pi 5 and x86_64 VMs. It offers container support, device management, and security hardening for IoT and edge computing applications.
+A lightweight home-server OS built on Debian 13 (Trixie) for the Raspberry Pi 5 and x86_64. Flash it, boot it, and open `http://kura.local` to reach the [Tomo](https://github.com/cbabil/tomo) desktop, even without internet on first boot.
 
 ## Features
 
 - **Debian-based**: Built on Debian 13 (Trixie) for broad hardware and package support
 - **mmdebstrap rootfs**: Reproducible, minimal root filesystem generation
-- **Three targets**: RPi5 SD card image, x86_64 ISO, and Docker containers
-- **Container Support**: Integrated Docker runtime
-- **Security**: Security hardening and monitoring tools
+- **Tomo built in**: the pinned Tomo release `.deb` is installed at build time (checksum verified), with its Traefik image saved for offline first boot
+- **Docker built in**: Docker Engine and Compose from Docker's APT repository (signing key fingerprint pinned)
+- **First boot**: grows the root partition to fill the disk, generates this device's own SSH host keys and machine ID, and prepares Tomo
+- **Cloud supervisor**: optional device agent that connects to a cloud backend over WebSocket; it runs alongside Tomo and can only touch containers it created
+- **Three targets**: RPi5 SD card image, x86_64 live ISO (demo: data is lost at reboot), and a Docker rootfs
+- **Security**: hardening at boot (kernel, AppArmor, seccomp, SSH, firewall)
 - **Network Management**: NetworkManager for flexible configuration
 - **Rebrandable**: All user-visible branding controlled via `.env` variables
 
@@ -78,7 +85,7 @@ cp .env.example .env
 ./build.sh setup
 
 # Optional: create a system-wide symlink for convenience
-sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/falkenos
+sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/kura
 ```
 
 ### 4. Build
@@ -89,10 +96,34 @@ sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/falkenos
 ./build.sh build rpi5       # Build RPi5 only (incremental)
 
 # Or with the symlink:
-falkenos build iso
+kura build iso
 ```
 
-**Note:** Docker images are created automatically with each build. On the ISO target, Docker itself is deferred to firstboot; on RPi5, Docker is included directly in the image.
+**Note:** Every image boots with Docker and Tomo ready, and works offline. Building needs internet: Debian and Docker packages, the Tomo release from GitHub, and the Traefik image (fetched with `skopeo`, installed by `./build.sh setup`). Downloads are cached in `${OS_TMP}/cache/`.
+
+### CI builds
+
+GitHub Actions builds both images on every push to `dev` that changes build inputs, and on manual runs (**Actions → Images → Run workflow**). The x86 ISO is also booted headless **without internet** to check that:
+- first boot finishes;
+- the Tomo desktop is served;
+- the core services are running;
+- two boots of the same image get different SSH host keys, machine IDs and Tomo secrets.
+
+Download the images from the run's artifacts (`kura-iso-<sha>`, `kura-rpi5-<sha>`, kept 7 days). They are **test builds** with `.env.example`'s default credentials, not for distribution. To run the boot test locally on Linux with QEMU:
+
+```bash
+tests/boot/iso-boot-test.sh release/<version>/iso/kura-*.iso boot-a
+```
+
+### Releases
+
+Pushing a `v*` tag builds both images and publishes a GitHub Release with the Pi image (`.img.zst`), the ISO, `SHA512SUMS` and `manifest.json`. Every asset is signed keylessly with [Sigstore](https://www.sigstore.dev/) by the release workflow itself, so there is no signing key to manage; each asset ships with a `<asset>.sigstore.json` bundle. To verify a download (needs [cosign](https://github.com/sigstore/cosign)):
+
+```bash
+scripts/release/verify-release.sh kura-0.1.0-rpi5-arm64-20260929-0001.img.zst v0.1.0
+```
+
+Release images are built from `.env.example`: the `admin` password must be replaced at the first login and root has no password (see [Default Credentials](#default-credentials)).
 
 ## Configuration
 
@@ -111,6 +142,17 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | `OS_DEBIAN_SUITE` | Debian suite for mmdebstrap | `trixie` |
 | `OS_DEBIAN_MIRROR` | APT mirror URL | `http://deb.debian.org/debian` |
 | `OS_CROSS_BUILD` | Cross-compilation mode | `auto` (auto\|yes\|no) |
+
+**Tomo platform**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OS_TOMO_VERSION` | Tomo release installed into the image | `0.0.76` (pinned in `scripts/common/fetch-tomo.sh`) |
+| `OS_TOMO_SHA256_ARM64` | sha256 of `tomo_<ver>_arm64.deb`; required when changing the version | pinned |
+| `OS_TOMO_SHA256_AMD64` | sha256 of `tomo_<ver>_amd64.deb`; required when changing the version | pinned |
+| `OS_TOMO_DEB` | Local `.deb` to install instead (development; skips download and checksum) | *(unset)* |
+
+The Traefik version is read from the installed Tomo release, so it always matches.
 
 **Parallelism**
 
@@ -132,7 +174,7 @@ All tunable build values live in `.env` at the project root. Copy the template o
 |----------|-------------|---------|
 | `OS_BRAND` | Lowercase prefix for paths, services, user/group | *(see brand-defaults.sh)* |
 | `OS_NAME` | Display name shown in banners, MOTD, logs | *(see brand-defaults.sh)* |
-| `OS_COLOR` | Brand accent color (hex) | `#33ff00` |
+| `OS_COLOR` | Brand accent color (hex) | `#9146FF` |
 | `OS_API_ENDPOINT` | API endpoint for connectivity checks | *(see brand-defaults.sh)* |
 | `OS_WS_ENDPOINT` | WebSocket endpoint for supervisor | *(derived from API endpoint)* |
 | `OS_REGISTRY` | Container registry for managed apps | *(see brand-defaults.sh)* |
@@ -151,10 +193,11 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OS_VERSION` | Release version baked into images | `0.0.1` |
-| `OS_HOSTNAME` | Default hostname | `${OS_BRAND}os` |
-| `OS_USER` | Login user (SSH password auth) | `joshua` |
-| `OS_USER_PASSWD` | Login user password (plaintext) | `joshua` |
-| `OS_ROOT_PASSWD` | Root password (plaintext, key-only SSH) | `${OS_BRAND}` |
+| `OS_HOSTNAME` | Default hostname | `kura` |
+| `OS_USER` | Login user (SSH password auth) | `admin` |
+| `OS_USER_PASSWD` | Login user password (plaintext) | `admin` |
+| `OS_ROOT_PASSWD` | Root console password (plaintext; root SSH is key-only). Empty locks root | empty (locked) |
+| `OS_USER_PASSWD_EXPIRE` | Force the login user to set a new password at first login; `false` keeps `OS_USER_PASSWD` | `true` |
 | `OS_ISSUE` | Login banner | `Welcome to ${OS_NAME}` |
 
 **Network**
@@ -180,7 +223,7 @@ All tunable build values live in `.env` at the project root. Copy the template o
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OS_TMP` | Temp directory for builds | `/home/${OS_BRAND}os/tmp` |
+| `OS_TMP` | Temp directory for builds | `/home/${OS_BRAND}/tmp` |
 
 ## Commands
 
@@ -202,19 +245,19 @@ All tunable build values live in `.env` at the project root. Copy the template o
 ```
 release/<version>/
 ├── arm64/
-│   └── <brand>os-<version>-rpi5-arm64-YYYYMMDD-NNNN.img
+│   └── <brand>-<version>-rpi5-arm64-YYYYMMDD-NNNN.img
 ├── iso/
-│   └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-NNNN.iso
+│   └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.iso
 └── docker/
-    ├── <brand>os-<version>-rpi5-arm64-YYYYMMDD-NNNN.tar
-    └── <brand>os-<version>-x86_64-amd64-YYYYMMDD-NNNN.tar
+    ├── <brand>-<version>-rpi5-arm64-YYYYMMDD-NNNN.tar
+    └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.tar
 ```
 
 `NNNN` is an auto-incremented build sequence number (zero-padded, stored in `.build-number`).
 
 **Docker images:**
-- `<brand>os:latest-arm64` - RPi5 build
-- `<brand>os:latest-amd64` - x86_64 build
+- `kura:latest-arm64` - RPi5 build
+- `kura:latest-amd64` - x86_64 build
 
 ## Deploying
 
@@ -222,26 +265,30 @@ release/<version>/
 
 | User | Password | SSH Access |
 |------|----------|------------|
-| `joshua` | `joshua` | Password auth |
-| `root` | `falken` | Key-only (no password SSH) |
+| `admin` | `admin`, expired: the first SSH or console login must set a new one | Password auth |
+| `root` | locked | None by password; use `sudo` from `admin` |
 
-Change these in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building.
+The `admin` password only gets you to the change-password prompt, so no device keeps it. Root has no password: with root locked, systemd's emergency mode can't open a shell, so a system that won't boot is repaired from another machine (or build with a private `OS_ROOT_PASSWD`). Change the defaults in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building; set `OS_USER_PASSWD_EXPIRE="false"` to keep a private `OS_USER_PASSWD`.
 
 ### RPi5 - Flash SD Card
 
 ```bash
-sudo dd if=release/<version>/arm64/<brand>os-*.img of=/dev/sdX bs=4M status=progress
+sudo dd if=release/<version>/arm64/kura-*.img of=/dev/sdX bs=4M status=progress
 sync
 ```
 
+Boot the Pi on your network, wait for first boot to finish (it grows the root partition and prepares Tomo), then open `http://kura.local`. If the root partition is too small for the image, the build stops and names the `OS_ROOTFS_SIZE` to set.
+
 ### x86_64 - Boot ISO in VM
+
+The ISO is a live system that runs from RAM: Tomo works, but apps and data are lost at every reboot. Use it to try Kura; a persistent x86 disk image is planned.
 
 ```bash
 # QEMU
-qemu-system-x86_64 -cdrom release/<version>/iso/<brand>os-*.iso -m 2048 -enable-kvm
+qemu-system-x86_64 -cdrom release/<version>/iso/kura-*.iso -m 2048 -enable-kvm
 
 # Proxmox - Upload ISO and create VM via web UI
-scp release/<version>/iso/<brand>os-*.iso root@proxmox:/var/lib/vz/template/iso/
+scp release/<version>/iso/kura-*.iso root@proxmox:/var/lib/vz/template/iso/
 ```
 
 ### Docker
@@ -250,12 +297,12 @@ Docker images are created automatically with each build and imported into the lo
 
 ```bash
 # Run a built image
-docker run -it <brand>os:latest-amd64 /bin/bash   # x86_64
-docker run -it <brand>os:latest-arm64 /bin/bash   # RPi5/ARM64
+docker run -it kura:latest-amd64 /bin/bash   # x86_64
+docker run -it kura:latest-arm64 /bin/bash   # RPi5/ARM64
 
 # Import from tarball (e.g. on another machine)
-docker import release/<version>/docker/<brand>os-*-amd64-*.tar <brand>os:latest-amd64
-docker import release/<version>/docker/<brand>os-*-arm64-*.tar <brand>os:latest-arm64
+docker import release/<version>/docker/kura-*-amd64-*.tar kura:latest-amd64
+docker import release/<version>/docker/kura-*-arm64-*.tar kura:latest-arm64
 ```
 
 ## Project Structure
@@ -295,7 +342,7 @@ After changing these values, rebuild (`./build.sh build all`). The build system 
 
 **What stays static** (not affected by rebranding):
 - Source filenames in `packages/` (installed under branded names)
-- The bootstrap path `/etc/falken/brand.env` (hardcoded discovery point)
+- The bootstrap path `/etc/kura/brand.env` (hardcoded discovery point)
 
 ## License
 

@@ -41,8 +41,6 @@ install -d "${ROOTFS}/etc/${BRAND}"
 echo "  Installing ${BRAND}-config..."
 install -D -m 0755 "${PKG_DIR}/os-config/src/os-config" \
     "${ROOTFS}/usr/bin/${BRAND}-config"
-install -m 0644 "${PKG_DIR}/os-config/src/config.json" \
-    "${ROOTFS}/etc/${BRAND}/"
 install -d "${ROOTFS}/etc/NetworkManager/conf.d"
 install -m 0644 "${PKG_DIR}/os-config/src/00-os-network.conf" \
     "${ROOTFS}/etc/NetworkManager/conf.d/00-${BRAND}-network.conf"

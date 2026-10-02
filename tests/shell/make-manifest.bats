@@ -1,0 +1,41 @@
+#!/usr/bin/env bats
+# tests/shell/make-manifest.bats — scripts/release/make-manifest.sh writes the
+# release manifest (updates.md section 2) the release workflow signs and publishes.
+
+REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
+SCRIPT="${REPO_ROOT}/scripts/release/make-manifest.sh"
+
+setup() {
+    load test_helper
+    # shellcheck disable=SC1091
+    source "${REPO_ROOT}/scripts/common/hash.sh"
+    IMG="${BATS_TEST_TMPDIR}/kura-0.1.0-rpi5-arm64.img.zst"; printf 'pi image' > "${IMG}"
+    ISO="${BATS_TEST_TMPDIR}/kura-0.1.0-x86_64.iso"; printf 'iso' > "${ISO}"
+}
+
+@test "make-manifest: version, channel, date and one bundle per image" {
+    run "${SCRIPT}" v0.1.0 cbabil/kura "${IMG}" "${ISO}"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r .version)" = "0.1.0" ]
+    [ "$(echo "$output" | jq -r .channel)" = "stable" ]
+    matches "$(echo "$output" | jq -r .released)" "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+    [ "$(echo "$output" | jq -r '.bundles | keys | join(",")')" = "rpi5-arm64,x86_64" ]
+}
+
+@test "make-manifest: each bundle points at the release asset with its sha256 and size" {
+    run "${SCRIPT}" v0.1.0 cbabil/kura "${IMG}" "${ISO}"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].url')" = \
+      "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-rpi5-arm64.img.zst" ]
+    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].sha256')" = "$(file_sha256 "${IMG}")" ]
+    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].size')" = "8" ]
+    [ "$(echo "$output" | jq -r '.bundles["x86_64"].url')" = \
+      "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64.iso" ]
+    [ "$(echo "$output" | jq -r '.bundles["x86_64"].size')" = "3" ]
+}
+
+@test "make-manifest: fails without all four arguments" {
+    run "${SCRIPT}" v0.1.0 cbabil/kura "${IMG}"
+    [ "$status" -ne 0 ]
+    output_has "Usage"
+}

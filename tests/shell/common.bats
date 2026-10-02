@@ -81,7 +81,7 @@ setup() {
 }
 
 @test "validate_domain: accepts subdomain" {
-    run validate_domain "api.falken.io"
+    run validate_domain "api.kura.io"
     [ "$status" -eq 0 ]
 }
 

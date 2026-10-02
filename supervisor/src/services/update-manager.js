@@ -49,6 +49,9 @@ async function triggerUpdate(containerId, newImage) {
   if (currentState !== UPDATE_STATES.IDLE) {
     throw new Error(`Cannot update while in state: ${currentState}`);
   }
+  // Guarded inspect: refuses containers the supervisor did not create (e.g.
+  // Tomo's) before pulling anything, so a refused update never reaches rollback.
+  const info = await containerManager.inspectContainer(containerId);
   let release = null;
   let oldImage = null;
   try {
@@ -59,7 +62,6 @@ async function triggerUpdate(containerId, newImage) {
 
     setState(UPDATE_STATES.APPLYING);
     updateProgress = { ...updateProgress, step: 'stopping' };
-    const info = await containerManager.inspectContainer(containerId);
     oldImage = info.Config.Image;
     await containerManager.stopContainer(containerId);
     await containerManager.removeContainer(containerId);

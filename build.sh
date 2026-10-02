@@ -48,6 +48,18 @@ fi
 # Single source of truth for default brand values
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/brand-defaults.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/docker-repo.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/fetch-tomo.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/install-tomo.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/install-firstboot.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/passwords.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/verify-rootfs.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
@@ -58,7 +70,7 @@ OS_BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 OS_VERSION="${OS_VERSION:-2.0}"
 OS_HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
-OS_ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
+OS_ROOT_PASSWD="${OS_ROOT_PASSWD:-}"   # empty: root's password is locked
 OS_ISSUE="${OS_ISSUE:-Welcome to ${DEFAULT_NAME}}"
 OS_DHCP_INTERFACE="${OS_DHCP_INTERFACE:-eth0}"
 OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
@@ -87,7 +99,7 @@ mkdir -p "${OS_TMP}" 2>/dev/null || true
 
 # Derived brand variables
 BRAND="${OS_BRAND}"
-ARTIFACT_PREFIX="${BRAND}os"
+ARTIFACT_PREFIX="${BRAND}"
 
 # Shared paths
 RELEASE_DIR="${PROJECT_DIR}/release"
@@ -226,6 +238,8 @@ setup_host() {
 
     local REQUIRED_PKGS="
         mmdebstrap
+        debian-archive-keyring
+        arch-test
         qemu-user-static
         binfmt-support
         debootstrap
@@ -240,6 +254,10 @@ setup_host() {
         gdisk
         shellcheck
         bats
+        curl
+        gnupg
+        skopeo
+        cosign
         docker.io
         containerd
         zstd
@@ -277,8 +295,19 @@ bootstrap_rootfs() {
     local MMDEBSTRAP_OPTS=(
         --variant=minbase
         "--arch=${ARCH}"
+        # CA certificates from the start: install_packages adds Docker's HTTPS
+        # repo and runs apt-get update before the package list is installed.
+        --include=ca-certificates
         --quiet
     )
+
+    # Verify the Debian archive with Debian's keyring explicitly. Without it,
+    # mmdebstrap trusts only the host's apt keys, which on a non-Debian host
+    # (e.g. Ubuntu, as on GitHub runners) don't include Debian's, so apt fails.
+    local DEBIAN_KEYRING="/usr/share/keyrings/debian-archive-keyring.gpg"
+    if [ -f "${DEBIAN_KEYRING}" ]; then
+        MMDEBSTRAP_OPTS+=("--keyring=${DEBIAN_KEYRING}")
+    fi
 
     # Cross-build detection
     local HOST_ARCH
@@ -303,7 +332,8 @@ bootstrap_rootfs() {
 
 install_packages() {
     local ROOTFS="$1"
-    local TARGET="$2"
+    local TARGET="$2"      # script directory name: rpi5 | x86_64
+    local DEB_ARCH="$3"    # Debian architecture: arm64 | amd64
 
     # Mount virtual filesystems for chroot
     mount_chroot "${ROOTFS}"
@@ -340,12 +370,23 @@ POLICYEOF
         "${REPO_SCRIPT}" "${ROOTFS}"
     fi
 
+    # Docker's APT repo (key fingerprint verified on the host) for every target
+    install_docker_repo "${ROOTFS}" "${DEB_ARCH}"
+
     if [ -n "${PACKAGES}" ]; then
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get update -qq 2>&1 | grep -v "^$" || true
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get install -y -qq --no-install-recommends ${PACKAGES}
     fi
+
+    # Tomo platform, from its pinned release .deb (needs apt lists + policy-rc.d),
+    # plus the container images it needs at first start (offline boot)
+    print_status "Installing Tomo..."
+    local TOMO_DEB
+    TOMO_DEB=$(fetch_tomo_deb "${DEB_ARCH}" "${OS_TMP}/cache/tomo")
+    install_tomo "${ROOTFS}" "${TOMO_DEB}"
+    save_tomo_images "${ROOTFS}" "${BRAND}" "${DEB_ARCH}" "${OS_TMP}/cache/images"
 
     # Purge build-only packages no longer needed at runtime
     print_status "Purging build-only packages..."
@@ -432,21 +473,6 @@ apply_overlays() {
 }
 
 # ============================================================================
-# set_passwords -- set root password inside chroot
-# ============================================================================
-
-set_passwords() {
-    local ROOTFS="$1"
-    local LOGIN_USER="${OS_USER:-joshua}"
-    local LOGIN_USER_PASSWD="${OS_USER_PASSWD:-joshua}"
-
-    mount_chroot "${ROOTFS}"
-    chroot "${ROOTFS}" sh -c "printf 'root:%s\n%s:%s\n' \
-        '${OS_ROOT_PASSWD}' '${LOGIN_USER}' '${LOGIN_USER_PASSWD}' | chpasswd"
-    umount_chroot "${ROOTFS}"
-}
-
-# ============================================================================
 # create_docker_image -- create Docker rootfs tarball
 # ============================================================================
 
@@ -528,23 +554,11 @@ package_release() {
 
     print_status "Generating checksums for ${TARGET}..."
 
+    # Local builds are unsigned dev builds. Releases are signed keylessly by
+    # .github/workflows/release.yml on v* tags (Sigstore, ADR-012).
     (
         cd "${TARGET_DIR}"
         sha512sum ${ARTIFACT_PREFIX}-"${VERSION}"-* > SHA512SUMS 2>/dev/null || true
-
-        # GPG sign if key is available
-        local HAS_GPG_KEY=false
-        if command -v gpg >/dev/null 2>&1; then
-            gpg --list-secret-keys 2>/dev/null | grep -q "sec" && HAS_GPG_KEY=true
-        fi
-        if [ "${HAS_GPG_KEY}" = "true" ]; then
-            for file in ${ARTIFACT_PREFIX}-"${VERSION}"-*; do
-                if [ -f "${file}" ] && [[ ! "${file}" =~ \.sign$ ]]; then
-                    gpg --yes --detach-sign -o "${file}.sign" "${file}" 2>/dev/null || true
-                fi
-            done
-            gpg --yes --detach-sign -o "SHA512SUMS.sign" SHA512SUMS 2>/dev/null || true
-        fi
     ) || true
 }
 
@@ -797,13 +811,13 @@ build_target() {
         return 0
     fi
 
-    local ARCH="amd64"
-    [ "${TARGET}" = "rpi5" ] && ARCH="arm64"
-
-    # Map target name to directory name used for scripts/config/overlay paths
-    # "iso" target uses "x86_64" directories, "rpi5" uses "rpi5"
-    local TARGET_DIRNAME="${TARGET}"
-    [ "${TARGET}" = "iso" ] && TARGET_DIRNAME="x86_64"
+    # Debian architecture, and the directory name used for the target's
+    # scripts, package list and overlay
+    local ARCH TARGET_DIRNAME
+    case "${TARGET}" in
+        rpi5) ARCH="arm64"; TARGET_DIRNAME="rpi5" ;;
+        iso)  ARCH="amd64"; TARGET_DIRNAME="x86_64" ;;
+    esac
 
     local ROOTFS="${OS_TMP}/${ARTIFACT_PREFIX}-rootfs-${TARGET}"
 
@@ -823,7 +837,7 @@ build_target() {
     # Phase 2: Install Debian packages
     print_status "[2/7] Installing Debian packages (common + ${TARGET_DIRNAME})..."
     print_status "  Package lists: ${CONFIG_DIR}/packages-common.list, ${CONFIG_DIR}/packages-${TARGET_DIRNAME}.list"
-    install_packages "${ROOTFS}" "${TARGET_DIRNAME}"
+    install_packages "${ROOTFS}" "${TARGET_DIRNAME}" "${ARCH}"
 
     # Phase 3: Install OS packages
     print_status "[3/7] Installing OS packages..."
@@ -839,52 +853,12 @@ build_target() {
     apply_overlays "${ROOTFS}" "${TARGET_DIRNAME}"
     customize_rootfs "${ROOTFS}" "${TARGET_DIRNAME}"
     set_passwords "${ROOTFS}"
+    # Each flashed device must get its own SSH host keys and machine ID
+    reset_device_identity "${ROOTFS}"
 
-    # Verify critical files before creating the artifact
-    # Note: enable symlinks are absolute paths (e.g. -> /usr/lib/systemd/...)
-    # so we use -L (is-symlink) for those since -e follows the symlink to the
-    # host filesystem where the target doesn't exist.
+    # Verify critical files, enable links and device identity (fail fast)
     print_status "Verifying rootfs..."
-    local VERIFY_FAIL=0
-    # Target-specific files to verify
-    local EXTRA_FILES=""
-    if [ "${TARGET}" = "iso" ]; then
-        EXTRA_FILES="usr/lib/${BRAND}os/firstboot.sh"
-    fi
-    for f in \
-        "usr/local/bin/bun" \
-        "usr/bin/${BRAND}-config" \
-        "usr/bin/${BRAND}-security" \
-        "usr/lib/systemd/system/${BRAND}-supervisor.service" \
-        "usr/lib/systemd/system/${BRAND}-config.service" \
-        "usr/lib/systemd/system/${BRAND}-security.service" \
-        "opt/${BRAND}-supervisor/src/index.js" \
-        "opt/${BRAND}-supervisor/node_modules" \
-        ${EXTRA_FILES} \
-    ; do
-        if [ ! -e "${ROOTFS}/${f}" ]; then
-            print_error "  MISSING: /${f}"
-            VERIFY_FAIL=1
-        fi
-    done
-    # Symlinks (absolute targets — use -L not -e)
-    local EXTRA_SYMLINKS=""
-    if [ "${TARGET}" = "iso" ]; then
-        EXTRA_SYMLINKS="etc/systemd/system/multi-user.target.wants/${BRAND}os-firstboot.service"
-    fi
-    for f in \
-        "etc/systemd/system/multi-user.target.wants/${BRAND}-supervisor.service" \
-        "etc/systemd/system/multi-user.target.wants/${BRAND}-config.service" \
-        "etc/systemd/system/sysinit.target.wants/${BRAND}-security.service" \
-        "etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service" \
-        ${EXTRA_SYMLINKS} \
-    ; do
-        if [ ! -L "${ROOTFS}/${f}" ]; then
-            print_error "  MISSING symlink: /${f}"
-            VERIFY_FAIL=1
-        fi
-    done
-    if [ "${VERIFY_FAIL}" -eq 1 ]; then
+    if ! verify_rootfs "${ROOTFS}" "${BRAND}"; then
         print_error "Rootfs verification failed — aborting"
         exit 1
     fi

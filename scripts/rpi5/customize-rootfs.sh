@@ -12,7 +12,8 @@ ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 echo "Applying RPi5-specific customization..."
 
 # NOTE: APT repos (RPi archive, non-free-firmware) configured in configure-repos.sh
-# NOTE: Docker is installed at first boot, not baked into the image.
+# NOTE: Docker is baked into every image (packages-common.list) and enabled
+# by scripts/common/customize-rootfs.sh.
 
 # ---- Serial console on tty1 at 115200 ----
 install -d "${ROOTFS}/etc/systemd/system/getty.target.wants"

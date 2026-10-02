@@ -30,6 +30,12 @@ apply_firewall() {
     fi
 }
 
+# Inbound: SSH, plus tomod (port 3000) only from tomo_main's bridge (named
+# tomo0 by first boot), where Tomo's Traefik container forwards requests.
+# Containers on other Docker networks (docker0, other br-*) cannot reach tomod.
+# Ports Traefik publishes (80, app ports) reach containers through Docker's own
+# FORWARD rules, added when dockerd starts after this ruleset (os-security runs
+# before sysinit.target).
 _build_iptables_rules() {
     local config_file="$1"
     local lines
@@ -39,7 +45,8 @@ _build_iptables_rules() {
 :OUTPUT ACCEPT [0:0]
 -A INPUT -i lo -j ACCEPT
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A INPUT -p tcp --dport 22 -j ACCEPT"
+-A INPUT -p tcp --dport 22 -j ACCEPT
+-A INPUT -i tomo0 -p tcp --dport 3000 -j ACCEPT"
 
     local count domain
     count=$(jq '.network_security.api_whitelist | length' "${config_file}" 2>/dev/null)

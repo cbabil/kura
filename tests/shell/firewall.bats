@@ -22,8 +22,8 @@ setup() {
     [[ "$output" == *"-A INPUT -i lo -j ACCEPT"* ]]
     [[ "$output" == *"-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT"* ]]
     [[ "$output" == *"-A INPUT -p tcp --dport 22 -j ACCEPT"* ]]
-    [[ "$output" == *"-A OUTPUT -d api.falken.io -j ACCEPT"* ]]
-    [[ "$output" == *"-A OUTPUT -d updates.falken.io -j ACCEPT"* ]]
+    [[ "$output" == *"-A OUTPUT -d api.kura.io -j ACCEPT"* ]]
+    [[ "$output" == *"-A OUTPUT -d updates.kura.io -j ACCEPT"* ]]
     [[ "$output" == *"COMMIT"* ]]
 }
 
@@ -99,4 +99,25 @@ JSON
     local last_line
     last_line=$(echo "$output" | grep -v '^$' | tail -1)
     [ "${last_line}" = "COMMIT" ]
+}
+
+# Tomo: Traefik runs in a container and forwards to tomod on the host's port
+# 3000. That traffic arrives on tomo_main's bridge (named tomo0 by first boot)
+# and must be accepted; port 3000 stays closed on every other interface,
+# including docker0 and other Docker networks. (grep, not [[ ]]: bash 3.2
+# ignores a failing [[ ]] that is not a test's last command.)
+
+@test "_build_iptables_rules: accepts tomod's port 3000 from tomo_main's bridge only" {
+    run _build_iptables_rules "$(create_hardening_json)"
+    [ "$status" -eq 0 ]
+    grep -qxF -- "-A INPUT -i tomo0 -p tcp --dport 3000 -j ACCEPT" <<< "$output"
+}
+
+@test "_build_iptables_rules: port 3000 is not open on any other interface" {
+    run _build_iptables_rules "$(create_hardening_json)"
+    [ "$status" -eq 0 ]
+    run grep -E -- "--dport 3000" <<< "$output"
+    [ "${#lines[@]}" -eq 1 ]
+    run grep -vE -- "-i tomo0 " <<< "$output"
+    [ "$status" -ne 0 ]
 }

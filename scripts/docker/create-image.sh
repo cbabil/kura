@@ -21,7 +21,7 @@ MIRROR="${OS_DEBIAN_MIRROR:-http://deb.debian.org/debian}"
 VERSION="${OS_VERSION:-2.0}"
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PKG_DIR="$(cd "$(dirname "$0")/../../packages" && pwd)"
-DOCKER_ROOTFS="${OS_TMP:-/tmp}/${BRAND}os-docker-$$"
+DOCKER_ROOTFS="${OS_TMP:-/tmp}/${BRAND}-docker-$$"
 BUILD_SEQ="${OS_BUILD_SEQ:-0001}"
 
 trap 'rm -rf "${DOCKER_ROOTFS}"' EXIT
@@ -54,7 +54,7 @@ find "${DOCKER_ROOTFS}/usr/share/locale" -mindepth 1 -maxdepth 1 \
 # ---- Create tarball ----
 VARIANT="x86_64"
 [ "${ARCH}" = "arm64" ] && VARIANT="rpi5"
-TAR_NAME="${BRAND}os-${VERSION}-${VARIANT}-${ARCH}-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.tar"
+TAR_NAME="${BRAND}-${VERSION}-${VARIANT}-${ARCH}-${BUILD_DATE:-$(date +%Y%m%d)}-${BUILD_SEQ}.tar"
 
 mkdir -p "${OUTPUT_DIR}"
 tar -C "${DOCKER_ROOTFS}" -cf "${OUTPUT_DIR}/${TAR_NAME}" .
@@ -63,7 +63,7 @@ echo "Docker rootfs tarball: ${OUTPUT_DIR}/${TAR_NAME}"
 
 # ---- Import to Docker (if available) ----
 if command -v docker >/dev/null 2>&1; then
-    docker import "${OUTPUT_DIR}/${TAR_NAME}" "${BRAND}os:${VERSION}-${ARCH}-${BUILD_SEQ}"
-    docker tag "${BRAND}os:${VERSION}-${ARCH}-${BUILD_SEQ}" "${BRAND}os:latest-${ARCH}"
-    echo "Docker image tagged: ${BRAND}os:latest-${ARCH}"
+    docker import "${OUTPUT_DIR}/${TAR_NAME}" "${BRAND}:${VERSION}-${ARCH}-${BUILD_SEQ}"
+    docker tag "${BRAND}:${VERSION}-${ARCH}-${BUILD_SEQ}" "${BRAND}:latest-${ARCH}"
+    echo "Docker image tagged: ${BRAND}:latest-${ARCH}"
 fi

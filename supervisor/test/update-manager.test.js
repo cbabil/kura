@@ -1,7 +1,6 @@
 'use strict';
 
-const { dockerodeMockFactory } = require('./helpers/dockerode-mock');
-jest.mock('dockerode', dockerodeMockFactory);
+jest.mock('dockerode', () => require('./helpers/dockerode-mock').dockerodeMockFactory());
 
 jest.mock('../src/utils/logger', () => ({
   info: jest.fn(),
@@ -101,6 +100,18 @@ describe('update-manager', () => {
   });
 
   describe('triggerUpdate', () => {
+    it('refuses a container the supervisor does not manage, before pulling', async () => {
+      containerManager.inspectContainer.mockRejectedValueOnce(
+        new Error('Container tomo-proxy is not managed by the supervisor'),
+      );
+      await expect(updateManager.triggerUpdate('tomo-proxy', 'traefik:v3.4'))
+        .rejects.toThrow('not managed');
+      expect(containerManager.pullImage).not.toHaveBeenCalled();
+      expect(containerManager.stopContainer).not.toHaveBeenCalled();
+      expect(containerManager.createContainer).not.toHaveBeenCalled();
+      expect(updateManager.getUpdateStatus().state).toBe('idle');
+    });
+
     it('follows full success path: pull -> stop -> remove -> create', async () => {
       await updateManager.triggerUpdate('container1', 'myapp:2.0');
 

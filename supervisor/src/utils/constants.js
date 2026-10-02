@@ -5,8 +5,10 @@ const brand = require('./brand');
 const prefix = brand.BRAND_PREFIX;
 
 const PATHS = Object.freeze({
+  // Both are installed by the build: the overlay ships supervisor-config.json,
+  // os-security ships hardening.json (same schema as the security defaults)
   CONFIG: `/etc/${prefix}/supervisor-config.json`,
-  SECURITY_CONFIG: `/etc/${prefix}/security-config.json`,
+  SECURITY_CONFIG: `/etc/${prefix}/security/hardening.json`,
   STATE_FILE: `/var/lib/${prefix}/device-state.json`,
   STATE_LOCK: `/var/lib/${prefix}/device-state.lock`,
   UPDATE_LOCK: `/var/lib/${prefix}/update.lock`,
