@@ -3,6 +3,9 @@
 # Fail-fast checks run on every image rootfs before the artifact is created.
 # Source this file; it defines functions only.
 
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/passwords.sh"
+
 # rootfs_required_files <brand>
 # Files every image must contain (paths relative to the rootfs).
 rootfs_required_files() {
@@ -71,6 +74,19 @@ verify_rootfs() {
     fi
     if [ -s "${rootfs}/etc/machine-id" ]; then
         echo "  /etc/machine-id is not empty" >&2
+        status=1
+    fi
+    # Nor may a public password survive the first login
+    if ! login_password_expired "${rootfs}"; then
+        echo "  the login user's password is not expired" >&2
+        status=1
+    fi
+    if ! root_password_locked "${rootfs}"; then
+        echo "  root's password is not locked" >&2
+        status=1
+    fi
+    if ! login_user_has_sudo "${rootfs}"; then
+        echo "  the login user is not in the sudo group (no way to root)" >&2
         status=1
     fi
     return "${status}"

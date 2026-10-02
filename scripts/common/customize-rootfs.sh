@@ -27,9 +27,7 @@ fi
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
 HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
-export ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
-LOGIN_USER="${OS_USER:-admin}"
-export LOGIN_USER_PASSWD="${OS_USER_PASSWD:-admin}"
+LOGIN_USER="${OS_USER:-${DEFAULT_USER}}"
 VERSION="${OS_VERSION:-0.0.1}"
 DHCP_IFACE="${OS_DHCP_INTERFACE:-eth0}"
 API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
@@ -260,9 +258,7 @@ Match User ${LOGIN_USER}
     PasswordAuthentication yes
 SSHEOF
 
-# ---- Set passwords ----
-# Uses chpasswd inside chroot (called by build.sh after mounting /proc etc.)
-# build.sh will run: chroot ${ROOTFS} sh -c "echo 'root:...\n${LOGIN_USER}:...' | chpasswd"
+# Passwords: set_passwords (scripts/common/passwords.sh), run by build.sh.
 
 # ---- Locale (C + en_US) ----
 if [ -f "${ROOTFS}/etc/locale.gen" ]; then

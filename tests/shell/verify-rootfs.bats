@@ -25,6 +25,8 @@ make_complete_rootfs() {
     done
     mkdir -p "${ROOTFS}/etc/ssh"
     : > "${ROOTFS}/etc/machine-id"
+    printf 'root:x:0:\nsudo:x:27:admin\n' > "${ROOTFS}/etc/group"
+    printf 'root:!*:20000:0:99999:7:::\nadmin:$y$hash:0:0:99999:7:::\n' > "${ROOTFS}/etc/shadow"
 }
 
 @test "verify_rootfs: passes a complete image" {
@@ -84,4 +86,37 @@ make_complete_rootfs() {
     [ "$status" -eq 1 ]
     output_has "MISSING: /usr/bin/node"
     output_has "SSH host keys"
+}
+
+@test "verify_rootfs: fails when the login user's password is not expired" {
+    sed -i.bak 's/^admin:\([^:]*\):0:/admin:\1:20000:/' "${ROOTFS}/etc/shadow"
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -ne 0 ]
+    output_has "password is not expired"
+}
+
+@test "verify_rootfs: an unexpired password is fine when the build opted out" {
+    sed -i.bak 's/^admin:\([^:]*\):0:/admin:\1:20000:/' "${ROOTFS}/etc/shadow"
+    OS_USER_PASSWD_EXPIRE="false" run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -eq 0 ]
+}
+
+@test "verify_rootfs: fails when root has a password nobody asked for" {
+    sed -i.bak 's/^root:[^:]*:/root:$y$hash:/' "${ROOTFS}/etc/shadow"
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -ne 0 ]
+    output_has "root's password is not locked"
+}
+
+@test "verify_rootfs: a root password is fine when OS_ROOT_PASSWD set one" {
+    sed -i.bak 's/^root:[^:]*:/root:$y$hash:/' "${ROOTFS}/etc/shadow"
+    OS_ROOT_PASSWD="rootpw" run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -eq 0 ]
+}
+
+@test "verify_rootfs: fails when the login user has no sudo (root is locked: no way in)" {
+    printf 'sudo:x:27:\n' > "${ROOTFS}/etc/group"
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -ne 0 ]
+    output_has "not in the sudo group"
 }

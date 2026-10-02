@@ -18,7 +18,10 @@ DEFAULT_WS_HEARTBEAT_TIMEOUT="90000"
 DEFAULT_WS_RECONNECT_BASE="1000"
 DEFAULT_WS_RECONNECT_MAX="60000"
 DEFAULT_HOSTNAME="kura"
-DEFAULT_ROOT_PASSWD="${DEFAULT_BRAND}"
+# Login user (SSH password auth, sudo). Its default password is public, so it
+# is expired at build time (scripts/common/passwords.sh).
+DEFAULT_USER="admin"
+DEFAULT_USER_PASSWD="admin"
 DEFAULT_TMP="/home/${DEFAULT_BRAND}/tmp"
 
 # Derived domains (used in sed patterns for hardening.json, etc.)

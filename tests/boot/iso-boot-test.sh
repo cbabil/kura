@@ -5,13 +5,14 @@
 # restrict=on) and checks, from the host:
 #   1. first boot finished            ("First boot complete." on the serial console)
 #   2. the Tomo desktop is served      (http://127.0.0.1:<http-port>/ → <title>Tomo</title>)
-#   3. core services are active        (docker, tomod, first boot, SSH key units; tomo_main on tomo0)
-#   4. device identity is recorded     (SSH host key, machine-id, JWT secret hash)
+#   3. the default password is expired  (the first login gets no shell and must set a new one)
+#   4. core services are active        (docker, tomod, first boot, SSH key units; tomo_main on tomo0)
+#   5. device identity is recorded     (SSH host key, machine-id, JWT secret hash)
 #
 # Writes serial.log, report.txt and identity.txt to <out-dir>; exits non-zero
 # if any check fails. Compare identity.txt from two boots to prove each boot
-# generates its own identity. Needs qemu-system-x86_64, sshpass, curl,
-# ssh-keyscan. Uses KVM when /dev/kvm is writable.
+# generates its own identity. Needs qemu-system-x86_64, sshpass, expect,
+# curl, ssh-keyscan. Uses KVM when /dev/kvm is writable.
 
 set -euo pipefail
 
@@ -21,7 +22,9 @@ SSH_PORT="${3:-2222}"
 HTTP_PORT="${4:-8080}"
 BRAND="${KURA_TEST_BRAND:-kura}"
 LOGIN_USER="${KURA_TEST_USER:-admin}"
-LOGIN_PASS="${KURA_TEST_PASS:-admin}"
+DEFAULT_PASS="${KURA_TEST_PASS:-admin}"
+# Set at first login, which must replace the image's default password
+LOGIN_PASS="Kura-$(openssl rand -hex 8)"
 
 mkdir -p "${OUT}"
 SERIAL="${OUT}/serial.log"
@@ -97,7 +100,15 @@ ssh_run() {
 # stdin). The command string is passed to the guest shell as-is.
 sudo_run() { ssh_run "echo '${LOGIN_PASS}' | sudo -S -p '' $1"; }
 
-ssh_ready() { ssh_run true 2>/dev/null; }
+ssh_listening() { ssh-keyscan -p "${SSH_PORT}" -T 5 127.0.0.1 2>/dev/null | grep -q .; }
+
+# The default password must only reach a forced password change (first-login.exp
+# fails if it gets a shell); from then on LOGIN_PASS is the password.
+first_login_changes_password() {
+    "$(dirname "$0")/first-login.exp" "${SSH_PORT}" "${LOGIN_USER}" "${DEFAULT_PASS}" "${LOGIN_PASS}" \
+        > "${OUT}/first-login.log" 2>&1 || return 1
+    ssh_run true
+}
 
 # systemctl is-active exits 0 if ANY listed unit is active, so check each
 # unit's own state line.
@@ -145,7 +156,8 @@ qemu-system-x86_64 -m 4096 -smp 2 "${ACCEL[@]}" \
 
 check "first boot finished" wait_for "First boot complete." serial_has "First boot complete."
 check "Tomo desktop served offline" wait_for "Tomo desktop on :80" desktop_served
-check "SSH login" wait_for "SSH" ssh_ready
+check "SSH reachable" wait_for "SSH" ssh_listening
+check "first login replaces the default password" first_login_changes_password
 check "core services active" services_active
 check "tomo_main on bridge tomo0" tomo_network_on_tomo0
 check "device identity recorded" record_identity

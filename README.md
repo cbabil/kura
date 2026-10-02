@@ -123,7 +123,7 @@ Pushing a `v*` tag builds both images and publishes a GitHub Release with the Pi
 scripts/release/verify-release.sh kura-0.1.0-rpi5-arm64-20260929-0001.img.zst v0.1.0
 ```
 
-Release images still use `.env.example`'s default credentials until first-boot password setup exists (roadmap P5).
+Release images are built from `.env.example`: the `admin` password must be replaced at the first login and root has no password (see [Default Credentials](#default-credentials)).
 
 ## Configuration
 
@@ -196,7 +196,8 @@ The Traefik version is read from the installed Tomo release, so it always matche
 | `OS_HOSTNAME` | Default hostname | `kura` |
 | `OS_USER` | Login user (SSH password auth) | `admin` |
 | `OS_USER_PASSWD` | Login user password (plaintext) | `admin` |
-| `OS_ROOT_PASSWD` | Root password (plaintext, key-only SSH) | `${OS_BRAND}` |
+| `OS_ROOT_PASSWD` | Root console password (plaintext; root SSH is key-only). Empty locks root | empty (locked) |
+| `OS_USER_PASSWD_EXPIRE` | Force the login user to set a new password at first login; `false` keeps `OS_USER_PASSWD` | `true` |
 | `OS_ISSUE` | Login banner | `Welcome to ${OS_NAME}` |
 
 **Network**
@@ -264,10 +265,10 @@ release/<version>/
 
 | User | Password | SSH Access |
 |------|----------|------------|
-| `admin` | `admin` | Password auth |
-| `root` | `kura` | Key-only (no password SSH) |
+| `admin` | `admin`, expired: the first SSH or console login must set a new one | Password auth |
+| `root` | locked | None by password; use `sudo` from `admin` |
 
-Change these in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building.
+The `admin` password only gets you to the change-password prompt, so no device keeps it. Root has no password: with root locked, systemd's emergency mode can't open a shell, so a system that won't boot is repaired from another machine (or build with a private `OS_ROOT_PASSWD`). Change the defaults in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building; set `OS_USER_PASSWD_EXPIRE="false"` to keep a private `OS_USER_PASSWD`.
 
 ### RPi5 - Flash SD Card
 

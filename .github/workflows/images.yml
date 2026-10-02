@@ -141,7 +141,7 @@ jobs:
 
       - name: Install boot test tools
         if: matrix.target == 'iso'
-        run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 sshpass
+        run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 sshpass expect
 
       - name: Boot test A
         if: matrix.target == 'iso'

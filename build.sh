@@ -57,6 +57,8 @@ source "${PROJECT_DIR}/scripts/common/install-tomo.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/install-firstboot.sh"
 # shellcheck disable=SC1091
+source "${PROJECT_DIR}/scripts/common/passwords.sh"
+# shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/verify-rootfs.sh"
 
 BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
@@ -68,7 +70,7 @@ OS_BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 OS_VERSION="${OS_VERSION:-2.0}"
 OS_HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
-OS_ROOT_PASSWD="${OS_ROOT_PASSWD:-${DEFAULT_ROOT_PASSWD}}"
+OS_ROOT_PASSWD="${OS_ROOT_PASSWD:-}"   # empty: root's password is locked
 OS_ISSUE="${OS_ISSUE:-Welcome to ${DEFAULT_NAME}}"
 OS_DHCP_INTERFACE="${OS_DHCP_INTERFACE:-eth0}"
 OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
@@ -468,21 +470,6 @@ apply_overlays() {
     if [ -d "${OVERLAY_DIR}/${TARGET}" ]; then
         rsync -a "${OVERLAY_DIR}/${TARGET}/" "${ROOTFS}/"
     fi
-}
-
-# ============================================================================
-# set_passwords -- set root password inside chroot
-# ============================================================================
-
-set_passwords() {
-    local ROOTFS="$1"
-    local LOGIN_USER="${OS_USER:-admin}"
-    local LOGIN_USER_PASSWD="${OS_USER_PASSWD:-admin}"
-
-    mount_chroot "${ROOTFS}"
-    chroot "${ROOTFS}" sh -c "printf 'root:%s\n%s:%s\n' \
-        '${OS_ROOT_PASSWD}' '${LOGIN_USER}' '${LOGIN_USER_PASSWD}' | chpasswd"
-    umount_chroot "${ROOTFS}"
 }
 
 # ============================================================================

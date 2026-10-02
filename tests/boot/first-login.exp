@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+# tests/boot/first-login.exp <ssh-port> <user> <default-password> <new-password>
+#
+# Logs in over SSH with the image's default password and answers the forced
+# password change the way an owner would at first login. Exits 0 only if the
+# guest demanded the change and accepted the new password.
+
+set timeout 30
+lassign $argv port user old new
+
+spawn ssh -tt -p $port \
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+    -o ConnectTimeout=10 -o LogLevel=ERROR $user@127.0.0.1
+
+# Each step must arrive in order; anything else (a shell prompt, a timeout,
+# a closed connection) means the password was not expired.
+proc step {pattern answer} {
+    expect {
+        -nocase -re $pattern { send -- "$answer\r" }
+        -re {[$#] $} { puts stderr "first-login: got a shell before /$pattern/"; exit 1 }
+        timeout { puts stderr "first-login: timed out waiting for /$pattern/"; exit 1 }
+        eof     { puts stderr "first-login: connection closed before /$pattern/"; exit 1 }
+    }
+}
+
+step "$user@127\\.0\\.0\\.1's password:" $old
+step "current.*password:"                $old
+step "new password:"                     $new
+step "retype.*password:"                 $new
+
+expect {
+    -nocase "updated successfully" { exit 0 }
+    timeout { puts stderr "first-login: no confirmation of the new password"; exit 1 }
+    eof     { puts stderr "first-login: connection closed without confirmation"; exit 1 }
+}

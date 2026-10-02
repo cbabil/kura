@@ -36,8 +36,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install bats and jq
-        run: sudo apt-get install -y bats jq
+      - name: Install bats, jq and expect
+        run: sudo apt-get install -y bats jq expect
 
       - name: Run shell script tests
         run: bats tests/shell/*.bats
