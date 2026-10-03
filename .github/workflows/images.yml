@@ -3,8 +3,9 @@ name: Images
 # Builds the Kura images (Pi 5 SD card image and x86_64 ISO) and boots the ISO
 # headless without internet to check first boot, Tomo and device identity.
 # Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
-# On dev pushes the images are 7-day test artifacts; release.yml calls this
-# workflow on v* tags, then signs and publishes the images it built.
+# On dev pushes only the ISO is kept, for one day (artifacts count against the
+# Actions storage quota); release.yml calls this workflow on v* tags, then
+# signs and publishes both images it built.
 
 on:
   workflow_call:
@@ -115,12 +116,14 @@ jobs:
           find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f \
             \( -name '*.img' -o -name '*.img.zst' -o -name '*.iso' \) -exec ln -t artifact {} +
 
+      # The Pi image is only needed by release.yml: a dev build just has to succeed
       - name: Upload image
+        if: inputs.version || matrix.target == 'iso'
         uses: actions/upload-artifact@v4
         with:
           name: kura-${{ matrix.target }}-${{ github.sha }}
           path: artifact/*
-          retention-days: 7
+          retention-days: ${{ inputs.version && '7' || '1' }}
           if-no-files-found: error
           # release assets are already compressed; zipping them again only costs time
           compression-level: ${{ inputs.version && '0' || '6' }}
@@ -163,5 +166,5 @@ jobs:
           path: |
             boot-a/
             boot-b/
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: ignore
