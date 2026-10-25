@@ -11,40 +11,53 @@ output_has() { [[ "$output" == *"$1"* ]]; }
 matches() { [[ "$1" == $2 ]]; }
 file_has() { grep -qF -- "$2" "$1"; }
 
+# file_mode <file>: permission bits in octal (macOS: stat -f, Linux: stat -c)
+file_mode() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"; }
+
 # ---- Stubs ----
-# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path,
-# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url, and answers
-# -w '%{http_code}' the way real curl prints it on stdout (200).
-# A URL ending in .sigstore.json (a release's signature bundle) gets
-# CURL_BUNDLE_SRC when set, else an error page with HTTP CURL_BUNDLE_CODE
-# (default 404: an unsigned release).
+# log_call <words...>: record a stubbed command in ${CALLS}
+log_call() { echo "$*" >> "${CALLS}"; }
+
+# stub_disk_tools <root-device> <parent-disk>: findmnt/lsblk for "/"
+stub_disk_tools() {
+    ROOT_DEV="$1"; PARENT="$2"
+    findmnt() { echo "${ROOT_DEV}"; }
+    lsblk() { echo "${PARENT}"; }
+}
+
+# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path and
+# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url.
 stub_curl_copy() {
     CURL_SRC="$1"
     curl() {
-        local out="" url="" want_code=0 src="${CURL_SRC}" code=200
+        local out="" url=""
         while [ $# -gt 0 ]; do
             case "$1" in
                 -o) out="$2"; shift ;;
-                -w) want_code=1; shift ;;
                 http*) url="$1" ;;
             esac
             shift
         done
         echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-url"
-        if [[ "${url}" == *.sigstore.json ]]; then
-            src="${CURL_BUNDLE_SRC:-}"
-            [ -n "${src}" ] || code="${CURL_BUNDLE_CODE:-404}"
-        fi
-        if [ -n "${src}" ]; then cp "${src}" "${out}"; else echo "error page" > "${out}"; fi
-        [ "${want_code}" -eq 1 ] && printf '%s' "${code}"
-        return 0
+        cp "${CURL_SRC}" "${out}"
     }
 }
 
-# stub_bundle: make stub_curl_copy serve a (fake) Sigstore bundle for the deb
-stub_bundle() {
-    CURL_BUNDLE_SRC="${BATS_TEST_TMPDIR}/bundle.json"
-    echo '{}' > "${CURL_BUNDLE_SRC}"
+# load_os_config <config> <nm-dir> [hosts]: source os-config's functions
+# with its paths pointed at test files and nmcli stubbed
+load_os_config() {
+    local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
+    local tmp="${BATS_TEST_TMPDIR}/os-config-funcs.sh"
+    sed -e 's|__BRAND__|kura|g' \
+        -e "s|^CONFIG_PATH=.*|CONFIG_PATH=\"$1\"|" \
+        -e "s|^NM_CONN_DIR=.*|NM_CONN_DIR=\"$2\"|" \
+        -e "s|^HOSTS_PATH=.*|HOSTS_PATH=\"${3:-${BATS_TEST_TMPDIR}/hosts}\"|" \
+        -e '/^while true/,/^done$/d' \
+        -e '/^set -euo pipefail$/d' \
+        "${src}" > "${tmp}"
+    # shellcheck disable=SC1090
+    source "${tmp}"
+    nmcli() { echo "nmcli $*" >> "${BATS_TEST_TMPDIR}/nmcli-calls"; }
 }
 
 # Source security lib with __BRAND__ resolved to "kura" for testing.
@@ -64,7 +77,6 @@ create_hardening_json() {
     cat > "${dest}" << 'JSON'
 {
     "network_security": {
-        "api_whitelist": ["api.kura.io", "updates.kura.io"],
         "firewall_preset": "strict"
     },
     "apparmor_profiles": [

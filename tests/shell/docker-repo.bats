@@ -153,10 +153,9 @@ key_records() {
 
 # ---- build wiring (Docker is baked into every target) ----
 
-@test "packages-common.list includes Docker, Compose and Tomo's dependencies" {
+@test "packages-common.list includes Docker and Compose" {
     local list="${REPO_ROOT}/config/packages-common.list"
-    for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin \
-               nodejs git openssl; do
+    for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin; do
         grep -qx "${pkg}" "${list}"
     done
 }

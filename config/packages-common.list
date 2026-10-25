@@ -15,16 +15,17 @@ jq
 auditd
 
 # Containers (from Docker's APT repo, added for every target by build.sh).
-# Baked in so first boot works offline; Tomo runs apps with docker compose.
+# Baked in so containers can run without first installing Docker.
 docker-ce
 docker-ce-cli
 containerd.io
 docker-compose-plugin
 
-# Tomo platform dependencies (the Tomo .deb itself is installed separately)
-nodejs
-git
 openssl
+
+# First-boot setup from the imager: time zones, console keyboard layout
+tzdata
+console-setup
 
 # Grow the root partition on first boot (growpart)
 cloud-guest-utils
@@ -35,8 +36,7 @@ openssh-server
 iptables
 iproute2
 
-# Utilities (unzip needed for Bun binary extraction)
-unzip
+# Utilities
 htop
 nano
 curl

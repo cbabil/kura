@@ -3,7 +3,7 @@
 #
 # Compares two identity.txt reports written by iso-boot-test.sh from two boots
 # of the same image. Each device must generate its own identity, so every
-# value (SSH host key, machine-id, JWT secret hash) must be present in both
+# value (SSH host key, machine-id) must be present in both
 # and differ. Exits 1 if any value is missing or shared.
 
 set -euo pipefail
@@ -19,7 +19,7 @@ for f in "${A}" "${B}"; do
 done
 
 status=0
-for key in ssh_host_key machine_id jwt_secret; do
+for key in ssh_host_key machine_id; do
     a=$(awk -v k="${key}" '$1 == k {print $2}' "${A}")
     b=$(awk -v k="${key}" '$1 == k {print $2}' "${B}")
     if [ -z "${a}" ] || [ -z "${b}" ]; then

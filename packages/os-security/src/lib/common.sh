@@ -19,22 +19,6 @@ validate_name() {
     fi
 }
 
-# Validate a domain name for firewall whitelist.
-# Rejects empty, >253 chars, unresolved __*__ placeholders.
-validate_domain() {
-    local domain="$1"
-    if [[ -z "${domain}" ]] || [[ ${#domain} -gt 253 ]]; then
-        return 1
-    fi
-    # Reject unresolved build-time placeholders
-    if [[ "${domain}" == __*__ ]]; then
-        return 1
-    fi
-    if ! [[ "${domain}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]]; then
-        return 1
-    fi
-}
-
 # Write content to a file with explicit mode (0644 by default).
 # Reads stdin, writes atomically via temp file + rename.
 write_file() {

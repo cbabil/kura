@@ -6,26 +6,33 @@
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/systemd-units.sh"
 
-# install_firstboot <rootfs> <brand> <os-name> <firstboot-script>
+# install_firstboot <rootfs> <brand> <os-name> <scripts-dir>
 # Installs the first-boot script and two units:
 #   <brand>-ssh-keygen.service  generates SSH host keys before sshd starts.
-#                               Standalone so SSH never waits for Docker.
-#   <brand>-firstboot.service   grows the root partition, loads saved images
-#                               and creates tomod's network, after Docker and
-#                               before tomod and the supervisor.
+#                               (Neither unit orders itself before ssh.socket:
+#                               sockets come before basic.target, which both
+#                               follow, so that would be a cycle.)
+#                               Standalone so SSH never waits for first boot.
+#   <brand>-firstboot.service   applies the imager's setup file, grows the
+#                               root partition and applies the hostname from
+#                               attached user-data, before sshd, os-config and
+#                               console logins.
 install_firstboot() {
     local rootfs="$1" brand="$2" name="$3" src="$4"
     local units="${rootfs}/usr/lib/systemd/system"
 
     install -d "${rootfs}/usr/lib/${brand}" "${units}"
-    sed "s|__BRAND_NAME__|${name}|g; s|__BRAND__|${brand}|g" "${src}" \
-        > "${rootfs}/usr/lib/${brand}/firstboot.sh"
-    chmod 0755 "${rootfs}/usr/lib/${brand}/firstboot.sh"
+    local script
+    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh; do
+        sed "s|__BRAND_NAME__|${name}|g; s|__BRAND__|${brand}|g" "${src}/${script}" \
+            > "${rootfs}/usr/lib/${brand}/${script}"
+        chmod 0755 "${rootfs}/usr/lib/${brand}/${script}"
+    done
 
     cat > "${units}/${brand}-ssh-keygen.service" <<EOF
 [Unit]
 Description=${name} SSH host key generation
-Before=ssh.service ssh.socket
+Before=ssh.service
 ConditionPathExists=!/etc/ssh/ssh_host_ed25519_key
 
 [Service]
@@ -40,9 +47,7 @@ EOF
     cat > "${units}/${brand}-firstboot.service" <<EOF
 [Unit]
 Description=${name} first boot setup
-Wants=docker.service
-After=docker.service
-Before=tomod.service ${brand}-supervisor.service
+Before=ssh.service ${brand}-config.service systemd-user-sessions.service
 ConditionPathExists=!/var/lib/${brand}/.firstboot-done
 StartLimitIntervalSec=0
 
@@ -50,7 +55,7 @@ StartLimitIntervalSec=0
 Type=oneshot
 ExecStart=/usr/lib/${brand}/firstboot.sh
 RemainAfterExit=yes
-# Retry while running: tomod crash-loops without its network and images
+# Retry while running, not only at the next boot
 Restart=on-failure
 RestartSec=30
 TimeoutStartSec=600

@@ -9,9 +9,6 @@ set -euo pipefail
 ROOTFS="${1:?Usage: $0 <rootfs-dir> <packages-dir>}"
 PKG_DIR="${2:?Usage: $0 <rootfs-dir> <packages-dir>}"
 
-# Resolve project root (two levels up from this script)
-PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-
 # Single source of truth for default brand values
 # shellcheck disable=SC1091
 source "$(dirname "$0")/brand-defaults.sh"
@@ -23,13 +20,6 @@ if ! [[ "${BRAND}" =~ ^[a-z][a-z0-9-]*$ ]]; then
     exit 1
 fi
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
-API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
-REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
-# Extract domain from API_ENDPOINT (strip protocol prefix)
-API_DOMAIN="${API_ENDPOINT#*://}"
-# Derive base domain and updates domain
-BASE_DOMAIN="${API_DOMAIN#*.}"
-UPDATES_DOMAIN="updates.${BASE_DOMAIN}"
 
 echo "Installing ${OS_NAME} packages into ${ROOTFS}..."
 
@@ -67,20 +57,11 @@ if [ -f "${PKG_DIR}/os-security/src/hardening.json" ]; then
         "${ROOTFS}/etc/${BRAND}/security/hardening.json"
 fi
 
-# ---- ${BRAND}-supervisor (systemd service) ----
-echo "  Installing ${BRAND}-supervisor systemd service..."
-install -D -m 0644 "${PROJECT_DIR}/supervisor/os-supervisor.service" \
-    "${ROOTFS}/usr/lib/systemd/system/${BRAND}-supervisor.service"
-
 # Replace brand placeholders in all service files
-for svc_file in "${BRAND}-supervisor" "${BRAND}-config" "${BRAND}-security"; do
-    sed -i "s|__BRAND__|${BRAND}|g; s|__BRAND_NAME__|${OS_NAME}|g; s|__BRAND_API__|${API_DOMAIN}|g" \
+for svc_file in "${BRAND}-config" "${BRAND}-security"; do
+    sed -i "s|__BRAND__|${BRAND}|g; s|__BRAND_NAME__|${OS_NAME}|g" \
         "${ROOTFS}/usr/lib/systemd/system/${svc_file}.service"
 done
-
-# Replace brand placeholder in NetworkManager config
-sed -i "s|__BRAND_API__|${API_DOMAIN}|g" \
-    "${ROOTFS}/etc/NetworkManager/conf.d/00-${BRAND}-network.conf"
 
 # Patch shell scripts: replace __BRAND__ placeholder with actual brand
 for script in "${ROOTFS}/usr/bin/${BRAND}-config" \
@@ -96,13 +77,5 @@ for lib_file in "${ROOTFS}/usr/lib/${BRAND}/security"/*.sh; do
         sed -i "s|__BRAND__|${BRAND}|g" "${lib_file}"
     fi
 done
-
-# Patch hardening.json: replace domain placeholders with actual values
-if [ -f "${ROOTFS}/etc/${BRAND}/security/hardening.json" ]; then
-    sed -i "s|__REGISTRY__|${REGISTRY}|g; \
-            s|__API_DOMAIN__|${API_DOMAIN}|g; \
-            s|__UPDATES_DOMAIN__|${UPDATES_DOMAIN}|g" \
-        "${ROOTFS}/etc/${BRAND}/security/hardening.json"
-fi
 
 echo "${OS_NAME} packages installed."

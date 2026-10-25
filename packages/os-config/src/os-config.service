@@ -1,7 +1,6 @@
 [Unit]
 Description=__BRAND_NAME__ Configuration Manager
-After=network-online.target
-Before=__BRAND__-supervisor.service
+After=NetworkManager.service
 
 [Service]
 Type=simple

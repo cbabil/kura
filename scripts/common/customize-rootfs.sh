@@ -30,37 +30,11 @@ HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
 LOGIN_USER="${OS_USER:-${DEFAULT_USER}}"
 VERSION="${OS_VERSION:-0.0.1}"
 DHCP_IFACE="${OS_DHCP_INTERFACE:-eth0}"
-API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
-WS_ENDPOINT="${OS_WS_ENDPOINT:-${DEFAULT_WS_ENDPOINT}}"
-REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
-WS_HEARTBEAT_INTERVAL="${OS_WS_HEARTBEAT_INTERVAL:-${DEFAULT_WS_HEARTBEAT_INTERVAL}}"
-WS_HEARTBEAT_TIMEOUT="${OS_WS_HEARTBEAT_TIMEOUT:-${DEFAULT_WS_HEARTBEAT_TIMEOUT}}"
-WS_RECONNECT_BASE="${OS_WS_RECONNECT_BASE:-${DEFAULT_WS_RECONNECT_BASE}}"
-WS_RECONNECT_MAX="${OS_WS_RECONNECT_MAX:-${DEFAULT_WS_RECONNECT_MAX}}"
 
 echo "Customizing rootfs at ${ROOTFS}..."
 
 # ---- Directory structure ----
-install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/lib/${BRAND}"
-install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/lib/${BRAND}/volumes"
-install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/lib/${BRAND}-supervisor"
-install -d -m 0755 -o 999 -g 999 "${ROOTFS}/var/log/${BRAND}"
-install -d -m 0750 -g 999 "${ROOTFS}/etc/${BRAND}/certs"
-install -d -m 0755 "${ROOTFS}/mnt/data"
-
-# ---- System user for supervisor (runs unprivileged) ----
-if ! grep -q "^${BRAND}:" "${ROOTFS}/etc/passwd" 2>/dev/null; then
-    echo "${BRAND}:x:999:999:${OS_NAME} Supervisor:/opt/${BRAND}-supervisor:/usr/sbin/nologin" \
-        >> "${ROOTFS}/etc/passwd"
-    echo "${BRAND}:x:999:" >> "${ROOTFS}/etc/group"
-    echo "${BRAND}:!:19000:0:99999:7:::" >> "${ROOTFS}/etc/shadow"
-fi
-# Add brand user to docker group (docker group is created later by Docker install)
-if grep -q "^docker:" "${ROOTFS}/etc/group" 2>/dev/null &&
-   ! grep -q "^docker:.*:${BRAND}\(,\|$\)" "${ROOTFS}/etc/group"; then
-    # Append to docker group members (handles both empty and non-empty member lists)
-    sed -i "s/^\(docker:[^:]*:[^:]*:.*\)$/\1,${BRAND}/; s/:,/:/" "${ROOTFS}/etc/group"
-fi
+install -d -m 0755 "${ROOTFS}/var/lib/${BRAND}"
 
 # ---- Hostname ----
 echo "${HOSTNAME}" > "${ROOTFS}/etc/hostname"
@@ -69,11 +43,6 @@ cat > "${ROOTFS}/etc/hosts" <<EOF
 127.0.1.1	${HOSTNAME}
 ::1		localhost ip6-localhost ip6-loopback
 EOF
-
-# ---- Permissions ----
-# /etc/${BRAND} readable by brand group (supervisor needs config access)
-chmod 750 "${ROOTFS}/etc/${BRAND}"
-chgrp 999 "${ROOTFS}/etc/${BRAND}"
 
 # ---- Shell environment ----
 install -d "${ROOTFS}/etc/profile.d"
@@ -121,13 +90,11 @@ SYSEOF
 enable_unit "${ROOTFS}" multi-user.target /usr/lib/systemd/system/docker.service
 enable_unit "${ROOTFS}" multi-user.target /usr/lib/systemd/system/containerd.service
 
-# First boot: SSH host keys, root partition growth, saved images, tomod network
-install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")/firstboot.sh"
+# First boot: SSH host keys, the imager's setup file, root partition growth,
+# hostname from user-data
+install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
 
-# multi-user.target (service names use ${BRAND} prefix)
-for svc in ${BRAND}-supervisor ${BRAND}-config; do
-    enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${svc}.service"
-done
+enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-config.service"
 
 # sysinit.target (security runs early)
 enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-security.service"
@@ -170,13 +137,6 @@ BRAND_NAME="${OS_NAME}"
 BRAND_PREFIX="${BRAND}"
 BRAND_COLOR="${COLOR}"
 BRAND_VERSION="${VERSION}"
-BRAND_API_ENDPOINT="${API_ENDPOINT}"
-BRAND_WS_ENDPOINT="${WS_ENDPOINT}"
-BRAND_REGISTRY="${REGISTRY}"
-BRAND_WS_HEARTBEAT_INTERVAL="${WS_HEARTBEAT_INTERVAL}"
-BRAND_WS_HEARTBEAT_TIMEOUT="${WS_HEARTBEAT_TIMEOUT}"
-BRAND_WS_RECONNECT_BASE="${WS_RECONNECT_BASE}"
-BRAND_WS_RECONNECT_MAX="${WS_RECONNECT_MAX}"
 BRANDEOF
 chmod 644 "${ROOTFS}/etc/kura/brand.env"
 
@@ -190,13 +150,7 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
         "${ROOTFS}/etc/${BRAND}/config.json"
     sed -i "s/\"interface\": \"[^\"]*\"/\"interface\": \"${DHCP_IFACE}\"/" \
         "${ROOTFS}/etc/${BRAND}/config.json"
-    chown 999:999 "${ROOTFS}/etc/${BRAND}/config.json"
     chmod 600 "${ROOTFS}/etc/${BRAND}/config.json"
-fi
-# The supervisor (uid 999) reads its own config; keep it private like config.json
-if [ -f "${ROOTFS}/etc/${BRAND}/supervisor-config.json" ]; then
-    chown 999:999 "${ROOTFS}/etc/${BRAND}/supervisor-config.json"
-    chmod 600 "${ROOTFS}/etc/${BRAND}/supervisor-config.json"
 fi
 
 # ---- ANSI color definitions (from brand color) ----
@@ -265,13 +219,6 @@ if [ -f "${ROOTFS}/etc/locale.gen" ]; then
     sed -i 's/^# en_US.UTF-8/en_US.UTF-8/' "${ROOTFS}/etc/locale.gen"
 fi
 
-# ---- Sudoers: allow brand user to reboot/shutdown (supervisor runs unprivileged) ----
-install -d -m 0750 "${ROOTFS}/etc/sudoers.d"
-cat > "${ROOTFS}/etc/sudoers.d/${BRAND}" <<SUDOEOF
-${BRAND} ALL=(root) NOPASSWD: /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff
-SUDOEOF
-chmod 440 "${ROOTFS}/etc/sudoers.d/${BRAND}"
-
 # ---- Journald: limit persistent log storage ----
 JOURNAL_MAX="${OS_JOURNAL_MAX_SIZE:-100M}"
 JOURNAL_MAX_FILE="${OS_JOURNAL_MAX_FILE_SEC:-1week}"
@@ -294,30 +241,10 @@ rm -rf "${ROOTFS}/usr/share/bug"
 rm -rf "${ROOTFS}/usr/share/lintian"
 
 # Strip debug symbols from ELF binaries and shared libraries.
-# Skip /usr/local/bin/bun — it embeds resources and breaks if stripped.
 find "${ROOTFS}/usr/lib" "${ROOTFS}/usr/bin" "${ROOTFS}/usr/sbin" \
     "${ROOTFS}/lib" "${ROOTFS}/bin" "${ROOTFS}/sbin" \
     -type f \( -name '*.so*' -o -executable \) \
-    ! -name 'bun' \
     -exec strip --strip-unneeded {} + 2>/dev/null || true
-
-# Supervisor node_modules: remove non-runtime files
-for NM_DIR in "${ROOTFS}"/opt/*-supervisor/node_modules; do
-    [ -d "${NM_DIR}" ] || continue
-    find "${NM_DIR}" \( \
-        -name 'README*' -o -name 'LICENSE*' -o -name 'CHANGELOG*' \
-        -o -name 'HISTORY*' -o -name '*.md' -o -name '*.ts' \
-        -o -name '*.map' -o -name '*.flow' -o -name '.eslint*' \
-        -o -name '.prettier*' -o -name 'Makefile' \
-        -o -name '.package-lock.json' -o -name '.npmignore' \
-        -o -name '.travis.yml' -o -name '.github' \
-    \) -exec rm -rf {} + 2>/dev/null || true
-    # Remove test/example directories inside deps
-    find "${NM_DIR}" -type d \( \
-        -name 'test' -o -name 'tests' -o -name '__tests__' \
-        -o -name 'example' -o -name 'examples' -o -name 'benchmark' \
-    \) -exec rm -rf {} + 2>/dev/null || true
-done
 
 # GnuPG: remove data files (only needed during package install)
 rm -rf "${ROOTFS}/usr/share/gnupg"

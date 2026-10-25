@@ -1,7 +1,7 @@
 name: Images
 
 # Builds the Kura images (Pi 5 SD card image and x86_64 ISO) and boots the ISO
-# headless without internet to check first boot, Tomo and device identity.
+# headless without internet to check first boot, SSH, Docker and device identity.
 # Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
 # Artifacts count against the Actions storage quota, so they live one day and
 # dev pushes keep only the ISO. release.yml calls this workflow on v* tags and
@@ -22,10 +22,6 @@ on:
       - scripts/**
       - packages/**
       - overlay/**
-      - supervisor/src/**
-      - supervisor/package.json
-      - supervisor/bun.lock
-      - supervisor/os-supervisor.service
       - .env.example
       - tests/boot/**
       - .github/workflows/images.yml
@@ -70,7 +66,7 @@ jobs:
             mmdebstrap debian-archive-keyring arch-test \
             qemu-user-static binfmt-support debootstrap rsync \
             xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
-            squashfs-tools e2fsprogs gdisk curl gnupg skopeo zstd unzip
+            squashfs-tools e2fsprogs gdisk curl gnupg zstd
           sudo modprobe loop || true
 
       - name: Check arm64 emulation
@@ -86,16 +82,6 @@ jobs:
           fi
         env:
           VERSION: ${{ inputs.version }}
-
-      - name: Cache downloads (Tomo release, container images)
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/kura/cache
-          key: downloads-${{ matrix.target }}-${{ hashFiles('scripts/common/fetch-tomo.sh') }}
-
-      # Verifies the pinned Tomo release's Sigstore bundle during the build
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
 
       # The build runs as root; the steps below (zstd, staging) run as the runner
       - name: Build ${{ matrix.target }}
