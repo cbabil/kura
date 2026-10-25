@@ -9,19 +9,13 @@ set -euo pipefail
 
 ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/apt-components.sh"
+
 echo "Configuring RPi5 APT repositories..."
 
 # ---- Add non-free-firmware component (for firmware-brcm80211 etc.) ----
-# Handle both traditional sources.list and DEB822 .sources format
-if [ -f "${ROOTFS}/etc/apt/sources.list.d/debian.sources" ]; then
-    # DEB822 format: append non-free-firmware to Components line
-    sed -i 's|^Components: main$|Components: main non-free-firmware|' \
-        "${ROOTFS}/etc/apt/sources.list.d/debian.sources"
-elif [ -f "${ROOTFS}/etc/apt/sources.list" ]; then
-    # Traditional format
-    sed -i 's|^\(deb .* trixie main\)$|\1 non-free-firmware|' \
-        "${ROOTFS}/etc/apt/sources.list"
-fi
+add_non_free_firmware "${ROOTFS}"
 
 # ---- Add Raspberry Pi APT repository ----
 # [trusted=yes] required: RPi archive keyring uses SHA1 binding signatures,

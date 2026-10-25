@@ -138,11 +138,17 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     file_has "${CALLS}" "wipe ${BOOT}/kura-setup.json"
 }
 
+# with_failing_rm <command...>: rm fails inside the subshell run makes only
+# (overriding it in the test itself would also break bats's own cleanup)
+with_failing_rm() {
+    # shellcheck disable=SC2329  # invoked by the command
+    rm() { return 1; }
+    "$@"
+}
+
 @test "apply_setup_dir: a file that cannot be deleted is an error" {
     full_setup
-    # shellcheck disable=SC2329  # invoked by apply_setup_dir
-    rm() { return 1; }
-    run apply_setup_dir "${BOOT}"
+    run with_failing_rm apply_setup_dir "${BOOT}"
     [ "$status" -eq 1 ]
     output_has "delete"
 }
@@ -310,6 +316,9 @@ reject() {  # reject <json> <word expected in the message>
     stub_disk_tools /dev/sda2 sda
     run boot_partition
     [ "$output" = "/dev/sda1" ]
+    stub_disk_tools /dev/nvme0n1p2 nvme0n1
+    run boot_partition
+    [ "$output" = "/dev/nvme0n1p1" ]
 }
 
 @test "boot_partition: none on a live system" {

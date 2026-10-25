@@ -11,8 +11,9 @@ output_has() { [[ "$output" == *"$1"* ]]; }
 matches() { [[ "$1" == $2 ]]; }
 file_has() { grep -qF -- "$2" "$1"; }
 
-# file_mode <file>: permission bits in octal (macOS: stat -f, Linux: stat -c)
-file_mode() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"; }
+# file_mode <file>: permission bits in octal. GNU stat first: on Linux,
+# stat -f means filesystem status and succeeds with other output.
+file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
 
 # ---- Stubs ----
 # log_call <words...>: record a stubbed command in ${CALLS}
@@ -43,7 +44,7 @@ stub_curl_copy() {
     }
 }
 
-# load_os_config <config> <nm-dir> [hosts]: source os-config's functions
+# load_os_config <config> <nm-dir> [hosts] [hostname-file]: source os-config's functions
 # with its paths pointed at test files and nmcli stubbed
 load_os_config() {
     local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
@@ -52,6 +53,7 @@ load_os_config() {
         -e "s|^CONFIG_PATH=.*|CONFIG_PATH=\"$1\"|" \
         -e "s|^NM_CONN_DIR=.*|NM_CONN_DIR=\"$2\"|" \
         -e "s|^HOSTS_PATH=.*|HOSTS_PATH=\"${3:-${BATS_TEST_TMPDIR}/hosts}\"|" \
+        -e "s|^HOSTNAME_PATH=.*|HOSTNAME_PATH=\"${4:-${BATS_TEST_TMPDIR}/hostname}\"|" \
         -e '/^while true/,/^done$/d' \
         -e '/^set -euo pipefail$/d' \
         "${src}" > "${tmp}"

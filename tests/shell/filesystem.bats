@@ -112,10 +112,11 @@ _test_update_fstab() {
 
     _test_update_fstab "${BATS_TEST_TMPDIR}/fstab"
 
-    if stat -f '%Lp' "${BATS_TEST_TMPDIR}/fstab" >/dev/null 2>&1; then
-        perms=$(stat -f '%Lp' "${BATS_TEST_TMPDIR}/fstab")
-    else
-        perms=$(stat -c '%a' "${BATS_TEST_TMPDIR}/fstab")
-    fi
-    [ "${perms}" = "644" ]
+    [ "$(file_mode "${BATS_TEST_TMPDIR}/fstab")" = "644" ]
+}
+
+# ---- Pi boot partition ----
+
+@test "the Pi image also mounts its root read-write (no fstab ships)" {
+    file_has "${BATS_TEST_DIRNAME}/../../scripts/rpi5/cmdline.txt" "root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw"
 }

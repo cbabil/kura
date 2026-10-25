@@ -5,7 +5,7 @@
 # to firstboot.sh by install-firstboot.sh. Defines functions only.
 
 # root_disk: "<root-device> <parent-disk>"; fails when / is not on a disk
-# partition (the live ISO)
+# partition (a live or container root)
 root_disk() {
     local root_dev disk
     root_dev=$(findmnt -no SOURCE / 2>/dev/null) || return 1

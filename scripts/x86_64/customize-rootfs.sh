@@ -1,94 +1,47 @@
 #!/bin/bash
 # scripts/x86_64/customize-rootfs.sh
-# x86_64-specific rootfs customization.
-# x86_64-specific rootfs customizations applied during build
+# x86 PC rootfs customizations (target pc). The image runs on real hardware
+# such as the Intel NUC, so firmware, kernel modules and time zones stay;
+# only documentation and translations are removed.
 #
 # Usage: customize-rootfs.sh <rootfs-dir>
 
 set -euo pipefail
 
 ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # shellcheck disable=SC1091
-source "$(dirname "$0")/../common/systemd-units.sh"
+source "${SCRIPT_DIR}/../common/brand-defaults.sh"
+BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 
 echo "Applying x86_64-specific customization..."
 
-# ---- Container storage in RAM on the live ISO ----
-# The live root is an overlay (squashfs + RAM). containerd and Docker store
-# images as overlays too, and the kernel refuses an overlay on an overlay, so
-# no container can be created. On a live boot, their storage gets its own
-# tmpfs (lost at reboot, like everything on the live ISO).
-install -d "${ROOTFS}/usr/lib/systemd/system"
-for dir in containerd docker; do
-    cat > "${ROOTFS}/usr/lib/systemd/system/var-lib-${dir}.mount" <<UNITEOF
-[Unit]
-Description=${dir} storage in RAM (live system)
-ConditionKernelCommandLine=boot=live
-Before=containerd.service docker.service
+# The QEMU guest agent is not enabled here: its package starts it when a VM
+# exposes the agent's virtio port, and on bare metal it would wait for that
+# device at every boot.
 
-[Mount]
-What=tmpfs
-Where=/var/lib/${dir}
-Type=tmpfs
-Options=mode=0711
+# ---- Keep the EFI partition's shim and GRUB current ----
+# Nothing runs grub-install on this image: after every APT run, sync-efi.sh
+# copies newer signed binaries onto the EFI partition (mounted at /boot/efi).
+install -d "${ROOTFS}/usr/lib/${BRAND}" "${ROOTFS}/etc/apt/apt.conf.d" "${ROOTFS}/boot/efi"
+install -m 0755 "${SCRIPT_DIR}/sync-efi.sh" "${ROOTFS}/usr/lib/${BRAND}/sync-efi.sh"
+install -m 0644 "${SCRIPT_DIR}/efi-files.list" "${ROOTFS}/usr/lib/${BRAND}/efi-files.list"
+cat > "${ROOTFS}/etc/apt/apt.conf.d/90${BRAND}-efi" <<EOF
+DPkg::Post-Invoke { "if [ -x /usr/lib/${BRAND}/sync-efi.sh ]; then /usr/lib/${BRAND}/sync-efi.sh; fi"; };
+EOF
 
-[Install]
-WantedBy=local-fs.target
-UNITEOF
-    enable_unit "${ROOTFS}" local-fs.target "/usr/lib/systemd/system/var-lib-${dir}.mount"
-done
-
-# ---- QEMU guest agent (Proxmox/KVM integration) ----
-install -d "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
-ln -sf /usr/lib/systemd/system/qemu-guest-agent.service \
-    "${ROOTFS}/etc/systemd/system/multi-user.target.wants/qemu-guest-agent.service"
-
-# ---- Serial console ----
+# ---- Serial console (VMs and the CI boot test) ----
 install -d "${ROOTFS}/etc/systemd/system/getty.target.wants"
 ln -sf /usr/lib/systemd/system/serial-getty@.service \
     "${ROOTFS}/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
 
-# ---- Strip unnecessary files to reduce ISO size ----
-echo "Stripping docs/man/locales/firmware..."
-rm -rf "${ROOTFS}/usr/share/doc"
-rm -rf "${ROOTFS}/usr/share/man"
-rm -rf "${ROOTFS}/usr/share/info"
-rm -rf "${ROOTFS}/usr/lib/firmware"
-find "${ROOTFS}/usr/share/locale" -mindepth 1 -maxdepth 1 \
-    ! -name 'C' ! -name 'en_US' -exec rm -rf {} + 2>/dev/null || true
-
-# Strip i18n/translations
-rm -rf "${ROOTFS}/usr/share/i18n/charmaps"
-rm -rf "${ROOTFS}/usr/share/i18n/locales"
-find "${ROOTFS}/usr/share/zoneinfo" -mindepth 1 -maxdepth 1 \
-    -type d ! -name 'UTC' ! -name 'Etc' -exec rm -rf {} + 2>/dev/null || true
-
-# Strip unused kernel modules (keep essential: fs, net, virtio, block)
-if [ -d "${ROOTFS}/lib/modules" ]; then
-    KVER=$(ls "${ROOTFS}/lib/modules/" | head -1)
-    if [ -n "${KVER}" ] && [ -d "${ROOTFS}/lib/modules/${KVER}/kernel" ]; then
-        KMOD="${ROOTFS}/lib/modules/${KVER}/kernel"
-        rm -rf "${KMOD}/sound"
-        rm -rf "${KMOD}/drivers/media"
-        rm -rf "${KMOD}/drivers/gpu"
-        rm -rf "${KMOD}/drivers/infiniband"
-        rm -rf "${KMOD}/drivers/staging"
-        rm -rf "${KMOD}/drivers/usb/serial"
-        rm -rf "${KMOD}/drivers/bluetooth"
-        rm -rf "${KMOD}/drivers/isdn"
-        rm -rf "${KMOD}/drivers/nfc"
-        rm -rf "${KMOD}/drivers/thunderbolt"
-        rm -rf "${KMOD}/drivers/hwmon"
-        rm -rf "${KMOD}/drivers/iio"
-        rm -rf "${KMOD}/drivers/input/joystick"
-        rm -rf "${KMOD}/drivers/input/touchscreen"
-        rm -rf "${KMOD}/drivers/leds"
-        # Regenerate module dependencies
-        if [ -x "${ROOTFS}/sbin/depmod" ]; then
-            chroot "${ROOTFS}" depmod "${KVER}" 2>/dev/null || true
-        fi
-    fi
+# ---- Strip documentation and translations ----
+echo "Stripping docs/man/locales..."
+rm -rf "${ROOTFS}/usr/share/doc" "${ROOTFS}/usr/share/man" "${ROOTFS}/usr/share/info"
+if [ -d "${ROOTFS}/usr/share/locale" ]; then
+    find "${ROOTFS}/usr/share/locale" -mindepth 1 -maxdepth 1 ! -name 'C' ! -name 'en_US' -exec rm -rf {} +
 fi
+rm -rf "${ROOTFS}/usr/share/i18n/charmaps" "${ROOTFS}/usr/share/i18n/locales"
 
 echo "x86_64 customization complete."

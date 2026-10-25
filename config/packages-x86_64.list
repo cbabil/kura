@@ -1,14 +1,20 @@
-# Kernel
+# Kernel (signed by Debian, so Secure Boot works)
 linux-image-amd64
 
-# Live boot (mounts squashfs, handles boot=live toram)
-live-boot
+# UEFI boot chain: create-image.sh copies the signed shim and GRUB onto the
+# EFI partition (no grub-install, no firmware boot entry)
+shim-signed
+grub-efi-amd64-signed
+
+# Firmware for real hardware (non-free-firmware, scripts/x86_64/configure-repos.sh):
+# Intel Wi-Fi/Bluetooth, Realtek network, Intel graphics and others
+firmware-iwlwifi
+firmware-realtek
+firmware-misc-nonfree
+intel-microcode
+amd64-microcode
 
 # Cloud/VM support
 qemu-guest-agent
 
 # NOTE: Docker is baked into every image (see packages-common.list).
-
-# NOTE: grub-pc-bin, grub-efi-amd64-bin, squashfs-tools are HOST-only
-# dependencies (used by create-iso.sh). They are installed via
-# ./build.sh setup, NOT in the rootfs.

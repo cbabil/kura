@@ -1,5 +1,5 @@
 #!/bin/bash
-# scripts/release/make-manifest.sh <tag> <owner/repo> <pi-image> <iso>
+# scripts/release/make-manifest.sh <tag> <owner/repo> <pi-image> <pc-image>
 #
 # Prints the release manifest (projects-docs/kura/architecture/updates.md, section 2)
 # for one Kura release: version, channel, release date, and the download
@@ -9,8 +9,8 @@
 
 set -euo pipefail
 
-[ $# -eq 4 ] || { echo "Usage: $0 <tag> <owner/repo> <pi-image> <iso>" >&2; exit 2; }
-TAG="$1" REPO="$2" PI_IMAGE="$3" ISO="$4"
+[ $# -eq 4 ] || { echo "Usage: $0 <tag> <owner/repo> <pi-image> <pc-image>" >&2; exit 2; }
+TAG="$1" REPO="$2" PI_IMAGE="$3" PC_IMAGE="$4"
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/hash.sh"
@@ -42,6 +42,6 @@ asset() {
 jq -n --arg version "${TAG#v}" \
       --arg released "$(date -u +%Y-%m-%d)" \
       --argjson rpi "$(asset "${PI_IMAGE}")" \
-      --argjson x86 "$(asset "${ISO}")" \
+      --argjson x86 "$(asset "${PC_IMAGE}")" \
       '{version: $version, channel: "stable", released: $released,
         bundles: {"rpi5-arm64": $rpi, "x86_64": $x86}}'

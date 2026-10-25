@@ -7,6 +7,7 @@ set -euo pipefail
 CONFIG_PATH="/etc/__BRAND__/config.json"
 NM_CONN_DIR="/etc/NetworkManager/system-connections"
 HOSTS_PATH="/etc/hosts"
+HOSTNAME_PATH="/etc/hostname"
 SAFE_SSID_RE='^[a-zA-Z0-9][a-zA-Z0-9 _.-]*$'
 
 log_info()    { echo "INFO:  __BRAND__-config: $*"; }
@@ -93,7 +94,8 @@ apply_hostname() {
 
     current=$(hostname)
     [[ "${current}" != "${desired}" ]] || return 0
-    if ! hostnamectl set-hostname "${desired}" 2>/dev/null; then
+    # hostname(1) and /etc/hostname, not hostnamectl: the image has no D-Bus
+    if ! printf '%s\n' "${desired}" > "${HOSTNAME_PATH}" || ! hostname "${desired}"; then
         log_warning "Failed to set hostname to ${desired}"
         return 0
     fi
