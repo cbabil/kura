@@ -24,7 +24,7 @@ A lightweight home-server OS built on Debian 13 (Trixie) for the Raspberry Pi 5 
 - **mmdebstrap rootfs**: Reproducible, minimal root filesystem generation
 - **Docker built in**: Docker Engine and Compose from Docker's APT repository (signing key fingerprint pinned)
 - **First boot**: grows the root partition to fill the disk, generates this device's own SSH host keys and machine ID, and applies the settings an imager left on the boot partition (`kura-setup.json`)
-- **Three targets**: RPi5 SD card image, x86_64 live ISO (demo: data is lost at reboot), and a Docker rootfs
+- **Three targets**: RPi5 SD card image, x86_64 PC disk image (UEFI, Secure Boot, e.g. Intel NUC), and a Docker rootfs
 - **Security**: hardening at boot (kernel, AppArmor, seccomp, SSH, firewall)
 - **Network Management**: NetworkManager for flexible configuration
 - **Rebrandable**: All user-visible branding controlled via `.env` variables
@@ -90,32 +90,33 @@ sudo ln -sf "$(pwd)/build.sh" /usr/local/bin/kura
 
 ```bash
 ./build.sh build all        # Build all targets (clean build)
-./build.sh build iso        # Build x86_64 only (incremental)
+./build.sh build pc         # Build the x86_64 PC image only (incremental)
 ./build.sh build rpi5       # Build RPi5 only (incremental)
 
 # Or with the symlink:
-kura build iso
+kura build pc
 ```
 
 **Note:** Every image boots with Docker ready, and works offline. Building needs internet for Debian and Docker packages.
 
 ### CI builds
 
-GitHub Actions builds both images on every push to `dev` that changes build inputs, and on manual runs (**Actions → Images → Run workflow**). The x86 ISO is also booted headless **without internet** to check that:
-- first boot finishes;
-- the default password only reaches a forced change;
+GitHub Actions builds both images on every push to `dev` that changes build inputs, and on manual runs (**Actions → Images → Run workflow**). The PC image is also booted headless under UEFI **without internet**, once with a `kura-setup.json` on its EFI partition and once without, to check that:
+- first boot finishes and grows the root partition;
+- the setup file is applied (SSH key login as the new user, passwords off, hostname, Wi-Fi, time zone) and deleted;
+- without it, the default password only reaches a forced change;
 - the core services are running and Docker answers;
 - two boots of the same image get different SSH host keys and machine IDs.
 
-Download the images from the run's artifacts (`kura-iso-<sha>`, `kura-rpi5-<sha>`, kept 7 days). They are **test builds** with `.env.example`'s default credentials, not for distribution. To run the boot test locally on Linux with QEMU:
+Dev runs only build and boot-test the images; release runs also upload them (`kura-pc-<sha>`, `kura-rpi5-<sha>`, kept 1 day) for the release job. They are **test builds** with `.env.example`'s default credentials, not for distribution. To run the boot test locally on Linux with QEMU:
 
 ```bash
-tests/boot/iso-boot-test.sh release/<version>/iso/kura-*.iso boot-a
+tests/boot/boot-test.sh release/<version>/pc/kura-*.img.zst boot-a 2222 --setup
 ```
 
 ### Releases
 
-Pushing a `v*` tag builds both images and publishes a GitHub Release with the Pi image (`.img.zst`), the ISO, `SHA512SUMS`, `manifest.json` and `etchwise.json` (the OS list Etchwise reads). Every asset is signed keylessly with [Sigstore](https://www.sigstore.dev/) by the release workflow itself, so there is no signing key to manage; each asset ships with a `<asset>.sigstore.json` bundle. To verify a download (needs [cosign](https://github.com/sigstore/cosign)):
+Pushing a `v*` tag builds both images and publishes a GitHub Release with the Pi and PC images (`.img.zst`), `SHA512SUMS`, `manifest.json` and `etchwise.json` (the OS list Etchwise reads). Every asset is signed keylessly with [Sigstore](https://www.sigstore.dev/) by the release workflow itself, so there is no signing key to manage; each asset ships with a `<asset>.sigstore.json` bundle. To verify a download (needs [cosign](https://github.com/sigstore/cosign)):
 
 ```bash
 scripts/release/verify-release.sh kura-0.1.0-rpi5-arm64-20260929-0001.img.zst v0.1.0
@@ -185,6 +186,7 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OS_ROOTFS_SIZE` | RPi5 rootfs ext4 + partition size | `2G` |
+| `OS_PC_ROOTFS_SIZE` | PC image root partition size (firmware, all kernel modules) | `3G` |
 
 **Build Directories**
 
@@ -202,7 +204,7 @@ All tunable build values live in `.env` at the project root. Copy the template o
 | `help` | Show help |
 
 **Build targets:**
-- `iso` - x86_64: creates ISO + Docker image (incremental)
+- `pc` - x86_64: creates the PC disk image (incremental)
 - `rpi5` - ARM64: creates SD card image + Docker image (incremental)
 - `docker` - Docker image only
 - `all` - Build both targets (clean build, default)
@@ -213,8 +215,8 @@ All tunable build values live in `.env` at the project root. Copy the template o
 release/<version>/
 ├── arm64/
 │   └── <brand>-<version>-rpi5-arm64-YYYYMMDD-NNNN.img
-├── iso/
-│   └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.iso
+├── pc/
+│   └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.img
 └── docker/
     ├── <brand>-<version>-rpi5-arm64-YYYYMMDD-NNNN.tar
     └── <brand>-<version>-x86_64-amd64-YYYYMMDD-NNNN.tar
@@ -224,7 +226,7 @@ release/<version>/
 
 **Docker images:**
 - `kura:latest-arm64` - RPi5 build
-- `kura:latest-amd64` - x86_64 build
+- `kura:latest-amd64` - Intel/AMD PCs (`amd64` is Docker's and Debian's name for x86_64)
 
 ## Deploying
 
@@ -239,7 +241,7 @@ The `admin` password only gets you to the change-password prompt, so no device k
 
 ### Etchwise
 
-Etchwise (a multi-device imager based on Raspberry Pi Imager) lists Kura under Raspberry Pi 5 (from each release's `etchwise.json`). Its setup screens become `kura-setup.json` on the card's boot partition; first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay. Format and rules: `scripts/common/firstboot-setup.sh`.
+Etchwise (a multi-device imager based on Raspberry Pi Imager) lists Kura under Raspberry Pi 5 and Intel NUC (from each release's `etchwise.json`). Its setup screens become `kura-setup.json` on the boot partition (the EFI partition on a PC); first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay. Format and rules: `scripts/common/firstboot-setup.sh`.
 
 ### RPi5 - Flash SD Card
 
@@ -250,17 +252,16 @@ sync
 
 Boot the Pi on your network, wait for first boot to finish (it grows the root partition), then `ssh admin@kura.local`. If the root partition is too small for the image, the build stops and names the `OS_ROOTFS_SIZE` to set.
 
-### x86_64 - Boot ISO in VM
+### PC (Intel NUC) - USB drive or SSD
 
-The ISO is a live system that runs from RAM: containers and data are lost at every reboot. Use it to try Kura; a persistent x86 disk image is planned.
+The PC image boots on UEFI machines (Secure Boot can stay on) and keeps running from the drive it is written to. Write it with Etchwise (choose **Intel NUC**, then Kura) to a USB SSD or drive, or by hand:
 
 ```bash
-# QEMU
-qemu-system-x86_64 -cdrom release/<version>/iso/kura-*.iso -m 2048 -enable-kvm
-
-# Proxmox - Upload ISO and create VM via web UI
-scp release/<version>/iso/kura-*.iso root@proxmox:/var/lib/vz/template/iso/
+zstd -dc kura-*-x86_64-amd64-*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress
+sync
 ```
+
+Plug it into the NUC, pick it in the boot menu (F10 on most NUCs), and wait for first boot to finish (it grows the root partition to the whole drive). It also runs in a VM: `qemu-system-x86_64 -machine q35 -bios /usr/share/ovmf/OVMF.fd -drive file=kura.img,format=raw,if=virtio -m 2048 -enable-kvm`. Installing onto the NUC's internal disk is not offered yet.
 
 ### Docker
 

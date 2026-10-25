@@ -1,0 +1,5 @@
+# <file in the rootfs> <file on the EFI partition>, GRUB before shim: a shim
+# update never runs ahead of the GRUB it loads. Read by pc-image.sh (build)
+# and sync-efi.sh (on the device, after every APT run).
+usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed EFI/BOOT/grubx64.efi
+usr/lib/shim/shimx64.efi.signed EFI/BOOT/BOOTX64.EFI

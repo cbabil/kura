@@ -141,14 +141,18 @@ setup_nm() { NM_DIR="${BATS_TEST_TMPDIR}/nm"; mkdir -p "${NM_DIR}"; }
 
 # ---- hostname ----
 
-@test "apply_hostname: sets the hostname and the 127.0.1.1 entry in /etc/hosts" {
-    local hosts="${BATS_TEST_TMPDIR}/hosts"
+# Without D-Bus (minimal image) hostnamectl cannot work: the name is written
+# to /etc/hostname and set with hostname(1).
+@test "apply_hostname: sets /etc/hostname, the running name and the 127.0.1.1 entry" {
+    local hosts="${BATS_TEST_TMPDIR}/hosts" name_file="${BATS_TEST_TMPDIR}/hostname"
     printf '127.0.0.1\tlocalhost\n127.0.1.1\tkura\n' > "${hosts}"
-    load_os_config "$(create_config_json)" "${BATS_TEST_TMPDIR}/nm" "${hosts}"
-    hostname() { echo kura; }
-    hostnamectl() { echo "hostnamectl $*" >> "${BATS_TEST_TMPDIR}/calls"; }
+    echo kura > "${name_file}"
+    load_os_config "$(create_config_json)" "${BATS_TEST_TMPDIR}/nm" "${hosts}" "${name_file}"
+    hostname() { if [ $# -eq 0 ]; then echo kura; else echo "hostname $*" >> "${BATS_TEST_TMPDIR}/calls"; fi; }
+    hostnamectl() { return 1; }
     apply_hostname
-    file_has "${BATS_TEST_TMPDIR}/calls" "hostnamectl set-hostname test-device"
+    file_has "${BATS_TEST_TMPDIR}/calls" "hostname test-device"
+    [ "$(cat "${name_file}")" = "test-device" ]
     file_has "${hosts}" "127.0.1.1	test-device"
     file_has "${hosts}" "127.0.0.1	localhost"
 }

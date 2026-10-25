@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/boot/boot-checks.sh
 # Checks run from the host by boot-test.sh against the booted guest. Source
-# this file; it uses boot-test.sh's settings (REPORT, SERIAL, OUT, SSH_PORT,
+# this file; it uses boot-test.sh's settings (REPORT, OUT, SSH_PORT,
 # LOGIN_USER, LOGIN_PASS, DEFAULT_PASS, KEY, BRAND, WAIT_SECS).
 #
 # QEMU's user networking forwards IPv4 only: use 127.0.0.1, never localhost
@@ -32,8 +32,6 @@ check() {
     shift
     if "$@"; then report "PASS ${name}"; else report "FAIL ${name}"; FAILED=1; fi
 }
-
-serial_has() { grep -qF "$1" "${SERIAL}" 2>/dev/null; }
 
 SSH_OPTS=(-p "${SSH_PORT}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
           -o ConnectTimeout=10 -o LogLevel=ERROR)
@@ -79,8 +77,14 @@ setup_applied() {
     sudo_run "test -s /etc/NetworkManager/system-connections/CIWifi.nmconnection"
 }
 
-setup_file_gone() {
-    sudo_run "mount -o ro /dev/vda1 /mnt && trap 'umount /mnt' EXIT && test ! -e /mnt/${BRAND}-setup.json"
+setup_file_gone() { sudo_run "test ! -e /boot/efi/${BRAND}-setup.json"; }
+
+secure_boot_on() { sudo_run "dmesg" | grep -q "Secure boot enabled"; }
+
+# /boot/efi is mounted from fstab, and the APT hook's sync finds nothing newer
+efi_partition_current() {
+    ssh_run "findmnt -no FSTYPE /boot/efi" | grep -qx vfat &&
+    [ -z "$(sudo_run "/usr/lib/${BRAND}/sync-efi.sh")" ]
 }
 
 # root_grown <image-bytes>: the root filesystem is now larger than the whole

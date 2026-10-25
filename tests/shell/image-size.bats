@@ -31,3 +31,14 @@ setup() {
     run check_rootfs_fits $((2200 * MiB)) $((2048 * MiB))
     output_has "OS_ROOTFS_SIZE=3G"
 }
+
+@test "check_rootfs_fits: names the setting of the image being built" {
+    run check_rootfs_fits $((3500 * MiB)) $((3072 * MiB)) OS_PC_ROOTFS_SIZE
+    [ "$status" -eq 1 ]
+    output_has "OS_PC_ROOTFS_SIZE=4G"
+}
+
+@test "build.sh passes the PC root size on to the image script" {
+    grep -q '^OS_PC_ROOTFS_SIZE="${OS_PC_ROOTFS_SIZE:-3G}"' "${REPO_ROOT}/build.sh"
+    grep -qE '^export .*OS_PC_ROOTFS_SIZE' "${REPO_ROOT}/build.sh"
+}

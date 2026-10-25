@@ -15,6 +15,8 @@ OUTPUT_DIR="${2:?Usage: $0 <rootfs-dir> <output-dir>}"
 source "$(dirname "$0")/../common/brand-defaults.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/image-size.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/../common/disk-image.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 VERSION="${OS_VERSION:-2.0}"
@@ -31,28 +33,10 @@ TOTAL_BYTES=$(( BOOT_BYTES + ROOTFS_BYTES + (4 * 1024 * 1024) ))  # +4M alignmen
 # Fail early, with the fix, if the rootfs cannot fit its partition
 check_rootfs_fits "$(du -s -B1 "${ROOTFS}" | cut -f1)" "${ROOTFS_BYTES}"
 
-# Ensure loop device kernel module is loaded
-modprobe loop 2>/dev/null || true
-
 echo "Creating RPi5 SD card image (${IMG_NAME})..."
 
 mkdir -p "${OUTPUT_DIR}"
 IMG="${OUTPUT_DIR}/${IMG_NAME}"
-
-# Track resources for cleanup
-LOOP=""
-BOOT_MNT=""
-ROOT_MNT=""
-
-cleanup() {
-    echo "Cleaning up..."
-    [ -n "${ROOT_MNT}" ] && mountpoint -q "${ROOT_MNT}" && umount "${ROOT_MNT}" 2>/dev/null || true
-    [ -n "${ROOT_MNT}" ] && [ -d "${ROOT_MNT}" ] && rmdir "${ROOT_MNT}" 2>/dev/null || true
-    [ -n "${BOOT_MNT}" ] && mountpoint -q "${BOOT_MNT}" && umount "${BOOT_MNT}" 2>/dev/null || true
-    [ -n "${BOOT_MNT}" ] && [ -d "${BOOT_MNT}" ] && rmdir "${BOOT_MNT}" 2>/dev/null || true
-    [ -n "${LOOP}" ] && losetup -d "${LOOP}" 2>/dev/null || true
-}
-trap cleanup EXIT
 
 # ---- Create image file ----
 truncate -s "${TOTAL_BYTES}" "${IMG}"
@@ -71,7 +55,8 @@ start=$(( 2048 + BOOT_SECTORS )), type=83
 EOF
 
 # ---- Setup loop device ----
-LOOP=$(losetup --show --partscan -f "${IMG}")
+disk_image_attach "${IMG}"
+LOOP="${DISK_IMAGE_LOOP}"
 
 # ---- Format partitions ----
 echo "  Formatting boot partition (FAT32)..."
@@ -80,8 +65,8 @@ echo "  Formatting rootfs partition (ext4)..."
 mkfs.ext4 -F "${LOOP}p2"
 
 # ---- Mount and populate boot partition ----
-BOOT_MNT=$(mktemp -d)
-mount "${LOOP}p1" "${BOOT_MNT}"
+disk_image_mount "${LOOP}p1"
+BOOT_MNT="${DISK_IMAGE_MNT}"
 
 # Copy kernel (try vmlinuz first, then Image)
 if ls "${ROOTFS}"/boot/vmlinuz-* 1>/dev/null 2>&1; then
@@ -155,27 +140,10 @@ echo "  Copied config.txt"
 cp "${SCRIPT_DIR}/cmdline.txt" "${BOOT_MNT}/"
 echo "  Copied cmdline.txt"
 
-umount "${BOOT_MNT}"
-rmdir "${BOOT_MNT}"
-BOOT_MNT=""
+disk_image_unmount
 
-# ---- Mount and populate rootfs partition ----
-ROOT_MNT=$(mktemp -d)
-mount "${LOOP}p2" "${ROOT_MNT}"
-
-echo "  Copying rootfs via tar..."
-tar -C "${ROOTFS}" -cf - . | tar -C "${ROOT_MNT}" -xf -
-echo "  Rootfs copy complete."
-
-umount "${ROOT_MNT}"
-rmdir "${ROOT_MNT}"
-ROOT_MNT=""
-
-# ---- Detach loop device ----
-losetup -d "${LOOP}"
-LOOP=""
-
-# ---- Checksums ----
-(cd "${OUTPUT_DIR}" && sha512sum "${IMG_NAME}" > SHA512SUMS)
+# ---- Populate the rootfs partition, detach, checksum ----
+disk_image_copy_rootfs "${ROOTFS}" "${LOOP}p2"
+disk_image_finish "${IMG}"
 
 echo "Created RPi5 SD card image: ${OUTPUT_DIR}/${IMG_NAME}"

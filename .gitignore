@@ -7,7 +7,6 @@ cache/
 *.wic
 *.wic.bmap
 *.ext4
-*.iso
 *.img
 *.tar.bz2
 *.tar.gz

@@ -2,8 +2,9 @@
 # tests/boot/boot-test.sh <pc-image(.img|.img.zst)> <out-dir> [ssh-port] [--setup]
 #
 # Boots a copy of Kura's PC disk image headless in QEMU under UEFI firmware
-# (OVMF), with NO internet (user networking with restrict=on). The disk is
-# grown by 2 GiB first, as a bigger USB drive would be.
+# (OVMF) with Secure Boot on and Microsoft's keys enrolled, as on a NUC, with
+# NO internet (user networking with restrict=on). The disk is grown by 2 GiB
+# first, as a bigger USB drive would be.
 #
 # Default: the image as shipped. The default password only reaches a forced
 # change (first-login.exp).
@@ -11,8 +12,9 @@
 # writes it (new user with a password hash and an SSH key, password logins
 # off, hostname, Wi-Fi, time zone); the checks prove it was applied and deleted.
 #
-# Both modes check first boot, the root partition grown and writable, core
-# services, Docker and the device identity, and report (without failing)
+# Both modes check Secure Boot, first boot, the root partition grown and
+# writable, the EFI partition mounted and kept current, core services,
+# Docker and the device identity, and report (without failing)
 # whether less still needs the LESS=-d workaround (issue #6). Writes
 # serial.log, report.txt and identity.txt to <out-dir>; exits non-zero if a
 # check fails. Needs qemu-system-x86_64, ovmf, mtools, zstd, sshpass, expect,
@@ -29,7 +31,6 @@ LOGIN_USER="${KURA_TEST_USER:-admin}"
 DEFAULT_PASS="${KURA_TEST_PASS:-admin}"
 # Set at first login (default mode) or by the setup file (--setup)
 LOGIN_PASS="Kura-$(openssl rand -hex 8)"
-EFI_OFFSET=$((2048 * 512))   # partition 1 (scripts/x86_64/pc-image.sh)
 
 mkdir -p "${OUT}"
 OUT="$(cd "${OUT}" && pwd)"
@@ -40,17 +41,22 @@ PIDFILE="${OUT}/qemu.pid" DISK="${OUT}/disk.img" KEY="${OUT}/id_ed25519"
 if [ -w /dev/kvm ]; then ACCEL=(-accel kvm -cpu host); WAIT_SECS=600
 else ACCEL=(-accel tcg); WAIT_SECS=1500; fi
 
-OVMF=""
-for f in /usr/share/ovmf/OVMF.fd /usr/share/OVMF/OVMF.fd /usr/share/qemu/OVMF.fd; do
-    [ -f "${f}" ] && { OVMF="${f}"; break; }
+# Secure Boot firmware and variables with Microsoft's keys (Debian's shim is
+# signed by Microsoft's UEFI CA), from the ovmf package
+OVMF_CODE=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd
+OVMF_VARS=/usr/share/OVMF/OVMF_VARS_4M.ms.fd
+for f in "${OVMF_CODE}" "${OVMF_VARS}"; do
+    [ -f "${f}" ] || { echo "ERROR: missing ${f} (install ovmf)" >&2; exit 2; }
 done
-[ -n "${OVMF}" ] || { echo "ERROR: no OVMF firmware (install ovmf)" >&2; exit 2; }
 
 stop_vm() { [ -f "${PIDFILE}" ] && kill "$(cat "${PIDFILE}")" 2>/dev/null; rm -f "${PIDFILE}"; }
 trap stop_vm EXIT
 
 # shellcheck source=tests/boot/boot-checks.sh
 source "$(dirname "$0")/boot-checks.sh"
+# PC_EFI_START, where the setup file goes
+# shellcheck source=scripts/x86_64/pc-image.sh
+source "$(dirname "$0")/../../scripts/x86_64/pc-image.sh"
 
 # ---- disk ----
 
@@ -71,13 +77,17 @@ if [ "${SETUP}" = "--setup" ]; then
         ssh: {enabled: true, passwordAuth: false, authorizedKeys: [$key]},
         wifi: {ssid: "CIWifi", psk: "password-ci", hidden: false, country: "FR"},
         timezone: "Europe/Paris", keyboard: "fr"}' > "${OUT}/kura-setup.json"
-    mcopy -o -i "${DISK}@@${EFI_OFFSET}" "${OUT}/kura-setup.json" ::/kura-setup.json
+    mcopy -o -i "${DISK}@@$(( PC_EFI_START * 512 ))" "${OUT}/kura-setup.json" ::/kura-setup.json
 fi
 
 # ---- boot ----
 
-report "Booting ${IMAGE} ${SETUP} (UEFI, ${ACCEL[*]}, wait ${WAIT_SECS}s, no internet)"
-qemu-system-x86_64 -machine q35 -m 4096 -smp 2 "${ACCEL[@]}" -bios "${OVMF}" \
+cp "${OVMF_VARS}" "${OUT}/ovmf-vars.fd"
+report "Booting ${IMAGE} ${SETUP} (UEFI Secure Boot, ${ACCEL[*]}, wait ${WAIT_SECS}s, no internet)"
+qemu-system-x86_64 -machine q35,smm=on -m 4096 -smp 2 "${ACCEL[@]}" \
+    -global driver=cfi.pflash01,property=secure,val=on \
+    -drive "if=pflash,format=raw,unit=0,readonly=on,file=${OVMF_CODE}" \
+    -drive "if=pflash,format=raw,unit=1,file=${OUT}/ovmf-vars.fd" \
     -drive "file=${DISK},format=raw,if=virtio" \
     -display none -monitor none -serial "file:${SERIAL}" \
     -nic "user,restrict=on,hostfwd=tcp::${SSH_PORT}-:22" \
@@ -85,7 +95,7 @@ qemu-system-x86_64 -machine q35 -m 4096 -smp 2 "${ACCEL[@]}" -bios "${OVMF}" \
 
 # ---- checks ----
 
-check "first boot finished" wait_for "First boot complete." serial_has "First boot complete."
+# sshd starts after first boot: its marker is checked once logged in
 check "SSH reachable" wait_for "SSH" ssh_listening
 if [ "${SETUP}" = "--setup" ]; then
     check "setup: SSH key login as the new user" wait_for "key login" ssh_run true
@@ -95,7 +105,10 @@ if [ "${SETUP}" = "--setup" ]; then
 else
     check "first login replaces the default password" first_login_changes_password
 fi
+check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
+check "Secure Boot on" secure_boot_on
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
+check "EFI partition mounted and kept current" efi_partition_current
 check "core services active" services_active
 check "Docker answers" docker_answers
 check "device identity recorded" record_identity

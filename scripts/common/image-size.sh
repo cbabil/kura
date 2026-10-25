@@ -5,14 +5,16 @@
 # the copy with "No space left on device".
 # Source this file; it defines functions only.
 
-# check_rootfs_fits <used-bytes> <partition-bytes>
+# check_rootfs_fits <used-bytes> <partition-bytes> [setting]
+# <setting> is the .env variable that sizes this image's root partition.
 # Requires 10% headroom for ext4 metadata and the journal.
 check_rootfs_fits() {
-    local used="$1" partition="$2" mib=$((1024 * 1024)) gib=$((1024 * 1024 * 1024))
+    local used="$1" partition="$2" setting="${3:-OS_ROOTFS_SIZE}"
+    local mib=$((1024 * 1024)) gib=$((1024 * 1024 * 1024))
     local needed=$(( used * 110 / 100 ))
     [ "${needed}" -le "${partition}" ] && return 0
     echo "ERROR: rootfs is $(( used / mib )) MiB but the root partition is" \
          "$(( partition / mib )) MiB (10% headroom needed)." >&2
-    echo "       Set OS_ROOTFS_SIZE=$(( (needed + gib - 1) / gib ))G in .env." >&2
+    echo "       Set ${setting}=$(( (needed + gib - 1) / gib ))G in .env." >&2
     return 1
 }

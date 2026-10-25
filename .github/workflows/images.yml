@@ -6,7 +6,7 @@ name: Images
 # Docker and device identity.
 # Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
 # Artifacts count against the Actions storage quota, so they live one day and
-# dev pushes keep only the PC image. release.yml calls this workflow on v* tags and
+# dev pushes upload none. release.yml calls this workflow on v* tags and
 # publishes both images in the same run.
 
 on:
@@ -90,32 +90,6 @@ jobs:
           sudo -E env "PATH=${PATH}" ./build.sh build ${{ matrix.target }}
           sudo chown -R "$(id -u):$(id -g)" release
 
-      # Raw images are mostly empty space: ship them as .img.zst (the PC image
-      # always, since dev runs upload it for the boot test's logs and reuse)
-      - name: Compress image
-        if: inputs.version || matrix.target == 'pc'
-        run: zstd -T0 -15 --rm release/*/${{ matrix.release_dir }}/*.img
-
-      # The images only, in one flat directory: upload-artifact would otherwise
-      # keep <version>/<dir>/, and release.yml writes its own checksums.
-      - name: Stage artifact
-        if: inputs.version || matrix.target == 'pc'
-        run: |
-          mkdir artifact
-          find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f \
-            -name '*.img.zst' -exec ln -t artifact {} +
-
-      # The Pi image is only needed by release.yml: a dev build just has to succeed
-      - name: Upload image
-        if: inputs.version || matrix.target == 'pc'
-        uses: actions/upload-artifact@v4
-        with:
-          name: kura-${{ matrix.target }}-${{ github.sha }}
-          path: artifact/*
-          retention-days: 1
-          if-no-files-found: error
-          compression-level: 0   # the images are already compressed
-
       # ---- PC boot test (UEFI in QEMU; the Pi image needs Pi hardware) ----
 
       - name: Enable KVM
@@ -134,13 +108,47 @@ jobs:
         if: matrix.target == 'pc'
         run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 ovmf mtools sshpass expect
 
-      - name: Boot test A (setup file from the imager)
+      # Two devices from the same image, booted side by side: A with a setup
+      # file from the imager, B without
+      - name: Boot tests A (setup file) and B (no setup file)
         if: matrix.target == 'pc'
-        run: tests/boot/boot-test.sh "$(ls release/*/pc/*.img.zst)" boot-a 2222 --setup
+        run: |
+          img=$(ls release/*/pc/*.img)
+          tests/boot/boot-test.sh "${img}" boot-a 2222 --setup > boot-a.log 2>&1 & a=$!
+          tests/boot/boot-test.sh "${img}" boot-b 2223 > boot-b.log 2>&1 & b=$!
+          status=0
+          wait "${a}" || status=1
+          wait "${b}" || status=1
+          echo "== Boot A (setup file)"; cat boot-a.log
+          echo "== Boot B (no setup file)"; cat boot-b.log
+          exit "${status}"
 
-      - name: Boot test B (no setup file, second device)
-        if: matrix.target == 'pc'
-        run: tests/boot/boot-test.sh "$(ls release/*/pc/*.img.zst)" boot-b 2222
+
+      # Raw images are mostly empty space: releases ship them as .img.zst. Dev
+      # runs only have to build and boot, so nothing is compressed or uploaded.
+      - name: Compress image
+        if: inputs.version
+        run: zstd -T0 -15 --rm release/*/${{ matrix.release_dir }}/*.img
+
+      # The images only, in one flat directory: upload-artifact would otherwise
+      # keep <version>/<dir>/, and release.yml writes its own checksums.
+      - name: Stage artifact
+        if: inputs.version
+        run: |
+          mkdir artifact
+          find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f \
+            -name '*.img.zst' -exec ln -t artifact {} +
+
+      # The images are only needed by release.yml
+      - name: Upload image
+        if: inputs.version
+        uses: actions/upload-artifact@v4
+        with:
+          name: kura-${{ matrix.target }}-${{ github.sha }}
+          path: artifact/*
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0   # the images are already compressed
 
       - name: Each boot has its own identity
         if: matrix.target == 'pc'

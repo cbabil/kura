@@ -18,6 +18,8 @@ source "${SCRIPT_DIR}/../common/brand-defaults.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../common/image-size.sh"
 # shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../common/disk-image.sh"
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/pc-image.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
@@ -33,61 +35,47 @@ ROOTFS_BYTES=$(numfmt --from=iec "${ROOTFS_SIZE}")
 # +2 MiB: the 1 MiB alignment before p1 and the backup GPT after p2
 TOTAL_BYTES=$(( EFI_MIB * 1024 * 1024 + ROOTFS_BYTES + 2 * 1024 * 1024 ))
 
-check_rootfs_fits "$(du -s -B1 "${ROOTFS}" | cut -f1)" "${ROOTFS_BYTES}"
+check_rootfs_fits "$(du -s -B1 "${ROOTFS}" | cut -f1)" "${ROOTFS_BYTES}" OS_PC_ROOTFS_SIZE
 
-# newest_in_boot <pattern>: the highest version of /boot/<pattern>
-newest_in_boot() { find "${ROOTFS}/boot" -maxdepth 1 -name "$1" -printf '%f\n' | sort -V | tail -1; }
-KERNEL=$(newest_in_boot 'vmlinuz-*')
-INITRD=$(newest_in_boot 'initrd.img-*')
-[ -n "${KERNEL}" ] && [ -n "${INITRD}" ] || { echo "ERROR: no kernel or initrd in ${ROOTFS}/boot" >&2; exit 1; }
+# GRUB boots the kernel packages' /vmlinuz and /initrd.img symlinks
+for link in vmlinuz initrd.img; do
+    [ -e "${ROOTFS}/${link}" ] || { echo "ERROR: no /${link} in ${ROOTFS}" >&2; exit 1; }
+done
 while read -r src _; do
     [ -f "${ROOTFS}/${src}" ] || { echo "ERROR: missing ${src} (shim-signed, grub-efi-amd64-signed)" >&2; exit 1; }
 done < <(pc_efi_files)
 
-modprobe loop 2>/dev/null || true
 echo "Creating PC disk image (${IMG_NAME})..."
 mkdir -p "${OUTPUT_DIR}"
 IMG="${OUTPUT_DIR}/${IMG_NAME}"
 
-LOOP="" MNT=""
-cleanup() {
-    [ -n "${MNT}" ] && mountpoint -q "${MNT}" && umount "${MNT}" 2>/dev/null || true
-    [ -n "${MNT}" ] && rmdir "${MNT}" 2>/dev/null || true
-    [ -n "${LOOP}" ] && losetup -d "${LOOP}" 2>/dev/null || true
-}
-trap cleanup EXIT
-
 truncate -s "${TOTAL_BYTES}" "${IMG}"
 pc_partition_table "${EFI_MIB}" | sfdisk --quiet "${IMG}"
-LOOP=$(losetup --show --partscan -f "${IMG}")
+disk_image_attach "${IMG}"
+EFI_PART="${DISK_IMAGE_LOOP}p1"
+ROOT_PART="${DISK_IMAGE_LOOP}p2"
 
 echo "  Formatting the EFI partition (FAT32) and the root (ext4)..."
-mkfs.vfat -F 32 -n EFI "${LOOP}p1" >/dev/null
-mkfs.ext4 -q -F -L root "${LOOP}p2"
-ROOT_UUID=$(blkid -s UUID -o value "${LOOP}p2")
-ROOT_PARTUUID=$(blkid -s PARTUUID -o value "${LOOP}p2")
+mkfs.vfat -F 32 -n EFI "${EFI_PART}" >/dev/null
+mkfs.ext4 -q -F -L root "${ROOT_PART}"
+ROOT_UUID=$(blkid -s UUID -o value "${ROOT_PART}")
+ROOT_PARTUUID=$(blkid -s PARTUUID -o value "${ROOT_PART}")
+EFI_PARTUUID=$(blkid -s PARTUUID -o value "${EFI_PART}")
 
-MNT=$(mktemp -d)
-mount "${LOOP}p2" "${MNT}"
-echo "  Copying rootfs..."
-tar -C "${ROOTFS}" -cf - . | tar -C "${MNT}" -xf -
-umount "${MNT}"
+disk_image_copy_rootfs "${ROOTFS}" "${ROOT_PART}"
+disk_image_mount "${ROOT_PART}"
+pc_fstab "${ROOT_PARTUUID}" "${EFI_PARTUUID}" > "${DISK_IMAGE_MNT}/etc/fstab"
+disk_image_unmount
 
-mount "${LOOP}p1" "${MNT}"
+disk_image_mount "${EFI_PART}"
 echo "  Installing the signed shim + GRUB..."
 while read -r src dest; do
-    install -D -m 0644 "${ROOTFS}/${src}" "${MNT}/${dest}"
+    mkdir -p "$(dirname "${DISK_IMAGE_MNT}/${dest}")"
+    cp "${ROOTFS}/${src}" "${DISK_IMAGE_MNT}/${dest}"
 done < <(pc_efi_files)
-pc_grub_cfg "${ROOT_UUID}" "${ROOT_PARTUUID}" "${KERNEL}" "${INITRD}" "${OS_NAME}" \
-    > "${MNT}/grub.cfg.tmp"
-install -D -m 0644 "${MNT}/grub.cfg.tmp" "${MNT}/$(pc_grub_cfg_path)"
-mv "${MNT}/grub.cfg.tmp" "${MNT}/EFI/BOOT/grub.cfg"   # where an unsigned GRUB would look
-umount "${MNT}"
-rmdir "${MNT}"
-MNT=""
+mkdir -p "$(dirname "${DISK_IMAGE_MNT}/${PC_GRUB_CFG}")"
+pc_grub_cfg "${ROOT_UUID}" "${ROOT_PARTUUID}" "${OS_NAME}" > "${DISK_IMAGE_MNT}/${PC_GRUB_CFG}"
+disk_image_unmount
 
-losetup -d "${LOOP}"
-LOOP=""
-
-(cd "${OUTPUT_DIR}" && sha512sum "${IMG_NAME}" > SHA512SUMS)
-echo "Created PC disk image: ${OUTPUT_DIR}/${IMG_NAME}"
+disk_image_finish "${IMG}"
+echo "Created PC disk image: ${IMG}"
