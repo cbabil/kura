@@ -85,7 +85,7 @@ fi
 cp "${OVMF_VARS}" "${OUT}/ovmf-vars.fd"
 report "Booting ${IMAGE} ${SETUP} (UEFI Secure Boot, ${ACCEL[*]}, wait ${WAIT_SECS}s, no internet)"
 qemu-system-x86_64 -machine q35,smm=on -m 4096 -smp 2 "${ACCEL[@]}" \
-    -global driver=cfi.pflash01,property=secure,val=on \
+    -global driver=cfi.pflash01,property=secure,value=on \
     -drive "if=pflash,format=raw,unit=0,readonly=on,file=${OVMF_CODE}" \
     -drive "if=pflash,format=raw,unit=1,file=${OUT}/ovmf-vars.fd" \
     -drive "file=${DISK},format=raw,if=virtio" \
