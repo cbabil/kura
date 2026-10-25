@@ -34,27 +34,40 @@ make_complete_rootfs() {
     [ "$status" -eq 0 ]
 }
 
-@test "verify_rootfs: required files cover Docker, Tomo, first boot and the supervisor" {
+@test "verify_rootfs: required files cover Docker, first boot and the OS services" {
     run rootfs_required_files kura
     output_has "usr/libexec/docker/cli-plugins/docker-compose"
-    output_has "opt/tomo/dist/index.js"
-    output_has "usr/share/kura/images/traefik.tar"
     output_has "usr/lib/kura/firstboot.sh"
-    output_has "opt/kura-supervisor/src/index.js"
+    output_has "usr/lib/kura/firstboot-setup.sh"
+    output_has "usr/bin/kura-config"
+}
+
+@test "verify_rootfs: fails when a removed component is back (Tomo, the supervisor, Bun)" {
+    local f
+    for f in opt/tomo usr/local/bin/bun opt/kura-supervisor \
+             usr/lib/systemd/system/kura-supervisor.service; do
+        make_complete_rootfs
+        mkdir -p "$(dirname "${ROOTFS}/${f}")"
+        touch "${ROOTFS}/${f}"
+        run verify_rootfs "${ROOTFS}" kura
+        [ "$status" -eq 1 ]
+        output_has "UNEXPECTED: /${f}"
+        rm -rf "${ROOTFS:?}/${f}"
+    done
 }
 
 @test "verify_rootfs: fails and names a missing file" {
-    rm "${ROOTFS}/opt/tomo/dist/index.js"
+    rm "${ROOTFS}/usr/lib/kura/firstboot.sh"
     run verify_rootfs "${ROOTFS}" kura
     [ "$status" -eq 1 ]
-    output_has "MISSING: /opt/tomo/dist/index.js"
+    output_has "MISSING: /usr/lib/kura/firstboot.sh"
 }
 
 @test "verify_rootfs: fails and names a missing enable link" {
-    rm "${ROOTFS}/etc/systemd/system/multi-user.target.wants/tomod.service"
+    rm "${ROOTFS}/etc/systemd/system/multi-user.target.wants/docker.service"
     run verify_rootfs "${ROOTFS}" kura
     [ "$status" -eq 1 ]
-    output_has "MISSING symlink: /etc/systemd/system/multi-user.target.wants/tomod.service"
+    output_has "MISSING symlink: /etc/systemd/system/multi-user.target.wants/docker.service"
 }
 
 @test "verify_rootfs: an enable link must be a symlink, not a file" {
@@ -80,11 +93,11 @@ make_complete_rootfs() {
 }
 
 @test "verify_rootfs: reports every problem, not just the first" {
-    rm "${ROOTFS}/usr/bin/node"
+    rm "${ROOTFS}/usr/bin/docker"
     touch "${ROOTFS}/etc/ssh/ssh_host_rsa_key"
     run verify_rootfs "${ROOTFS}" kura
     [ "$status" -eq 1 ]
-    output_has "MISSING: /usr/bin/node"
+    output_has "MISSING: /usr/bin/docker"
     output_has "SSH host keys"
 }
 

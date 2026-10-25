@@ -18,10 +18,10 @@ setup() {
 }
 
 @test "enable_unit: works for other targets and units outside /usr/lib" {
-    run enable_unit "${ROOTFS}" sysinit.target /etc/systemd/system/tomod.service
+    run enable_unit "${ROOTFS}" sysinit.target /etc/systemd/system/example.service
     [ "$status" -eq 0 ]
-    [ "$(readlink "${ROOTFS}/etc/systemd/system/sysinit.target.wants/tomod.service")" = \
-      "/etc/systemd/system/tomod.service" ]
+    [ "$(readlink "${ROOTFS}/etc/systemd/system/sysinit.target.wants/example.service")" = \
+      "/etc/systemd/system/example.service" ]
 }
 
 @test "enable_unit: is safe to repeat" {

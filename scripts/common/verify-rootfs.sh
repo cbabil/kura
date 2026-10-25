@@ -17,22 +17,15 @@ usr/bin/containerd
 usr/libexec/docker/cli-plugins/docker-compose
 usr/lib/systemd/system/docker.service
 usr/lib/systemd/system/containerd.service
-usr/bin/node
-opt/tomo/dist/index.js
-opt/tomo/public/index.html
-etc/systemd/system/tomod.service
-usr/share/${b}/images/traefik.tar
-usr/local/bin/bun
 usr/bin/${b}-config
 usr/bin/${b}-security
-usr/lib/systemd/system/${b}-supervisor.service
 usr/lib/systemd/system/${b}-config.service
 usr/lib/systemd/system/${b}-security.service
-opt/${b}-supervisor/src/index.js
-opt/${b}-supervisor/node_modules
-etc/${b}/supervisor-config.json
 etc/${b}/security/hardening.json
 usr/lib/${b}/firstboot.sh
+usr/lib/${b}/firstboot-setup.sh
+usr/lib/${b}/firstboot-setup-check.sh
+usr/lib/${b}/firstboot-disk.sh
 usr/lib/systemd/system/${b}-firstboot.service
 usr/lib/systemd/system/${b}-ssh-keygen.service
 EOF
@@ -46,13 +39,24 @@ rootfs_required_links() {
     cat <<EOF
 ${w}/multi-user.target.wants/docker.service
 ${w}/multi-user.target.wants/containerd.service
-${w}/multi-user.target.wants/tomod.service
-${w}/multi-user.target.wants/${b}-supervisor.service
 ${w}/multi-user.target.wants/${b}-config.service
 ${w}/multi-user.target.wants/${b}-firstboot.service
 ${w}/multi-user.target.wants/${b}-ssh-keygen.service
 ${w}/sysinit.target.wants/${b}-security.service
 ${w}/network-online.target.wants/NetworkManager-wait-online.service
+EOF
+}
+
+# rootfs_forbidden_paths <brand>
+# Components removed from Kura (ADR-013 Tomo, ADR-014 the supervisor) that
+# must not come back into an image.
+rootfs_forbidden_paths() {
+    local b="$1"
+    cat <<EOF
+opt/tomo
+usr/local/bin/bun
+opt/${b}-supervisor
+usr/lib/systemd/system/${b}-supervisor.service
 EOF
 }
 
@@ -66,6 +70,9 @@ verify_rootfs() {
     while read -r f; do
         [ -L "${rootfs}/${f}" ] || { echo "  MISSING symlink: /${f}" >&2; status=1; }
     done < <(rootfs_required_links "${brand}")
+    while read -r f; do
+        [ ! -e "${rootfs}/${f}" ] || { echo "  UNEXPECTED: /${f}" >&2; status=1; }
+    done < <(rootfs_forbidden_paths "${brand}")
 
     # Device identity must be generated on the device, never baked in
     if compgen -G "${rootfs}/etc/ssh/ssh_host_*" >/dev/null; then

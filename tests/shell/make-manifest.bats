@@ -9,7 +9,8 @@ setup() {
     load test_helper
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/hash.sh"
-    IMG="${BATS_TEST_TMPDIR}/kura-0.1.0-rpi5-arm64.img.zst"; printf 'pi image' > "${IMG}"
+    RAW="${BATS_TEST_TMPDIR}/raw.img"; printf 'raw pi image bytes' > "${RAW}"
+    IMG="${BATS_TEST_TMPDIR}/kura-0.1.0-rpi5-arm64.img.zst"; zstd -q -c "${RAW}" > "${IMG}"
     ISO="${BATS_TEST_TMPDIR}/kura-0.1.0-x86_64.iso"; printf 'iso' > "${ISO}"
 }
 
@@ -28,7 +29,7 @@ setup() {
     [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].url')" = \
       "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-rpi5-arm64.img.zst" ]
     [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].sha256')" = "$(file_sha256 "${IMG}")" ]
-    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].size')" = "8" ]
+    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].size')" = "$(wc -c < "${IMG}" | tr -d ' ')" ]
     [ "$(echo "$output" | jq -r '.bundles["x86_64"].url')" = \
       "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64.iso" ]
     [ "$(echo "$output" | jq -r '.bundles["x86_64"].size')" = "3" ]
@@ -38,4 +39,14 @@ setup() {
     run "${SCRIPT}" v0.1.0 cbabil/kura "${IMG}"
     [ "$status" -ne 0 ]
     output_has "Usage"
+}
+
+@test "make-manifest: a compressed image also records the unpacked size and sha256" {
+    run "${SCRIPT}" v0.1.0 cbabil/kura "${IMG}" "${ISO}"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].extract_size')" = "18" ]
+    [ "$(echo "$output" | jq -r '.bundles["rpi5-arm64"].extract_sha256')" = "$(file_sha256 "${RAW}")" ]
+    # The ISO is written as it is
+    [ "$(echo "$output" | jq -r '.bundles["x86_64"].extract_size')" = "3" ]
+    [ "$(echo "$output" | jq -r '.bundles["x86_64"].extract_sha256')" = "$(file_sha256 "${ISO}")" ]
 }

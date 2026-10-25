@@ -41,22 +41,3 @@ jobs:
 
       - name: Run shell script tests
         run: bats tests/shell/*.bats
-
-  test-supervisor:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.4   # same as the image (OS_BUN_VERSION)
-
-      # The suite is written for Jest (package.json "test"), not Bun's built-in
-      # runner: `bun test` lacks jest.resetModules and differs on mock hoisting.
-      - name: Run supervisor tests (Jest, with coverage gate)
-        working-directory: supervisor
-        run: |
-          bun install --frozen-lockfile
-          bun run test:coverage

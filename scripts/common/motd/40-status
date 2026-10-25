@@ -22,7 +22,7 @@ BP="${BRAND_PREFIX:-kura}"
 DIV="$(printf '\xe2\x94\x80%.0s' {1..33})"  # ─ repeated 33 times
 
 # ---- Services ----
-SERVICES=(tomod ${BP}-supervisor docker NetworkManager sshd)
+SERVICES=(${BP}-config docker NetworkManager sshd)
 
 printf "  %s\n" "${C}Services${R}"
 printf "  %s\n" "${w}${DIV}${R}"

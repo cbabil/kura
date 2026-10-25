@@ -51,17 +51,12 @@ source "${PROJECT_DIR}/scripts/common/brand-defaults.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/docker-repo.sh"
 # shellcheck disable=SC1091
-source "${PROJECT_DIR}/scripts/common/fetch-tomo.sh"
-# shellcheck disable=SC1091
-source "${PROJECT_DIR}/scripts/common/install-tomo.sh"
-# shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/install-firstboot.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/passwords.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/verify-rootfs.sh"
 
-BUN_VERSION="${OS_BUN_VERSION:-1.2.4}"
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
 OS_DEBIAN_MIRROR="${OS_DEBIAN_MIRROR:-https://deb.debian.org/debian}"
 OS_CROSS_BUILD="${OS_CROSS_BUILD:-auto}"
@@ -75,13 +70,6 @@ OS_ISSUE="${OS_ISSUE:-Welcome to ${DEFAULT_NAME}}"
 OS_DHCP_INTERFACE="${OS_DHCP_INTERFACE:-eth0}"
 OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
 OS_TMP="${OS_TMP:-${DEFAULT_TMP}}"
-OS_API_ENDPOINT="${OS_API_ENDPOINT:-${DEFAULT_API_ENDPOINT}}"
-OS_WS_ENDPOINT="${OS_WS_ENDPOINT:-${DEFAULT_WS_ENDPOINT}}"
-OS_REGISTRY="${OS_REGISTRY:-${DEFAULT_REGISTRY}}"
-OS_WS_HEARTBEAT_INTERVAL="${OS_WS_HEARTBEAT_INTERVAL:-${DEFAULT_WS_HEARTBEAT_INTERVAL}}"
-OS_WS_HEARTBEAT_TIMEOUT="${OS_WS_HEARTBEAT_TIMEOUT:-${DEFAULT_WS_HEARTBEAT_TIMEOUT}}"
-OS_WS_RECONNECT_BASE="${OS_WS_RECONNECT_BASE:-${DEFAULT_WS_RECONNECT_BASE}}"
-OS_WS_RECONNECT_MAX="${OS_WS_RECONNECT_MAX:-${DEFAULT_WS_RECONNECT_MAX}}"
 OS_COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
 OS_JOURNAL_MAX_SIZE="${OS_JOURNAL_MAX_SIZE:-100M}"
 OS_JOURNAL_MAX_FILE_SEC="${OS_JOURNAL_MAX_FILE_SEC:-1week}"
@@ -90,9 +78,6 @@ export OS_CONF_VERSION OS_DEBIAN_SUITE OS_DEBIAN_MIRROR
 export OS_CROSS_BUILD OS_PARALLEL_JOBS OS_BRAND OS_NAME
 export OS_VERSION OS_HOSTNAME OS_ROOT_PASSWD OS_ISSUE
 export OS_DHCP_INTERFACE OS_ROOTFS_SIZE OS_TMP
-export OS_API_ENDPOINT OS_WS_ENDPOINT OS_REGISTRY
-export OS_WS_HEARTBEAT_INTERVAL OS_WS_HEARTBEAT_TIMEOUT
-export OS_WS_RECONNECT_BASE OS_WS_RECONNECT_MAX
 export OS_COLOR OS_JOURNAL_MAX_SIZE OS_JOURNAL_MAX_FILE_SEC
 
 mkdir -p "${OS_TMP}" 2>/dev/null || true
@@ -256,8 +241,6 @@ setup_host() {
         bats
         curl
         gnupg
-        skopeo
-        cosign
         docker.io
         containerd
         zstd
@@ -379,14 +362,6 @@ POLICYEOF
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get install -y -qq --no-install-recommends ${PACKAGES}
     fi
-
-    # Tomo platform, from its pinned release .deb (needs apt lists + policy-rc.d),
-    # plus the container images it needs at first start (offline boot)
-    print_status "Installing Tomo..."
-    local TOMO_DEB
-    TOMO_DEB=$(fetch_tomo_deb "${DEB_ARCH}" "${OS_TMP}/cache/tomo")
-    install_tomo "${ROOTFS}" "${TOMO_DEB}"
-    save_tomo_images "${ROOTFS}" "${BRAND}" "${DEB_ARCH}" "${OS_TMP}/cache/images"
 
     # Purge build-only packages no longer needed at runtime
     print_status "Purging build-only packages..."
@@ -643,137 +618,6 @@ clean_build() {
 }
 
 # ============================================================================
-# build_supervisor -- install supervisor directly into rootfs (no Docker)
-# ============================================================================
-
-build_supervisor() {
-    local ROOTFS="$1"
-    local TARGET_ARCH="${2:-amd64}"
-
-    print_status "Installing supervisor into rootfs..."
-
-    if [ ! -d "${PROJECT_DIR}/supervisor" ]; then
-        print_error "supervisor/ directory not found. Cannot install supervisor."
-        exit 1
-    fi
-
-    # Determine Bun release name for the target rootfs.
-    # x64 uses the -baseline variant (no AVX2 requirement) so it runs on
-    # any x86_64 CPU including build VMs without SIMD extensions.
-    # aarch64 has no baseline variant; the standard build works everywhere.
-    local TARGET_BUN_NAME="bun-linux-aarch64"
-    [ "${TARGET_ARCH}" != "arm64" ] && TARGET_BUN_NAME="bun-linux-x64-baseline"
-
-    # Determine host-compatible Bun for running `bun install` during build.
-    local HOST_BUN_NAME
-    if [ "$(uname -m)" = "aarch64" ]; then
-        HOST_BUN_NAME="bun-linux-aarch64"
-    else
-        HOST_BUN_NAME="bun-linux-x64-baseline"
-    fi
-
-    # --- Download and install TARGET Bun binary to rootfs ---
-    local BUN_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${TARGET_BUN_NAME}.zip"
-    print_status "Downloading Bun v${BUN_VERSION} (${TARGET_BUN_NAME}) for rootfs..."
-    if ! curl -fsSL "${BUN_URL}" -o "${ROOTFS}/tmp/bun.zip"; then
-        print_error "Failed to download Bun from ${BUN_URL}"
-        exit 1
-    fi
-    # Verify SHA256 checksum if configured
-    local EXPECTED_SHA=""
-    if [ "${TARGET_BUN_NAME}" = "bun-linux-x64-baseline" ]; then
-        EXPECTED_SHA="${OS_BUN_SHA256_X64:-}"
-    else
-        EXPECTED_SHA="${OS_BUN_SHA256_AARCH64:-}"
-    fi
-    if [ -n "${EXPECTED_SHA}" ]; then
-        local ACTUAL_SHA
-        ACTUAL_SHA=$(sha256sum "${ROOTFS}/tmp/bun.zip" | awk '{print $1}')
-        if [ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]; then
-            print_error "Bun SHA256 mismatch! Expected: ${EXPECTED_SHA}, Got: ${ACTUAL_SHA}"
-            rm -f "${ROOTFS}/tmp/bun.zip"
-            exit 1
-        fi
-        print_status "Bun SHA256 verified: ${ACTUAL_SHA}"
-    else
-        print_error "No SHA256 checksum configured for Bun — set OS_BUN_SHA256_X64 or OS_BUN_SHA256_AARCH64 in .env"
-        rm -f "${ROOTFS}/tmp/bun.zip"
-        exit 1
-    fi
-    if ! unzip -o "${ROOTFS}/tmp/bun.zip" -d "${ROOTFS}/tmp/bun-extract"; then
-        print_error "Failed to extract Bun binary"
-        rm -rf "${ROOTFS}/tmp/bun.zip" "${ROOTFS}/tmp/bun-extract"
-        exit 1
-    fi
-    install -m 0755 "${ROOTFS}/tmp/bun-extract/${TARGET_BUN_NAME}/bun" \
-        "${ROOTFS}/usr/local/bin/bun"
-    rm -rf "${ROOTFS}/tmp/bun.zip" "${ROOTFS}/tmp/bun-extract"
-
-    # --- Get a host-compatible Bun for dependency installation ---
-    local BUILD_BUN="${ROOTFS}/usr/local/bin/bun"
-    if [ "${HOST_BUN_NAME}" != "${TARGET_BUN_NAME}" ]; then
-        # Cross-compiling: download a host-compatible Bun binary
-        local HOST_URL="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${HOST_BUN_NAME}.zip"
-        print_status "Downloading Bun v${BUN_VERSION} (${HOST_BUN_NAME}) for build host..."
-        curl -fsSL "${HOST_URL}" -o "${ROOTFS}/tmp/bun-host.zip"
-        # Verify host Bun SHA256 checksum if configured
-        local HOST_SHA=""
-        if [ "${HOST_BUN_NAME}" = "bun-linux-x64-baseline" ]; then
-            HOST_SHA="${OS_BUN_SHA256_X64:-}"
-        else
-            HOST_SHA="${OS_BUN_SHA256_AARCH64:-}"
-        fi
-        if [ -n "${HOST_SHA}" ]; then
-            local ACTUAL_HOST_SHA
-            ACTUAL_HOST_SHA=$(sha256sum "${ROOTFS}/tmp/bun-host.zip" | awk '{print $1}')
-            if [ "${ACTUAL_HOST_SHA}" != "${HOST_SHA}" ]; then
-                print_error "Host Bun SHA256 mismatch! Expected: ${HOST_SHA}, Got: ${ACTUAL_HOST_SHA}"
-                rm -f "${ROOTFS}/tmp/bun-host.zip"
-                exit 1
-            fi
-            print_status "Host Bun SHA256 verified: ${ACTUAL_HOST_SHA}"
-        else
-            print_error "No SHA256 checksum configured for host Bun (${HOST_BUN_NAME}) -- set OS_BUN_SHA256_X64 or OS_BUN_SHA256_AARCH64 in .env"
-            rm -f "${ROOTFS}/tmp/bun-host.zip"
-            exit 1
-        fi
-        unzip -o "${ROOTFS}/tmp/bun-host.zip" -d "${ROOTFS}/tmp/bun-host"
-        BUILD_BUN="${ROOTFS}/tmp/bun-host/${HOST_BUN_NAME}/bun"
-        chmod +x "${BUILD_BUN}"
-    fi
-
-    # --- Copy supervisor source and package manifests ---
-    local DEST="${ROOTFS}/opt/${BRAND}-supervisor"
-    install -d "${DEST}"
-    cp -r "${PROJECT_DIR}/supervisor/src" "${DEST}/"
-    cp "${PROJECT_DIR}/supervisor/package.json" "${DEST}/"
-    cp "${PROJECT_DIR}/supervisor/bun.lock" "${DEST}/"
-
-    # Install production dependencies directly (no chroot needed;
-    # all supervisor deps are pure JS so the host can install them).
-    # --ignore-scripts prevents native install scripts (e.g. ssh2) from
-    # running; ssh2 is an optional dockerode dep unused by the supervisor.
-    if ! (cd "${DEST}" && "${BUILD_BUN}" install --production --ignore-scripts); then
-        print_error "bun install failed"
-        exit 1
-    fi
-
-    # Remove cpu-features (unused native addon)
-    rm -rf "${DEST}/node_modules/cpu-features"
-
-    # Clean build artifacts
-    rm -rf "${ROOTFS}/tmp/bun-host.zip" "${ROOTFS}/tmp/bun-host"
-    rm -rf "${ROOTFS}/root/.bun/install/cache"
-
-    if [ ! -d "${DEST}/node_modules" ]; then
-        print_error "bun install failed — node_modules not found"
-        exit 1
-    fi
-
-    print_status "Supervisor installed to /opt/${BRAND}-supervisor"
-}
-
-# ============================================================================
 # build_target -- main pipeline dispatcher
 # ============================================================================
 
@@ -830,26 +674,22 @@ build_target() {
     rm -rf "${ROOTFS}"
 
     # Phase 1: Bootstrap
-    print_status "[1/7] Bootstrapping Debian ${OS_DEBIAN_SUITE} (${ARCH})..."
+    print_status "[1/6] Bootstrapping Debian ${OS_DEBIAN_SUITE} (${ARCH})..."
     print_status "  Rootfs: ${ROOTFS}"
     bootstrap_rootfs "${ROOTFS}" "${ARCH}"
 
     # Phase 2: Install Debian packages
-    print_status "[2/7] Installing Debian packages (common + ${TARGET_DIRNAME})..."
+    print_status "[2/6] Installing Debian packages (common + ${TARGET_DIRNAME})..."
     print_status "  Package lists: ${CONFIG_DIR}/packages-common.list, ${CONFIG_DIR}/packages-${TARGET_DIRNAME}.list"
     install_packages "${ROOTFS}" "${TARGET_DIRNAME}" "${ARCH}"
 
     # Phase 3: Install OS packages
-    print_status "[3/7] Installing OS packages..."
+    print_status "[3/6] Installing OS packages..."
     print_status "  Source: ${PACKAGES_DIR}/"
     install_os_pkgs "${ROOTFS}"
 
-    # Phase 4: Install supervisor
-    print_status "[4/7] Installing supervisor..."
-    build_supervisor "${ROOTFS}" "${ARCH}"
-
-    # Phase 5: Customize
-    print_status "[5/7] Customizing rootfs (common + ${TARGET_DIRNAME})..."
+    # Phase 4: Customize
+    print_status "[4/6] Customizing rootfs (common + ${TARGET_DIRNAME})..."
     apply_overlays "${ROOTFS}" "${TARGET_DIRNAME}"
     customize_rootfs "${ROOTFS}" "${TARGET_DIRNAME}"
     set_passwords "${ROOTFS}"
@@ -864,15 +704,15 @@ build_target() {
     fi
     print_status "Rootfs verification passed"
 
-    # Phase 6: Create artifact
-    print_status "[6/7] Creating ${TARGET_LABEL}..."
+    # Phase 5: Create artifact
+    print_status "[5/6] Creating ${TARGET_LABEL}..."
     case "${TARGET}" in
         rpi5) create_rpi5_image "${ROOTFS}" ;;
         iso)  create_x86_iso "${ROOTFS}" ;;
     esac
 
-    # Phase 7: Package release
-    print_status "[7/7] Packaging release..."
+    # Phase 6: Package release
+    print_status "[6/6] Packaging release..."
     package_release "${TARGET}"
     if [ "${_BUILD_ALL:-0}" -eq 0 ]; then
         print_build_summary "${TARGET}" "${BUILD_START}"

@@ -1,10 +1,11 @@
 name: Images
 
 # Builds the Kura images (Pi 5 SD card image and x86_64 ISO) and boots the ISO
-# headless without internet to check first boot, Tomo and device identity.
+# headless without internet to check first boot, SSH, Docker and device identity.
 # Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
-# On dev pushes the images are 7-day test artifacts; release.yml calls this
-# workflow on v* tags, then signs and publishes the images it built.
+# Artifacts count against the Actions storage quota, so they live one day and
+# dev pushes keep only the ISO. release.yml calls this workflow on v* tags and
+# publishes both images in the same run.
 
 on:
   workflow_call:
@@ -21,10 +22,6 @@ on:
       - scripts/**
       - packages/**
       - overlay/**
-      - supervisor/src/**
-      - supervisor/package.json
-      - supervisor/bun.lock
-      - supervisor/os-supervisor.service
       - .env.example
       - tests/boot/**
       - .github/workflows/images.yml
@@ -69,7 +66,7 @@ jobs:
             mmdebstrap debian-archive-keyring arch-test \
             qemu-user-static binfmt-support debootstrap rsync \
             xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
-            squashfs-tools e2fsprogs gdisk curl gnupg skopeo zstd unzip
+            squashfs-tools e2fsprogs gdisk curl gnupg zstd
           sudo modprobe loop || true
 
       - name: Check arm64 emulation
@@ -86,16 +83,6 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
 
-      - name: Cache downloads (Tomo release, container images)
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/kura/cache
-          key: downloads-${{ matrix.target }}-${{ hashFiles('scripts/common/fetch-tomo.sh') }}
-
-      # Verifies the pinned Tomo release's Sigstore bundle during the build
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
       # The build runs as root; the steps below (zstd, staging) run as the runner
       - name: Build ${{ matrix.target }}
         run: |
@@ -110,20 +97,22 @@ jobs:
       # The images only, in one flat directory: upload-artifact would otherwise
       # keep <version>/<dir>/, and release.yml writes its own checksums.
       - name: Stage artifact
+        if: inputs.version || matrix.target == 'iso'
         run: |
           mkdir artifact
           find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f \
             \( -name '*.img' -o -name '*.img.zst' -o -name '*.iso' \) -exec ln -t artifact {} +
 
+      # The Pi image is only needed by release.yml: a dev build just has to succeed
       - name: Upload image
+        if: inputs.version || matrix.target == 'iso'
         uses: actions/upload-artifact@v4
         with:
           name: kura-${{ matrix.target }}-${{ github.sha }}
           path: artifact/*
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
-          # release assets are already compressed; zipping them again only costs time
-          compression-level: ${{ inputs.version && '0' || '6' }}
+          compression-level: 0   # the images are already compressed
 
       # ---- ISO boot test (x86 only; the Pi image needs Pi hardware) ----
 
@@ -159,9 +148,9 @@ jobs:
         if: always() && matrix.target == 'iso'
         uses: actions/upload-artifact@v4
         with:
-          name: kura-iso-boot-logs-${{ github.sha }}
+          name: boot-logs-${{ github.sha }}   # not kura-*: release.yml downloads those
           path: |
             boot-a/
             boot-b/
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: ignore

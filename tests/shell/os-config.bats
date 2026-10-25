@@ -67,137 +67,88 @@ setup() {
 
 # ---- WiFi config generation ----
 
-@test "setup_wifi: generates valid NM connection file" {
-    local config
-    config=$(create_config_json)
-    local nm_dir="${BATS_TEST_TMPDIR}/nm-connections"
-    mkdir -p "${nm_dir}"
-
-    # Source os-config functions (with brand resolved and paths overridden)
-    local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
-    local tmp="${BATS_TEST_TMPDIR}/os-config-funcs.sh"
-    sed -e 's|__BRAND__|kura|g' \
-        -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
-        -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
-        -e '/^while true/,/^done$/d' \
-        -e '/^set -euo pipefail$/d' \
-        "${src}" > "${tmp}"
-    # shellcheck disable=SC1090
-    source "${tmp}"
-
-    setup_wifi
-
-    # Check MyNetwork connection file exists
-    [ -f "${nm_dir}/MyNetwork.nmconnection" ]
-    run cat "${nm_dir}/MyNetwork.nmconnection"
-    [[ "$output" == *"id=MyNetwork"* ]]
-    [[ "$output" == *"type=wifi"* ]]
-    [[ "$output" == *"ssid=MyNetwork"* ]]
-    [[ "$output" == *"key-mgmt=wpa-psk"* ]]
-    [[ "$output" == *"psk=secret123"* ]]
-    [[ "$output" == *"interface-name=wlan0"* ]]
-
-    # Check Office-5G too
-    [ -f "${nm_dir}/Office-5G.nmconnection" ]
+# wifi_config <networks-json>: a config.json with Wi-Fi on and these networks
+wifi_config() {
+    local config="${BATS_TEST_TMPDIR}/wifi-config.json"
+    echo "{\"networkConfig\":{\"wifi\":{\"enable\":true,\"defaultInterface\":\"wlan0\",\"networks\":$1}}}" \
+        > "${config}"
+    echo "${config}"
 }
 
-@test "setup_wifi: sets 0600 permissions on connection files" {
-    local config
-    config=$(create_config_json)
-    local nm_dir="${BATS_TEST_TMPDIR}/nm-connections2"
-    mkdir -p "${nm_dir}"
+setup_nm() { NM_DIR="${BATS_TEST_TMPDIR}/nm"; mkdir -p "${NM_DIR}"; }
 
-    local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
-    local tmp="${BATS_TEST_TMPDIR}/os-config-funcs2.sh"
-    sed -e 's|__BRAND__|kura|g' \
-        -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
-        -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
-        -e '/^while true/,/^done$/d' \
-        -e '/^set -euo pipefail$/d' \
-        "${src}" > "${tmp}"
-    source "${tmp}"
-
+@test "setup_wifi: generates valid NM connection files, private to root" {
+    setup_nm
+    load_os_config "$(create_config_json)" "${NM_DIR}"
     setup_wifi
-
-    # Check permissions (macOS: stat -f, Linux: stat -c)
-    if stat -f '%Lp' "${nm_dir}/MyNetwork.nmconnection" >/dev/null 2>&1; then
-        perms=$(stat -f '%Lp' "${nm_dir}/MyNetwork.nmconnection")
-    else
-        perms=$(stat -c '%a' "${nm_dir}/MyNetwork.nmconnection")
-    fi
-    [ "${perms}" = "600" ]
+    local f="${NM_DIR}/MyNetwork.nmconnection"
+    for line in "id=MyNetwork" "type=wifi" "ssid=MyNetwork" "key-mgmt=wpa-psk" \
+                "psk=secret123" "interface-name=wlan0"; do
+        file_has "${f}" "${line}"
+    done
+    [ -f "${NM_DIR}/Office-5G.nmconnection" ]
+    [ "$(file_mode "${f}")" = "600" ]
 }
 
 @test "setup_wifi: skips invalid SSIDs" {
-    local config="${BATS_TEST_TMPDIR}/bad-ssid-config.json"
-    cat > "${config}" << 'JSON'
-{
-    "hostname": "test",
-    "networkConfig": {
-        "wifi": {
-            "enable": true,
-            "defaultInterface": "wlan0",
-            "networks": [
-                {"ssid": "GoodNetwork", "psk": "pass1"},
-                {"ssid": ";evil", "psk": "pass2"},
-                {"ssid": "", "psk": "pass3"}
-            ]
-        }
-    }
-}
-JSON
-
-    local nm_dir="${BATS_TEST_TMPDIR}/nm-bad-ssid"
-    mkdir -p "${nm_dir}"
-
-    local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
-    local tmp="${BATS_TEST_TMPDIR}/os-config-funcs3.sh"
-    sed -e 's|__BRAND__|kura|g' \
-        -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
-        -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
-        -e '/^while true/,/^done$/d' \
-        -e '/^set -euo pipefail$/d' \
-        "${src}" > "${tmp}"
-    source "${tmp}"
-
+    setup_nm
+    load_os_config "$(wifi_config '[{"ssid":"GoodNetwork","psk":"pass1"},{"ssid":";evil","psk":"pass2"},{"ssid":"","psk":"pass3"}]')" "${NM_DIR}"
     setup_wifi
-
-    # Good SSID created
-    [ -f "${nm_dir}/GoodNetwork.nmconnection" ]
-    # Bad SSIDs not created
-    [ ! -f "${nm_dir}/;evil.nmconnection" ]
-    [ ! -f "${nm_dir}/.nmconnection" ]
+    [ -f "${NM_DIR}/GoodNetwork.nmconnection" ]
+    [ ! -f "${NM_DIR}/;evil.nmconnection" ]
+    [ ! -f "${NM_DIR}/.nmconnection" ]
 }
 
 @test "setup_wifi: does nothing when wifi disabled" {
+    setup_nm
     local config="${BATS_TEST_TMPDIR}/wifi-off.json"
-    cat > "${config}" << 'JSON'
-{
-    "hostname": "test",
-    "networkConfig": {
-        "wifi": {
-            "enable": false,
-            "networks": [{"ssid": "NoCreate", "psk": "pass"}]
-        }
-    }
-}
-JSON
-
-    local nm_dir="${BATS_TEST_TMPDIR}/nm-disabled"
-    mkdir -p "${nm_dir}"
-
-    local src="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config"
-    local tmp="${BATS_TEST_TMPDIR}/os-config-funcs4.sh"
-    sed -e 's|__BRAND__|kura|g' \
-        -e "s|CONFIG_PATH=.*|CONFIG_PATH=\"${config}\"|" \
-        -e "s|NM_CONN_DIR=.*|NM_CONN_DIR=\"${nm_dir}\"|" \
-        -e '/^while true/,/^done$/d' \
-        -e '/^set -euo pipefail$/d' \
-        "${src}" > "${tmp}"
-    source "${tmp}"
-
+    echo '{"networkConfig":{"wifi":{"enable":false,"networks":[{"ssid":"NoCreate","psk":"pass"}]}}}' > "${config}"
+    load_os_config "${config}" "${NM_DIR}"
     setup_wifi
+    [ ! -f "${NM_DIR}/NoCreate.nmconnection" ]
+}
 
-    # No files created
-    [ "$(ls -A "${nm_dir}" 2>/dev/null)" = "" ]
+@test "setup_wifi: marks a hidden network so NetworkManager probes for it" {
+    setup_nm
+    load_os_config "$(wifi_config '[{"ssid":"Attic","psk":"pass1234","hidden":true},{"ssid":"Open","psk":"pass5678"}]')" "${NM_DIR}"
+    setup_wifi
+    file_has "${NM_DIR}/Attic.nmconnection" "hidden=true"
+    run grep -q "hidden=" "${NM_DIR}/Open.nmconnection"
+    [ "$status" -ne 0 ]
+}
+
+@test "setup_wifi: escapes the key the way NetworkManager's keyfiles read it" {
+    setup_nm
+    load_os_config "$(wifi_config '[{"ssid":"Home","psk":" pa\\ss "}]')" "${NM_DIR}"
+    setup_wifi
+    file_has "${NM_DIR}/Home.nmconnection" 'psk=\spa\\ss\s'
+}
+
+@test "setup_wifi: reloads NetworkManager only when a connection file changed" {
+    setup_nm
+    load_os_config "$(create_config_json)" "${NM_DIR}"
+    setup_wifi
+    setup_wifi
+    [ "$(grep -c "nmcli connection reload" "${BATS_TEST_TMPDIR}/nmcli-calls")" -eq 1 ]
+}
+
+@test "os-config.service does not wait for the network to be online" {
+    local unit="${BATS_TEST_DIRNAME}/../../packages/os-config/src/os-config.service"
+    file_has "${unit}" "After=NetworkManager.service"
+    run grep -q "network-online" "${unit}"
+    [ "$status" -ne 0 ]
+}
+
+# ---- hostname ----
+
+@test "apply_hostname: sets the hostname and the 127.0.1.1 entry in /etc/hosts" {
+    local hosts="${BATS_TEST_TMPDIR}/hosts"
+    printf '127.0.0.1\tlocalhost\n127.0.1.1\tkura\n' > "${hosts}"
+    load_os_config "$(create_config_json)" "${BATS_TEST_TMPDIR}/nm" "${hosts}"
+    hostname() { echo kura; }
+    hostnamectl() { echo "hostnamectl $*" >> "${BATS_TEST_TMPDIR}/calls"; }
+    apply_hostname
+    file_has "${BATS_TEST_TMPDIR}/calls" "hostnamectl set-hostname test-device"
+    file_has "${hosts}" "127.0.1.1	test-device"
+    file_has "${hosts}" "127.0.0.1	localhost"
 }

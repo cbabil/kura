@@ -1,9 +1,0 @@
-node_modules
-test
-coverage
-*.md
-.git
-.eslintrc.json
-jest.config.js
-.env
-.env.*

@@ -1,10 +1,10 @@
 name: Release
 
 # On a v* tag: build both images (images.yml, including the ISO boot test),
-# then publish a GitHub Release with the Pi image, the ISO, SHA512SUMS and
-# manifest.json, each signed keylessly with Sigstore (cosign) under THIS
-# workflow's identity (ADR-012). Verify downloads with
-# scripts/release/verify-release.sh.
+# then publish a GitHub Release with the Pi image, the ISO, SHA512SUMS,
+# manifest.json and etchwise.json (Etchwise's OS list for Kura), each signed
+# keylessly with Sigstore (cosign) under THIS workflow's identity (ADR-012).
+# Verify downloads with scripts/release/verify-release.sh.
 
 on:
   push:
@@ -57,8 +57,9 @@ jobs:
           sha512sum ./*.img.zst ./*.iso > SHA512SUMS
           ../scripts/release/make-manifest.sh "${TAG}" "${REPO}" ./*.img.zst ./*.iso > manifest.json
           cat manifest.json
+          ../scripts/release/make-etchwise-list.sh manifest.json > etchwise.json
           # The one list of assets that get signed and published
-          ls ./*.img.zst ./*.iso SHA512SUMS manifest.json > ASSETS
+          ls ./*.img.zst ./*.iso SHA512SUMS manifest.json etchwise.json > ASSETS
 
       - name: Sign assets (Sigstore, keyless) and verify our own signatures
         working-directory: dist

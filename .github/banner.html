@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  Source of .github/banner-{dark,light}.png (README) and banner.png (dark).
+  Render at 672x384, scale 2: see the comment at the end of this file.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #0f172a; --panel: #111a2e; --edge: #1f2a40; --text: #e2e8f0; --muted: #94a3b8;
+    --glyph: #2a1f55; --accent: #a970ff; --logo: #9146ff; --ok: #23ce6b;
+    --shadow: 0 20px 60px rgba(0, 0, 0, .35);
+  }
+  body.light {
+    --bg: #f7f7fa; --panel: #ffffff; --edge: #d9dbe3; --text: #111827; --muted: #6b7280;
+    --glyph: #e8e0f8; --accent: #7b31ff; --logo: #9146ff; --ok: #16a34a;
+    --shadow: 0 20px 50px rgba(17, 24, 39, .10);
+  }
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    width: 672px; height: 384px; overflow: hidden; position: relative;
+    background: var(--bg); color: var(--text);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .glyph {
+    position: absolute; left: 26px; top: 18px; font-size: 270px; line-height: 1;
+    font-family: "Hiragino Mincho ProN", serif; color: var(--glyph);
+  }
+  .left { position: absolute; left: 52px; top: 124px; }
+  .kicker {
+    font-family: Menlo, monospace; font-size: 9px; letter-spacing: 2.2px; color: var(--accent);
+  }
+  h1 { font-size: 92px; font-weight: 700; letter-spacing: -4px; line-height: 1; margin: 6px 0 6px -4px; }
+  .tag { font-size: 16.5px; line-height: 1.32; color: var(--muted); letter-spacing: -.2px; }
+  .tag b { color: var(--text); }
+  .meta { font-family: Menlo, monospace; font-size: 8.5px; color: var(--muted); margin-top: 18px; }
+  .term {
+    position: absolute; left: 348px; top: 95px; width: 280px; height: 187px;
+    background: var(--panel); border: 1px solid var(--edge); border-radius: 7px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .bar {
+    height: 20px; border-bottom: 1px solid var(--edge); display: flex; align-items: center;
+    padding-left: 8px; gap: 4px; font-family: Menlo, monospace; font-size: 6px; color: var(--muted);
+  }
+  .bar i { width: 5px; height: 5px; border-radius: 50%; background: var(--edge); display: inline-block; }
+  .bar span { margin-left: 6px; }
+  .screen { padding: 12px 15px; font-family: Menlo, monospace; font-size: 7.5px; line-height: 1.6; }
+  .logo { color: var(--logo); font-size: 7.2px; line-height: 1.02; white-space: pre; margin-bottom: 11px; }
+  .welcome { color: var(--accent); margin-bottom: 7px; }
+  .svc { white-space: pre; }
+  .svc em { font-style: normal; color: var(--ok); }
+  .prompt { margin-top: 7px; }
+  .cursor { display: inline-block; width: 5px; height: 9px; background: var(--logo); vertical-align: -1px; }
+</style>
+</head>
+<body>
+  <div class="glyph">蔵</div>
+  <div class="left">
+    <div class="kicker">蔵 · THE STOREHOUSE</div>
+    <h1>Kura</h1>
+    <p class="tag">The lightweight OS<br>for your <b>home server</b>.</p>
+    <p class="meta">Raspberry Pi 5 · x86_64 · Debian 13 · Docker</p>
+  </div>
+  <div class="term">
+    <div class="bar"><i></i><i></i><i></i><span>admin@kura.local</span></div>
+    <div class="screen">
+<div class="logo">██   ██ ██    ██ ██████   █████
+██  ██  ██    ██ ██   ██ ██   ██
+█████   ██    ██ ██████  ███████
+██  ██  ██    ██ ██   ██ ██   ██
+██   ██  ██████  ██   ██ ██   ██</div>
+      <div class="welcome">Welcome to Kura</div>
+      <div class="svc">kura-config .............. <em>active</em>
+docker ................... <em>active</em>
+NetworkManager ........... <em>active</em>
+sshd ..................... <em>active</em></div>
+      <div class="prompt">admin@kura:~ &gt; <span class="cursor"></span></div>
+    </div>
+  </div>
+  <script>if (location.hash === "#light") document.body.className = "light";</script>
+</body>
+</html>
+<!--
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+    --hide-scrollbars --window-size=672,384 --force-device-scale-factor=2 \
+    --screenshot=banner-dark.png "file://$PWD/banner.html"     (#light for banner-light.png)
+-->

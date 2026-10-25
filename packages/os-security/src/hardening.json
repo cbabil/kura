@@ -1,28 +1,5 @@
 {
-    "secure_boot": {
-        "enabled": true,
-        "verify_kernel": true,
-        "verify_initramfs": true
-    },
-    "container_security": {
-        "verify_signatures": true,
-        "allowed_registries": [
-            "__REGISTRY__",
-            "docker.io"
-        ],
-        "seccomp_profile": "default"
-    },
     "network_security": {
-        "api_whitelist": [
-            "__API_DOMAIN__",
-            "__UPDATES_DOMAIN__"
-        ],
-        "firewall_preset": "strict",
-        "vpn_required": false
-    },
-    "update_security": {
-        "verify_signatures": true,
-        "require_chain_of_trust": true,
-        "rollback_protection": true
+        "firewall_preset": "strict"
     }
 }

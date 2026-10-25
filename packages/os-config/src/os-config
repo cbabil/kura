@@ -6,6 +6,7 @@ set -euo pipefail
 
 CONFIG_PATH="/etc/__BRAND__/config.json"
 NM_CONN_DIR="/etc/NetworkManager/system-connections"
+HOSTS_PATH="/etc/hosts"
 SAFE_SSID_RE='^[a-zA-Z0-9][a-zA-Z0-9 _.-]*$'
 
 log_info()    { echo "INFO:  __BRAND__-config: $*"; }
@@ -22,10 +23,11 @@ setup_wifi() {
     count=$(jq '.networkConfig.wifi.networks | length' "${CONFIG_PATH}" 2>/dev/null)
     [[ -n "${count}" ]] && [[ "${count}" -gt 0 ]] || return 0
 
-    local i ssid psk conn_file
+    local i ssid psk hidden conn_file tmp changed=0
     for ((i = 0; i < count; i++)); do
         ssid=$(jq -r ".networkConfig.wifi.networks[${i}].ssid // empty" "${CONFIG_PATH}")
         psk=$(jq -r ".networkConfig.wifi.networks[${i}].psk // empty" "${CONFIG_PATH}")
+        hidden=$(jq -r ".networkConfig.wifi.networks[${i}].hidden == true" "${CONFIG_PATH}")
 
         if [[ -z "${ssid}" ]] || ! [[ "${ssid}" =~ ${SAFE_SSID_RE} ]]; then
             log_warning "Skipping invalid SSID: '${ssid}'"
@@ -33,19 +35,48 @@ setup_wifi() {
         fi
 
         conn_file="${NM_CONN_DIR}/${ssid}.nmconnection"
-        cat > "${conn_file}" <<NMEOF
+        tmp="${conn_file}.new"
+        write_connection "${ssid}" "${psk}" "${hidden}" "${iface}" > "${tmp}"
+        chmod 0600 "${tmp}"
+        if cmp -s "${tmp}" "${conn_file}"; then
+            rm -f "${tmp}"
+        else
+            mv "${tmp}" "${conn_file}"
+            changed=1
+        fi
+    done
+    # NetworkManager reads connection files at start only
+    if [[ "${changed}" -eq 1 ]]; then
+        nmcli connection reload || log_warning "NetworkManager did not reload its connections"
+    fi
+}
+
+# keyfile_escape <value>: GKeyFile escaping (NetworkManager decodes \\ and
+# \s, and drops spaces around the value)
+keyfile_escape() {
+    local v="${1//\\/\\\\}"
+    [[ "${v}" == " "* ]] && v="\\s${v:1}"
+    [[ "${v}" == *" " ]] && v="${v%?}\\s"
+    printf '%s' "${v}"
+}
+
+# write_connection <ssid> <psk> <hidden:true|false> <iface>: NetworkManager keyfile
+write_connection() {
+    local hidden=""
+    [[ "$3" == "true" ]] && hidden=$'\nhidden=true'
+    cat <<NMEOF
 [connection]
-id=${ssid}
+id=$1
 type=wifi
-interface-name=${iface}
+interface-name=$4
 
 [wifi]
 mode=infrastructure
-ssid=${ssid}
+ssid=$1${hidden}
 
 [wifi-security]
 key-mgmt=wpa-psk
-psk=${psk}
+psk=$(keyfile_escape "$2")
 
 [ipv4]
 method=auto
@@ -53,8 +84,6 @@ method=auto
 [ipv6]
 method=auto
 NMEOF
-        chmod 0600 "${conn_file}"
-    done
 }
 
 apply_hostname() {
@@ -63,13 +92,17 @@ apply_hostname() {
     [[ -n "${desired}" ]] || return 0
 
     current=$(hostname)
-    if [[ "${current}" != "${desired}" ]]; then
-        if hostnamectl set-hostname "${desired}" 2>/dev/null; then
-            log_info "Hostname set to ${desired}"
-        else
-            log_warning "Failed to set hostname to ${desired}"
-        fi
+    [[ "${current}" != "${desired}" ]] || return 0
+    if ! hostnamectl set-hostname "${desired}" 2>/dev/null; then
+        log_warning "Failed to set hostname to ${desired}"
+        return 0
     fi
+    log_info "Hostname set to ${desired}"
+    # The name resolves to this machine through its 127.0.1.1 entry
+    local hosts
+    hosts=$(awk -v h="${desired}" '$1 == "127.0.1.1" { print "127.0.1.1\t" h; next } { print }' \
+        "${HOSTS_PATH}") && printf '%s\n' "${hosts}" > "${HOSTS_PATH}.new" &&
+        mv "${HOSTS_PATH}.new" "${HOSTS_PATH}"
 }
 
 apply_config() {
