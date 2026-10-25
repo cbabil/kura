@@ -120,7 +120,7 @@ install -d "${ROOTFS}/etc/systemd/system/network-online.target.wants"
 ln -sf /usr/lib/systemd/system/NetworkManager-wait-online.service \
     "${ROOTFS}/etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service"
 
-# Increase NM wait-online timeout (default 30s is too short for live-boot VMs)
+# Increase NM wait-online timeout (default 30s is too short for slow VMs)
 install -d "${ROOTFS}/etc/systemd/system/NetworkManager-wait-online.service.d"
 cat > "${ROOTFS}/etc/systemd/system/NetworkManager-wait-online.service.d/timeout.conf" <<'NMEOF'
 [Service]

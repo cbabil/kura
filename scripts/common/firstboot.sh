@@ -16,7 +16,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/firstboot-setup.sh"
 
 # resize_root: grow the root partition and filesystem to fill the disk.
 # The Pi image ships a small root partition; x86 disks vary. Skipped on the
-# live ISO, whose root is not a partition.
+# live or container systems, whose root is not a partition.
 resize_root() {
     local root_dev root_disk root_part
     read -r root_dev root_disk < <(root_disk) || return 0

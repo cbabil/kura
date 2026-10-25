@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # tests/shell/etchwise-list.bats — scripts/release/make-etchwise-list.sh turns
 # the release manifest into the OS list Etchwise reads (Raspberry Pi Imager's
-# v4 format): one Kura entry for the Pi 5, with first-boot setup ("kura").
+# v4 format): one Kura entry for the Pi 5 and one for PCs (Intel NUC), both
+# with first-boot setup ("kura").
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 SCRIPT="${REPO_ROOT}/scripts/release/make-etchwise-list.sh"
@@ -13,7 +14,8 @@ setup() {
 {"version":"0.1.0","channel":"stable","released":"2026-10-25","bundles":{
  "rpi5-arm64":{"url":"https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-rpi5-arm64.img.zst",
    "sha256":"aa","size":400,"extract_sha256":"bb","extract_size":2000},
- "x86_64":{"url":"https://x/kura.iso","sha256":"cc","size":9,"extract_sha256":"cc","extract_size":9}}}
+ "x86_64":{"url":"https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64-amd64.img.zst",
+   "sha256":"cc","size":500,"extract_sha256":"dd","extract_size":3000}}}
 JSON
 }
 
@@ -22,7 +24,7 @@ entry() { echo "$output" | jq -r ".os_list[0]$1"; }
 @test "make-etchwise-list: one Pi 5 entry with the image's download and unpacked hashes" {
     run "${SCRIPT}" "${MANIFEST}"
     [ "$status" -eq 0 ]
-    [ "$(echo "$output" | jq '.os_list | length')" = "1" ]
+    [ "$(echo "$output" | jq '.os_list | length')" = "2" ]
     [ "$(entry .name)" = "Kura 0.1.0" ]
     [ "$(entry .url)" = "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-rpi5-arm64.img.zst" ]
     [ "$(entry .image_download_size)" = "400" ]
@@ -33,9 +35,25 @@ entry() { echo "$output" | jq -r ".os_list[0]$1"; }
     [ "$(entry '.devices | join(",")')" = "pi5-64bit" ]
 }
 
-@test "make-etchwise-list: asks Etchwise for Kura's first-boot setup" {
+pc() { echo "$output" | jq -r ".os_list[1]$1"; }
+
+@test "make-etchwise-list: one PC entry for the Intel NUC and other x86-64 machines" {
+    run "${SCRIPT}" "${MANIFEST}"
+    [ "$status" -eq 0 ]
+    [ "$(pc .name)" = "Kura 0.1.0 (PC)" ]
+    [ "$(pc .url)" = "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64-amd64.img.zst" ]
+    [ "$(pc .image_download_size)" = "500" ]
+    [ "$(pc .image_download_sha256)" = "cc" ]
+    [ "$(pc .extract_size)" = "3000" ]
+    [ "$(pc .extract_sha256)" = "dd" ]
+    [ "$(pc '.devices | join(",")')" = "x86-64" ]
+    [ "$(pc .icon)" = "$(entry .icon)" ]
+}
+
+@test "make-etchwise-list: asks Etchwise for Kura's first-boot setup on both" {
     run "${SCRIPT}" "${MANIFEST}"
     [ "$(entry .init_format)" = "kura" ]
+    [ "$(pc .init_format)" = "kura" ]
     [ "$(entry '.capabilities | length')" = "0" ]
 }
 

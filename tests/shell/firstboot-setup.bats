@@ -310,6 +310,9 @@ reject() {  # reject <json> <word expected in the message>
     stub_disk_tools /dev/sda2 sda
     run boot_partition
     [ "$output" = "/dev/sda1" ]
+    stub_disk_tools /dev/nvme0n1p2 nvme0n1
+    run boot_partition
+    [ "$output" = "/dev/nvme0n1p1" ]
 }
 
 @test "boot_partition: none on a live system" {

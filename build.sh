@@ -4,7 +4,7 @@
 #
 # Commands:
 #   setup            - Install host dependencies for Debian builds
-#   build {target}   - Build OS image (rpi5|iso|docker|all)
+#   build {target}   - Build OS image (rpi5|pc|docker|all)
 #   clean            - Remove build rootfs and temp files
 #   help             - Show this help message
 
@@ -140,7 +140,7 @@ print_build_all_summary() {
     echo -e "${GREEN}║${NC}  ${BOLD}${OS_NAME} — All Targets Built${NC} (${MINS}m ${SECS}s)"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
     print_build_section "docker"
-    print_build_section "iso"
+    print_build_section "pc"
     print_build_section "rpi5"
     echo -e "${GREEN}║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
@@ -154,7 +154,7 @@ print_build_section() {
 
     case "${TARGET}" in
         rpi5)   TARGET_DIR="${RELEASE_DIR}/${VERSION}/arm64" ;;
-        iso)    TARGET_DIR="${RELEASE_DIR}/${VERSION}/iso" ;;
+        pc)     TARGET_DIR="${RELEASE_DIR}/${VERSION}/pc" ;;
         docker) TARGET_DIR="${RELEASE_DIR}/${VERSION}/docker" ;;
     esac
 
@@ -164,7 +164,7 @@ print_build_section() {
     local TARGET_LABEL=""
     case "${TARGET}" in
         rpi5)   TARGET_LABEL="RPi5 SD Card Image" ;;
-        iso)    TARGET_LABEL="x86_64 Hybrid ISO" ;;
+        pc)     TARGET_LABEL="x86_64 PC Disk Image" ;;
         docker) TARGET_LABEL="Docker Rootfs Tarball" ;;
     esac
 
@@ -229,12 +229,7 @@ setup_host() {
         binfmt-support
         debootstrap
         rsync
-        xorriso
-        grub-pc-bin
-        grub-efi-amd64-bin
-        mtools
         dosfstools
-        squashfs-tools
         e2fsprogs
         gdisk
         shellcheck
@@ -485,22 +480,17 @@ create_rpi5_image() {
 }
 
 # ============================================================================
-# create_x86_iso -- placeholder for Phase 2
+# create_pc_image -- assemble the x86 PC disk image (UEFI, GPT)
 # ============================================================================
 
-create_x86_iso() {
+create_pc_image() {
     local ROOTFS="$1"
-    local OUTPUT_DIR="${RELEASE_DIR}/${VERSION}/iso"
+    local OUTPUT_DIR="${RELEASE_DIR}/${VERSION}/pc"
 
-    # Remove previous ISOs so only the new one remains
-    rm -f "${OUTPUT_DIR}"/${ARTIFACT_PREFIX}-*.iso "${OUTPUT_DIR}"/SHA512SUMS* 2>/dev/null || true
+    # Remove previous images so only the new one remains
+    rm -f "${OUTPUT_DIR}"/${ARTIFACT_PREFIX}-*.img* "${OUTPUT_DIR}"/SHA512SUMS* 2>/dev/null || true
 
-    if [ -x "${SCRIPTS_DIR}/x86_64/create-iso.sh" ]; then
-        "${SCRIPTS_DIR}/x86_64/create-iso.sh" "${ROOTFS}" "${OUTPUT_DIR}"
-    else
-        print_warning "scripts/x86_64/create-iso.sh not found (Phase 2)."
-        print_warning "Skipping ISO creation."
-    fi
+    "${SCRIPTS_DIR}/x86_64/create-image.sh" "${ROOTFS}" "${OUTPUT_DIR}"
 }
 
 # ============================================================================
@@ -513,7 +503,7 @@ package_release() {
 
     case "${TARGET}" in
         rpi5)   TARGET_DIR="${RELEASE_DIR}/${VERSION}/arm64" ;;
-        iso)    TARGET_DIR="${RELEASE_DIR}/${VERSION}/iso" ;;
+        pc)     TARGET_DIR="${RELEASE_DIR}/${VERSION}/pc" ;;
         docker) TARGET_DIR="${RELEASE_DIR}/${VERSION}/docker" ;;
         *)      return 0 ;;
     esac
@@ -555,7 +545,7 @@ cleanup_old_artifacts() {
             for arch_dir in "${version_dir}"/*/; do
                 if [ ! -d "${arch_dir}" ]; then continue; fi
 
-                for ext in img iso tar qcow2; do
+                for ext in img tar qcow2; do
                     local COUNT=0
                     # shellcheck disable=SC2206
                     local FILES=( "${arch_dir}"${ARTIFACT_PREFIX}-*.${ext} )
@@ -612,7 +602,6 @@ clean_build() {
 
     rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-rootfs-* 2>/dev/null || true
     rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-docker-* 2>/dev/null || true
-    rm -rf "${OS_TMP}"/${ARTIFACT_PREFIX}-iso-* 2>/dev/null || true
 
     print_status "Clean complete!"
 }
@@ -629,7 +618,7 @@ build_target() {
     local TARGET_LABEL
     case "${TARGET}" in
         rpi5)   TARGET_LABEL="RPi5 SD Card Image (arm64)" ;;
-        iso)    TARGET_LABEL="x86_64 Hybrid ISO (amd64)" ;;
+        pc)     TARGET_LABEL="x86_64 PC Disk Image (amd64, UEFI)" ;;
         docker) TARGET_LABEL="Docker Rootfs Tarball" ;;
     esac
 
@@ -660,7 +649,7 @@ build_target() {
     local ARCH TARGET_DIRNAME
     case "${TARGET}" in
         rpi5) ARCH="arm64"; TARGET_DIRNAME="rpi5" ;;
-        iso)  ARCH="amd64"; TARGET_DIRNAME="x86_64" ;;
+        pc)   ARCH="amd64"; TARGET_DIRNAME="x86_64" ;;
     esac
 
     local ROOTFS="${OS_TMP}/${ARTIFACT_PREFIX}-rootfs-${TARGET}"
@@ -708,7 +697,7 @@ build_target() {
     print_status "[5/6] Creating ${TARGET_LABEL}..."
     case "${TARGET}" in
         rpi5) create_rpi5_image "${ROOTFS}" ;;
-        iso)  create_x86_iso "${ROOTFS}" ;;
+        pc)   create_pc_image "${ROOTFS}" ;;
     esac
 
     # Phase 6: Package release
@@ -740,14 +729,14 @@ show_help() {
     echo ""
     echo "Build targets:"
     echo "  docker             Docker rootfs tarball (fastest validation)"
-    echo "  iso                x86_64 hybrid BIOS+EFI ISO"
+    echo "  pc                 x86_64 PC disk image (UEFI, e.g. Intel NUC)"
     echo "  rpi5               ARM64 RPi5 SD card image"
     echo "  all                Build all targets"
     echo ""
     echo "Quick start:"
     echo "  ./build.sh setup          # First time only (installs host deps)"
     echo "  ./build.sh build docker   # Build Docker image (fastest)"
-    echo "  ./build.sh build iso      # Build x86_64 ISO"
+    echo "  ./build.sh build pc       # Build x86_64 PC disk image"
     echo "  ./build.sh build rpi5     # Build RPi5 SD card image"
     echo "  ./build.sh build all      # Build all targets"
     echo ""
@@ -776,12 +765,12 @@ case "${1:-help}" in
                 build_target "docker"
                 echo ""
                 echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
-                echo -e "${GREEN}  ✓ Docker complete — continuing with ISO...${NC}"
+                echo -e "${GREEN}  ✓ Docker complete — continuing with PC...${NC}"
                 echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
-                build_target "iso"
+                build_target "pc"
                 echo ""
                 echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
-                echo -e "${GREEN}  ✓ ISO complete — continuing with RPi5...${NC}"
+                echo -e "${GREEN}  ✓ PC complete — continuing with RPi5...${NC}"
                 echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
                 build_target "rpi5"
                 _BUILD_ALL=0
@@ -790,11 +779,11 @@ case "${1:-help}" in
                 SECS=$(( ELAPSED % 60 ))
                 print_build_all_summary "${MINS}" "${SECS}"
                 ;;
-            docker|iso|rpi5)
+            docker|pc|rpi5)
                 build_target "${TARGET}"
                 ;;
             *)
-                print_error "Unknown target: ${TARGET}. Use 'docker', 'iso', 'rpi5', or 'all'."
+                print_error "Unknown target: ${TARGET}. Use 'docker', 'pc', 'rpi5', or 'all'."
                 exit 1
                 ;;
         esac

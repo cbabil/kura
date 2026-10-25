@@ -1,7 +1,7 @@
 #!/bin/bash
 # tests/boot/compare-identity.sh <identity-a> <identity-b>
 #
-# Compares two identity.txt reports written by iso-boot-test.sh from two boots
+# Compares two identity.txt reports written by boot-test.sh from two boots
 # of the same image. Each device must generate its own identity, so every
 # value (SSH host key, machine-id) must be present in both
 # and differ. Exits 1 if any value is missing or shared.

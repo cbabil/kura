@@ -1,10 +1,12 @@
 name: Images
 
-# Builds the Kura images (Pi 5 SD card image and x86_64 ISO) and boots the ISO
-# headless without internet to check first boot, SSH, Docker and device identity.
+# Builds the Kura images (Pi 5 SD card image and x86_64 PC disk image) and boots
+# the PC image headless under UEFI without internet: once with a kura-setup.json
+# (as Etchwise writes it), once without, checking first boot, the setup, SSH,
+# Docker and device identity.
 # Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
 # Artifacts count against the Actions storage quota, so they live one day and
-# dev pushes keep only the ISO. release.yml calls this workflow on v* tags and
+# dev pushes keep only the PC image. release.yml calls this workflow on v* tags and
 # publishes both images in the same run.
 
 on:
@@ -43,8 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: iso
-            release_dir: iso
+          - target: pc
+            release_dir: pc
           - target: rpi5
             release_dir: arm64
     steps:
@@ -58,15 +60,14 @@ jobs:
           df -h /
 
       # ./build.sh setup would also install docker.io/containerd, which conflict
-      # with the runner's Docker; the iso and rpi5 builds don't use host Docker.
+      # with the runner's Docker; the pc and rpi5 builds don't use host Docker.
       - name: Install build tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends \
             mmdebstrap debian-archive-keyring arch-test \
             qemu-user-static binfmt-support debootstrap rsync \
-            xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools \
-            squashfs-tools e2fsprogs gdisk curl gnupg zstd
+            dosfstools e2fsprogs gdisk curl gnupg zstd
           sudo modprobe loop || true
 
       - name: Check arm64 emulation
@@ -89,23 +90,24 @@ jobs:
           sudo -E env "PATH=${PATH}" ./build.sh build ${{ matrix.target }}
           sudo chown -R "$(id -u):$(id -g)" release
 
-      # The raw Pi image is mostly empty space: for a release, ship it as .img.zst
-      - name: Compress Pi image for release
-        if: inputs.version && matrix.target == 'rpi5'
-        run: zstd -T0 -15 --rm release/*/arm64/*.img
+      # Raw images are mostly empty space: ship them as .img.zst (the PC image
+      # always, since dev runs upload it for the boot test's logs and reuse)
+      - name: Compress image
+        if: inputs.version || matrix.target == 'pc'
+        run: zstd -T0 -15 --rm release/*/${{ matrix.release_dir }}/*.img
 
       # The images only, in one flat directory: upload-artifact would otherwise
       # keep <version>/<dir>/, and release.yml writes its own checksums.
       - name: Stage artifact
-        if: inputs.version || matrix.target == 'iso'
+        if: inputs.version || matrix.target == 'pc'
         run: |
           mkdir artifact
           find release/*/${{ matrix.release_dir }} -maxdepth 1 -type f \
-            \( -name '*.img' -o -name '*.img.zst' -o -name '*.iso' \) -exec ln -t artifact {} +
+            -name '*.img.zst' -exec ln -t artifact {} +
 
       # The Pi image is only needed by release.yml: a dev build just has to succeed
       - name: Upload image
-        if: inputs.version || matrix.target == 'iso'
+        if: inputs.version || matrix.target == 'pc'
         uses: actions/upload-artifact@v4
         with:
           name: kura-${{ matrix.target }}-${{ github.sha }}
@@ -114,10 +116,10 @@ jobs:
           if-no-files-found: error
           compression-level: 0   # the images are already compressed
 
-      # ---- ISO boot test (x86 only; the Pi image needs Pi hardware) ----
+      # ---- PC boot test (UEFI in QEMU; the Pi image needs Pi hardware) ----
 
       - name: Enable KVM
-        if: matrix.target == 'iso'
+        if: matrix.target == 'pc'
         run: |
           if [ -e /dev/kvm ]; then
             echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
@@ -129,28 +131,30 @@ jobs:
           fi
 
       - name: Install boot test tools
-        if: matrix.target == 'iso'
-        run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 sshpass expect
+        if: matrix.target == 'pc'
+        run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 ovmf mtools sshpass expect
 
-      - name: Boot test A
-        if: matrix.target == 'iso'
-        run: tests/boot/iso-boot-test.sh "$(ls release/*/iso/*.iso)" boot-a
+      - name: Boot test A (setup file from the imager)
+        if: matrix.target == 'pc'
+        run: tests/boot/boot-test.sh "$(ls release/*/pc/*.img.zst)" boot-a 2222 --setup
 
-      - name: Boot test B (same image, second device)
-        if: matrix.target == 'iso'
-        run: tests/boot/iso-boot-test.sh "$(ls release/*/iso/*.iso)" boot-b
+      - name: Boot test B (no setup file, second device)
+        if: matrix.target == 'pc'
+        run: tests/boot/boot-test.sh "$(ls release/*/pc/*.img.zst)" boot-b 2222
 
       - name: Each boot has its own identity
-        if: matrix.target == 'iso'
+        if: matrix.target == 'pc'
         run: tests/boot/compare-identity.sh boot-a/identity.txt boot-b/identity.txt
 
       - name: Upload boot logs
-        if: always() && matrix.target == 'iso'
+        if: always() && matrix.target == 'pc'
         uses: actions/upload-artifact@v4
         with:
           name: boot-logs-${{ github.sha }}   # not kura-*: release.yml downloads those
           path: |
             boot-a/
             boot-b/
+            !boot-*/disk.img
+            !boot-*/id_ed25519*
           retention-days: 1
           if-no-files-found: ignore

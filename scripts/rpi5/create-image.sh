@@ -151,10 +151,9 @@ done
 cp "${SCRIPT_DIR}/config.txt" "${BOOT_MNT}/"
 echo "  Copied config.txt"
 
-# Create cmdline.txt
-echo "console=serial0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait" \
-    > "${BOOT_MNT}/cmdline.txt"
-echo "  Created cmdline.txt"
+# Copy cmdline.txt (root mounted read-write: the image ships no /etc/fstab)
+cp "${SCRIPT_DIR}/cmdline.txt" "${BOOT_MNT}/"
+echo "  Copied cmdline.txt"
 
 umount "${BOOT_MNT}"
 rmdir "${BOOT_MNT}"

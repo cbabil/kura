@@ -1,7 +1,7 @@
 #!/bin/bash
 # scripts/docker/create-image.sh
 # Create a minimized Docker rootfs tarball.
-# This runs a SEPARATE mmdebstrap (not the same rootfs as RPi5/ISO).
+# This runs a SEPARATE mmdebstrap (not the same rootfs as RPi5/PC).
 #
 # Usage: create-image.sh <output-dir> <arch>
 # Requires: OS_* env vars exported by build.sh
