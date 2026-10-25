@@ -8,6 +8,8 @@
 #   3. core services are active        (docker, first boot, SSH key units)
 #   4. Docker answers                  (docker info as root)
 #   5. device identity is recorded     (SSH host key, machine-id)
+# and reports, without failing, whether less still warns "terminal is not
+# fully functional" without the LESS=-d workaround (issue #6).
 #
 # Writes serial.log, report.txt and identity.txt to <out-dir>; exits non-zero
 # if any check fails. Compare identity.txt from two boots to prove each boot
@@ -126,6 +128,21 @@ record_identity() {
     [ -n "${host_key}" ] && [ -n "${machine_id}" ]
 }
 
+# less_report: run less in an SSH terminal with the workaround (-d) unset.
+# A warning makes less wait for RETURN, so it runs under a timeout.
+less_report() {
+    local out
+    out=$(TERM=xterm-256color timeout 30 sshpass -p "${LOGIN_PASS}" ssh -tt -p "${SSH_PORT}" \
+        -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+        "${LOGIN_USER}@127.0.0.1" 'env -u LESS -u SYSTEMD_LESS less -F /etc/hostname' \
+        < /dev/null 2>&1) || true
+    if grep -q "not fully functional" <<< "${out}"; then
+        report "INFO less without LESS=-d: warns (keep the workaround, issue #6)"
+    else
+        report "INFO less without LESS=-d: no warning (the workaround can go, issue #6)"
+    fi
+}
+
 collect_diagnostics() {
     sudo_run "journalctl -b --no-pager -u docker -u ${BRAND}-firstboot" \
         > "${OUT}/journal.txt" 2>&1 || true
@@ -149,6 +166,7 @@ check "first login replaces the default password" first_login_changes_password
 check "core services active" services_active
 check "Docker answers" docker_answers
 check "device identity recorded" record_identity
+less_report
 
 if [ "${FAILED}" -ne 0 ]; then
     collect_diagnostics
