@@ -79,7 +79,14 @@ setup_applied() {
 
 setup_file_gone() { sudo_run "test ! -e /boot/efi/${BRAND}-setup.json"; }
 
-secure_boot_on() { sudo_run "dmesg" | grep -q "Secure boot enabled"; }
+# secure_boot_on: the firmware's SecureBoot variable (its 5th byte, after
+# the attributes) is 1; the kernel's lockdown mode is reported with it
+secure_boot_on() {
+    local var=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c value
+    value=$(ssh_run "od -An -tu1 -j4 -N1 ${var}" 2>/dev/null | tr -d ' ')
+    report "  SecureBoot variable: ${value:-missing}; lockdown: $(ssh_run "cat /sys/kernel/security/lockdown" 2>/dev/null)"
+    [ "${value}" = "1" ]
+}
 
 # /boot/efi is mounted from fstab, and the APT hook's sync finds nothing newer
 efi_partition_current() {
@@ -118,22 +125,16 @@ record_identity() {
     [ -n "${host_key}" ] && [ -n "${machine_id}" ]
 }
 
-# less_report: run less in an SSH terminal with the workaround (-d) unset.
-# A warning makes less wait for RETURN, so it runs under a timeout. The
-# hostname must appear, or the SSH command itself failed and proves nothing.
-less_report() {
+# less_works: less in an SSH terminal shows a file without "terminal is not
+# fully functional" (issue #6). A warning makes less wait for RETURN, so it
+# runs under a timeout; the hostname must appear, or SSH itself failed.
+less_works() {
     local out name
     name=$(ssh_run hostname)
     login_ssh
     out=$(TERM=xterm-256color timeout 30 "${LOGIN_SSH[@]}" -tt "${LOGIN_USER}@127.0.0.1" \
-        'env -u LESS -u SYSTEMD_LESS less -F /etc/hostname' < /dev/null 2>&1) || true
-    if [ -z "${name}" ] || ! grep -qF "${name}" <<< "${out}"; then
-        report "INFO less without LESS=-d: not run (issue #6)"
-    elif grep -q "not fully functional" <<< "${out}"; then
-        report "INFO less without LESS=-d: warns (keep the workaround, issue #6)"
-    else
-        report "INFO less without LESS=-d: no warning (the workaround can go, issue #6)"
-    fi
+        'less -F /etc/hostname' < /dev/null 2>&1) || true
+    [ -n "${name}" ] && grep -qF "${name}" <<< "${out}" && ! grep -q "not fully functional" <<< "${out}"
 }
 
 collect_diagnostics() {

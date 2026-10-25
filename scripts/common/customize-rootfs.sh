@@ -57,12 +57,6 @@ case "\$TERM" in
     *) export TERM=xterm-256color ;;
 esac
 
-# Suppress "terminal is not fully functional" from less/systemctl.
-# Debian trixie ncurses 6.x wide-format terminfo can be unreadable by less;
-# the -d flag tells less to silently ignore missing terminal capabilities.
-export SYSTEMD_LESS=FRSXMKd
-export LESS='-FRSXMKd'
-
 # Brand color (${COLOR}) applied to prompt and cursor
 if [ "\$TERM" = "linux" ]; then
     PROMPT_COMMAND='printf "\033[1;35m"'
@@ -99,16 +93,6 @@ enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-conf
 # sysinit.target (security runs early)
 enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-security.service"
 
-# /etc/environment — read by PAM (pam_env) for ALL sessions before any shell.
-# -d flag suppresses "terminal is not fully functional" from less (ncurses 6.x
-# wide-format terminfo on Debian trixie is unreadable by less).
-# Append only if not already present (idempotent)
-if ! grep -q 'SYSTEMD_LESS=' "${ROOTFS}/etc/environment" 2>/dev/null; then
-    cat >> "${ROOTFS}/etc/environment" <<'ENVEOF'
-SYSTEMD_LESS=FRSXMKd
-LESS=-FRSXMKd
-ENVEOF
-fi
 
 # Ensure /etc/resolv.conf is a regular writable file (not a stale symlink).
 # NM with dns=default writes nameservers directly here at runtime.

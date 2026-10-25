@@ -14,8 +14,7 @@
 #
 # Both modes check Secure Boot, first boot, the root partition grown and
 # writable, the EFI partition mounted and kept current, core services,
-# Docker and the device identity, and report (without failing)
-# whether less still needs the LESS=-d workaround (issue #6). Writes
+# Docker, the device identity, and less in an SSH terminal (issue #6). Writes
 # serial.log, report.txt and identity.txt to <out-dir>; exits non-zero if a
 # check fails. Needs qemu-system-x86_64, ovmf, mtools, zstd, sshpass, expect,
 # openssl, jq. Uses KVM when /dev/kvm is writable.
@@ -112,7 +111,7 @@ check "EFI partition mounted and kept current" efi_partition_current
 check "core services active" services_active
 check "Docker answers" docker_answers
 check "device identity recorded" record_identity
-less_report
+check "less works in an SSH terminal" less_works
 
 if [ "${FAILED}" -ne 0 ]; then
     collect_diagnostics
