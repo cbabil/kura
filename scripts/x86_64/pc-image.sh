@@ -6,12 +6,14 @@
 # no firmware boot entry. Used by create-image.sh and the boot test. Defines
 # functions and constants only.
 
-# shellcheck disable=SC2034  # PC_GRUB_CFG and PC_EFI_START are read by the scripts sourcing this
+# shellcheck disable=SC2034  # PC_GRUB_CFG, PC_EFI_START, PC_CONSOLE_ARGS are read by the scripts sourcing this
 PC_EFI_START=2048                                     # sector of partition 1
 PC_EFI_TYPE="C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
 PC_ROOT_TYPE="0FC63DAF-8483-4772-8E79-3D69D8477DE4"   # Linux filesystem
 PC_GRUB_CFG="EFI/debian/grub.cfg"                     # Debian's signed GRUB has this prefix built in
 PC_EFI_FILES="$(dirname "${BASH_SOURCE[0]}")/efi-files.list"
+# The screen (listed last) is the main console; ttyS0 serves VMs
+PC_CONSOLE_ARGS="console=ttyS0,115200 console=tty0"
 
 # pc_partition_table <efi-mib>: sfdisk script, 1 MiB aligned. Partition 1 is
 # the EFI partition: first boot reads kura-setup.json from it.
@@ -32,10 +34,9 @@ pc_efi_files() { grep -v '^#' "${PC_EFI_FILES}"; }
 # pc_grub_cfg <root-fs-uuid> <root-partuuid> <os-name>
 # Boots /vmlinuz and /initrd.img, the symlinks Debian's kernel packages keep
 # pointing at the newest kernel (and .old at the previous one), so kernel
-# updates take effect. The screen (tty0, listed last) is the main console;
-# ttyS0 serves VMs.
+# updates take effect.
 pc_grub_cfg() {
-    local args="root=PARTUUID=$2 ro quiet console=ttyS0,115200 console=tty0"
+    local args="root=PARTUUID=$2 ro quiet ${PC_CONSOLE_ARGS}"
     cat <<EOF
 set timeout=3
 set default=0

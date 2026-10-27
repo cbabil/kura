@@ -26,8 +26,9 @@ stub_disk_tools() {
     lsblk() { echo "${PARENT}"; }
 }
 
-# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path and
-# appends each requested URL to ${BATS_TEST_TMPDIR}/curl-url.
+# stub_curl_copy <src>: curl stub that "downloads" <src> to its -o path (or
+# stdout without -o) and appends each requested URL to
+# ${BATS_TEST_TMPDIR}/curl-url.
 stub_curl_copy() {
     CURL_SRC="$1"
     curl() {
@@ -40,7 +41,7 @@ stub_curl_copy() {
             shift
         done
         echo "${url}" >> "${BATS_TEST_TMPDIR}/curl-url"
-        cp "${CURL_SRC}" "${out}"
+        if [ -n "${out}" ]; then cp "${CURL_SRC}" "${out}"; else cat "${CURL_SRC}"; fi
     }
 }
 

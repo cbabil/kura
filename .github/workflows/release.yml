@@ -55,7 +55,8 @@ jobs:
         run: |
           set -euo pipefail
           sha512sum ./*.img.zst > SHA512SUMS
-          ../scripts/release/make-manifest.sh "${TAG}" "${REPO}" ./*-rpi5-arm64-*.img.zst ./*-x86_64-amd64-*.img.zst > manifest.json
+          ../scripts/release/make-manifest.sh "${TAG}" "${REPO}" ./*-rpi5-arm64-*.img.zst ./*-x86_64-amd64-*.img.zst \
+            ./*-x86_64-installer-*.img.zst > manifest.json
           cat manifest.json
           ../scripts/release/make-etchwise-list.sh manifest.json > etchwise.json
           # The one list of assets that get signed and published

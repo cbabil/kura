@@ -3,7 +3,8 @@
 #
 # Prints etchwise.json: the OS list Etchwise reads for Kura (Raspberry Pi
 # Imager's v4 format, as a sublist), built from the release manifest: the Pi 5
-# image and the PC image (Intel NUC and other x86-64 machines). init_format
+# image, the PC installer (ADR-017: writes Kura to the PC's internal drive)
+# and the PC image (runs from the drive it is written to). init_format
 # "kura" makes Etchwise write kura-setup.json, which first boot applies
 # (scripts/common/firstboot-setup.sh). Needs jq.
 
@@ -25,6 +26,8 @@ jq --arg icon "${ICON}" '
     {os_list: [
         entry(.bundles["rpi5-arm64"]; "Kura \(.version)";
             "Lightweight home-server OS: Debian 13, Docker, hardened by default"; "pi5-64bit"),
+        entry(.installers["x86_64"]; "Kura \(.version) installer (PC)";
+            "Small USB installer: boot the PC from it with an Ethernet cable plugged in and it installs Kura on the internal drive"; "x86-64"),
         entry(.bundles["x86_64"]; "Kura \(.version) (PC)";
-            "Lightweight home-server OS for UEFI PCs such as the Intel NUC: write it to a USB drive or SSD and boot from it"; "x86-64")
+            "Kura for UEFI PCs such as the Intel NUC, run from the drive it is written to (a USB drive or SSD)"; "x86-64")
     ]}' "${MANIFEST}"

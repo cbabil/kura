@@ -1,0 +1,23 @@
+#!/bin/sh
+# scripts/pc-installer/udhcpc.script — busybox udhcpc hook for the PC
+# installer: applies the lease (address, default route, DNS). udhcpc passes
+# the event as $1 and the lease in its environment.
+# shellcheck disable=SC2154  # interface, ip, mask, router, dns come from udhcpc
+case "$1" in
+    deconfig)
+        ip addr flush dev "${interface}"
+        ip link set "${interface}" up
+        ;;
+    bound|renew)
+        ip addr flush dev "${interface}"
+        ip addr add "${ip}/${mask:-24}" dev "${interface}"
+        for gateway in ${router}; do
+            ip route replace default via "${gateway}" dev "${interface}"
+            break
+        done
+        : > /etc/resolv.conf
+        for server in ${dns}; do
+            echo "nameserver ${server}" >> /etc/resolv.conf
+        done
+        ;;
+esac

@@ -26,6 +26,8 @@ jobs:
                      packages/os-security/src/lib/*.sh \
                      packages/os-config/src/os-config \
                      scripts/common/*.sh \
+                     scripts/pc-installer/*.sh scripts/pc-installer/init \
+                     scripts/pc-installer/udhcpc.script \
                      scripts/rpi5/*.sh \
                      scripts/x86_64/*.sh \
                      tests/boot/*.sh

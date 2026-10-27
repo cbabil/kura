@@ -9,6 +9,23 @@
 
 report() { echo "$*" | tee -a "${REPORT}"; }
 
+# The user a setup file creates
+SETUP_USER="tester"
+
+# make_setup_file <dest>: a kura-setup.json as Etchwise writes it (new user
+# with LOGIN_PASS's hash and a new SSH key at KEY, password logins off,
+# hostname, Wi-Fi, time zone)
+make_setup_file() {
+    ssh-keygen -q -t ed25519 -N "" -C "kura-boot-test" -f "${KEY}"
+    jq -n --arg user "${SETUP_USER}" --arg hash "$(openssl passwd -6 "${LOGIN_PASS}")" \
+          --arg key "$(cat "${KEY}.pub")" '{
+        version: 1, hostname: "kura-ci",
+        user: {name: $user, passwordHash: $hash},
+        ssh: {enabled: true, passwordAuth: false, authorizedKeys: [$key]},
+        wifi: {ssid: "CIWifi", psk: "password-ci", hidden: false, country: "FR"},
+        timezone: "Europe/Paris", keyboard: "fr"}' > "$1"
+}
+
 # wait_for <description> <command...>: poll every 10 s until the command
 # succeeds or WAIT_SECS pass.
 wait_for() {

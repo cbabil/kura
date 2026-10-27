@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/boot/boot-test.sh <pc-image(.img|.img.zst)> <out-dir> [ssh-port] [--setup]
+# tests/boot/boot-test.sh <pc-image(.img|.img.zst)> <out-dir> [ssh-port] [--setup|--installed]
 #
 # Boots a copy of Kura's PC disk image headless in QEMU under UEFI firmware
 # (OVMF) with Secure Boot on and Microsoft's keys enrolled, as on a NUC, with
@@ -11,8 +11,12 @@
 # --setup: a kura-setup.json is put on the EFI partition first, as Etchwise
 # writes it (new user with a password hash and an SSH key, password logins
 # off, hostname, Wi-Fi, time zone); the checks prove it was applied and deleted.
+# --installed: the disk is one the PC installer wrote (installer-test.sh),
+# which already holds that setup file; the user's password comes from
+# KURA_TEST_LOGIN_PASS, the SSH key is <out-dir>/id_ed25519, and the image's
+# size from KURA_TEST_IMAGE_BYTES. Checked like --setup.
 #
-# Both modes check Secure Boot, first boot, the root partition grown and
+# Every mode checks Secure Boot, first boot, the root partition grown and
 # writable, the EFI partition mounted and kept current, core services,
 # Docker, the device identity, and less in an SSH terminal (issue #6). Writes
 # serial.log, report.txt and identity.txt to <out-dir>; exits non-zero if a
@@ -21,15 +25,17 @@
 
 set -euo pipefail
 
-IMAGE="${1:?Usage: $0 <pc-image> <out-dir> [ssh-port] [--setup]}"
-OUT="${2:?Usage: $0 <pc-image> <out-dir> [ssh-port] [--setup]}"
+USAGE="Usage: $0 <pc-image> <out-dir> [ssh-port] [--setup|--installed]"
+IMAGE="${1:?${USAGE}}"
+OUT="${2:?${USAGE}}"
 SSH_PORT="${3:-2222}"
 SETUP="${4:-}"
 BRAND="${KURA_TEST_BRAND:-kura}"
 LOGIN_USER="${KURA_TEST_USER:-admin}"
 DEFAULT_PASS="${KURA_TEST_PASS:-admin}"
-# Set at first login (default mode) or by the setup file (--setup)
-LOGIN_PASS="Kura-$(openssl rand -hex 8)"
+# Set at first login (default mode), by the setup file (--setup), or given
+# by KURA_TEST_LOGIN_PASS (--installed)
+LOGIN_PASS="${KURA_TEST_LOGIN_PASS:-Kura-$(openssl rand -hex 8)}"
 
 mkdir -p "${OUT}"
 OUT="$(cd "${OUT}" && pwd)"
@@ -63,20 +69,17 @@ case "${IMAGE}" in
     *.zst) zstd -q -d -f -o "${DISK}" "${IMAGE}" ;;
     *) cp "${IMAGE}" "${DISK}" ;;
 esac
-IMAGE_BYTES=$(stat -c %s "${DISK}")
+IMAGE_BYTES="${KURA_TEST_IMAGE_BYTES:-$(stat -c %s "${DISK}")}"
 truncate -s +2G "${DISK}"
 
 if [ "${SETUP}" = "--setup" ]; then
-    LOGIN_USER="tester"
-    ssh-keygen -q -t ed25519 -N "" -C "kura-boot-test" -f "${KEY}"
-    jq -n --arg user "${LOGIN_USER}" --arg hash "$(openssl passwd -6 "${LOGIN_PASS}")" \
-          --arg key "$(cat "${KEY}.pub")" '{
-        version: 1, hostname: "kura-ci",
-        user: {name: $user, passwordHash: $hash},
-        ssh: {enabled: true, passwordAuth: false, authorizedKeys: [$key]},
-        wifi: {ssid: "CIWifi", psk: "password-ci", hidden: false, country: "FR"},
-        timezone: "Europe/Paris", keyboard: "fr"}' > "${OUT}/kura-setup.json"
+    LOGIN_USER="${SETUP_USER}"
+    make_setup_file "${OUT}/kura-setup.json"
     mcopy -o -i "${DISK}@@$(( PC_EFI_START * 512 ))" "${OUT}/kura-setup.json" ::/kura-setup.json
+elif [ "${SETUP}" = "--installed" ]; then
+    LOGIN_USER="${SETUP_USER}"
+    [ -n "${KURA_TEST_LOGIN_PASS:-}" ] && [ -f "${KEY}" ] ||
+        { echo "ERROR: --installed needs KURA_TEST_LOGIN_PASS and ${KEY}" >&2; exit 2; }
 fi
 
 # ---- boot ----
@@ -96,7 +99,7 @@ qemu-system-x86_64 -machine q35,smm=on -m 4096 -smp 2 "${ACCEL[@]}" \
 
 # sshd starts after first boot: its marker is checked once logged in
 check "SSH reachable" wait_for "SSH" ssh_listening
-if [ "${SETUP}" = "--setup" ]; then
+if [ -n "${SETUP}" ]; then
     check "setup: SSH key login as the new user" wait_for "key login" ssh_run true
     check "setup: password logins refused" password_login_refused
     check "setup: hostname, Wi-Fi, time zone applied" setup_applied

@@ -162,17 +162,6 @@ apply_setup_file() {
     [ -z "${v}" ] || setup_keyboard "${v}" || return 1
 }
 
-# wipe_file <file>: overwrite in place before deleting (best effort: the
-# card's flash controller may still keep old copies)
-wipe_file() {
-    local size
-    size=$(wc -c < "$1" | tr -d ' ')
-    if [ "${size}" -gt 0 ]; then
-        dd if=/dev/zero of="$1" bs="${size}" count=1 conv=notrunc 2>/dev/null || true
-    fi
-    sync
-}
-
 # remove_setup_file <file>
 remove_setup_file() {
     wipe_file "$1"

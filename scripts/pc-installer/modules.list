@@ -1,0 +1,35 @@
+# scripts/pc-installer/modules.list — kernel modules the installer loads (and
+# copies into its initrd with their dependencies). Missing or built-in ones
+# are skipped.
+# Disks (vmd: NUCs set to Intel VMD/RST hide NVMe behind it)
+nvme
+vmd
+ahci
+sd_mod
+mmc_block
+sdhci_pci
+# USB: the key itself, keyboards (to cancel the countdown), network adapters
+xhci_pci
+ehci_pci
+usb_storage
+uas
+usbhid
+hid_generic
+# Wired network: Intel and Realtek (NUCs), USB adapters
+e1000e
+igb
+igc
+r8169
+r8152
+cdc_ether
+ax88179_178a
+# QEMU (boot test)
+virtio_pci
+virtio_blk
+virtio_scsi
+virtio_net
+# The key's and the installed system's EFI partition
+vfat
+nls_cp437
+nls_ascii
+nls_utf8
