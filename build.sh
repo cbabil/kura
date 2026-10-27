@@ -66,7 +66,7 @@ OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 OS_VERSION="${OS_VERSION:-2.0}"
 OS_HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
 OS_ROOT_PASSWD="${OS_ROOT_PASSWD:-}"   # empty: root's password is locked
-OS_ISSUE="${OS_ISSUE:-Welcome to ${DEFAULT_NAME}}"
+OS_ISSUE="${OS_ISSUE:-${DEFAULT_TAGLINE}}"
 OS_DHCP_INTERFACE="${OS_DHCP_INTERFACE:-eth0}"
 OS_ROOTFS_SIZE="${OS_ROOTFS_SIZE:-2G}"
 OS_PC_ROOTFS_SIZE="${OS_PC_ROOTFS_SIZE:-3G}"
@@ -428,6 +428,19 @@ customize_rootfs() {
 }
 
 # ============================================================================
+# refresh_initramfs -- rebuild the initrd of every installed kernel, so it
+# carries what customize added (the Plymouth theme on the PC image)
+# ============================================================================
+
+refresh_initramfs() {
+    local ROOTFS="$1"
+
+    mount_chroot "${ROOTFS}"
+    chroot "${ROOTFS}" update-initramfs -u -k all
+    umount_chroot "${ROOTFS}"
+}
+
+# ============================================================================
 # apply_overlays -- rsync overlay files into rootfs
 # ============================================================================
 
@@ -712,6 +725,10 @@ build_target() {
     print_status "[4/6] Customizing rootfs (common + ${TARGET_DIRNAME})..."
     apply_overlays "${ROOTFS}" "${TARGET_DIRNAME}"
     customize_rootfs "${ROOTFS}" "${TARGET_DIRNAME}"
+    # The PC image boots an initrd, which must carry the splash theme
+    if [ "${TARGET}" = "pc" ]; then
+        refresh_initramfs "${ROOTFS}"
+    fi
     set_passwords "${ROOTFS}"
     # Each flashed device must get its own SSH host keys and machine ID
     reset_device_identity "${ROOTFS}"

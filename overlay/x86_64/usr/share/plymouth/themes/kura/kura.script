@@ -1,0 +1,45 @@
+# Kura boot splash (ADR-018): the README banner's navy, the artwork of
+# .github/splash.html (蔵, THE STOREHOUSE, Kura, the tagline) centred, and
+# three purple dots pulsing in turn under it while the system starts or
+# stops.
+
+# Navy, slightly darker at the bottom (#0f172a -> #0b1120)
+Window.SetBackgroundTopColor(0.059, 0.090, 0.165);
+Window.SetBackgroundBottomColor(0.043, 0.067, 0.125);
+
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+
+# The artwork takes 45% of the screen height (never more than 90% of its width)
+logo_image = Image("logo.png");
+scale = screen_h * 0.45 / logo_image.GetHeight();
+if (logo_image.GetWidth() * scale > screen_w * 0.9)
+    scale = screen_w * 0.9 / logo_image.GetWidth();
+logo = logo_image.Scale(logo_image.GetWidth() * scale, logo_image.GetHeight() * scale);
+logo_sprite = Sprite(logo);
+logo_x = Window.GetX() + (screen_w - logo.GetWidth()) / 2;
+logo_y = Window.GetY() + (screen_h - logo.GetHeight()) / 2 - screen_h * 0.04;
+logo_sprite.SetPosition(logo_x, logo_y, 0);
+
+# Three dots, a little below the artwork
+dot_size = Math.Int(Math.Max(6, screen_h / 110));
+dot_image = Image("dot.png").Scale(dot_size, dot_size);
+dot_gap = dot_size * 2;
+dots_y = logo_y + logo.GetHeight() + screen_h * 0.06;
+dots_x = Window.GetX() + (screen_w - (3 * dot_size + 2 * dot_gap)) / 2;
+for (i = 0; i < 3; i++) {
+    dot[i] = Sprite(dot_image);
+    dot[i].SetPosition(dots_x + i * (dot_size + dot_gap), dots_y, 1);
+    dot[i].SetOpacity(0.3);
+}
+
+# Refreshed about 50 times a second: each dot brightens in turn
+tick = 0;
+fun refresh_callback() {
+    tick++;
+    for (i = 0; i < 3; i++) {
+        wave = (Math.Sin(tick * 0.08 - i * 0.9) + 1) / 2;
+        dot[i].SetOpacity(0.25 + 0.75 * wave * wave);
+    }
+}
+Plymouth.SetRefreshFunction(refresh_callback);

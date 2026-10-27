@@ -26,6 +26,8 @@ if ! [[ "${BRAND}" =~ ^[a-z][a-z0-9-]*$ ]]; then
 fi
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 COLOR="${OS_COLOR:-${DEFAULT_COLOR}}"
+# The README banner's tagline, on the login screen and the SSH welcome
+TAGLINE="${OS_ISSUE:-${DEFAULT_TAGLINE}}"
 HOSTNAME="${OS_HOSTNAME:-${DEFAULT_HOSTNAME}}"
 LOGIN_USER="${OS_USER:-${DEFAULT_USER}}"
 VERSION="${OS_VERSION:-0.0.1}"
@@ -122,6 +124,8 @@ BRAND_PREFIX="${BRAND}"
 BRAND_COLOR="${COLOR}"
 BRAND_VERSION="${VERSION}"
 BRANDEOF
+# Quoted for the shells that source brand.env, whatever OS_ISSUE holds
+printf 'BRAND_TAGLINE=%q\n' "${TAGLINE}" >> "${ROOTFS}/etc/kura/brand.env"
 chmod 644 "${ROOTFS}/etc/kura/brand.env"
 
 # ---- Patch config.json with env values ----
@@ -137,26 +141,10 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
     chmod 600 "${ROOTFS}/etc/${BRAND}/config.json"
 fi
 
-# ---- ANSI color definitions (from brand color) ----
-ESC=$'\033'
-_r=$((16#${COLOR:1:2})); _g=$((16#${COLOR:3:2})); _b=$((16#${COLOR:5:2}))
-B="${ESC}[38;2;${_r};${_g};${_b}m"
-G="${B}"
-R="${ESC}[0m"
-
-# ---- Generate colored /etc/issue (pre-login banner) ----
-# agetty passes raw ANSI bytes through; \r \m \l are agetty escapes
-cat > "${ROOTFS}/etc/issue" <<ISSUEEOF
-
-${B}  ██   ██ ██    ██ ██████   █████
-  ██  ██  ██    ██ ██   ██ ██   ██
-  █████   ██    ██ ██████  ███████
-  ██  ██  ██    ██ ██   ██ ██   ██
-  ██   ██  ██████  ██   ██ ██   ██${R}
-
-${G}  ${OS_ISSUE:-Welcome to ${OS_NAME}}${R}
-
-ISSUEEOF
+# ---- /etc/issue: the console login screen (ADR-018) ----
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/issue.sh"
+kura_issue "${TAGLINE}" "${COLOR#\#}" > "${ROOTFS}/etc/issue"
 
 # ---- Install dynamic MOTD scripts ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

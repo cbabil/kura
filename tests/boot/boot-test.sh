@@ -41,6 +41,7 @@ mkdir -p "${OUT}"
 OUT="$(cd "${OUT}" && pwd)"
 SERIAL="${OUT}/serial.log" REPORT="${OUT}/report.txt" IDENTITY="${OUT}/identity.txt"
 PIDFILE="${OUT}/qemu.pid" DISK="${OUT}/disk.img" KEY="${OUT}/id_ed25519"
+MONITOR="${OUT}/monitor.sock"
 : > "${REPORT}"
 
 if [ -w /dev/kvm ]; then ACCEL=(-accel kvm -cpu host); WAIT_SECS=600
@@ -91,14 +92,17 @@ qemu-system-x86_64 -machine q35,smm=on -m 4096 -smp 2 "${ACCEL[@]}" \
     -drive "if=pflash,format=raw,unit=0,readonly=on,file=${OVMF_CODE}" \
     -drive "if=pflash,format=raw,unit=1,file=${OUT}/ovmf-vars.fd" \
     -drive "file=${DISK},format=raw,if=virtio" \
-    -display none -monitor none -serial "file:${SERIAL}" \
+    -display none -monitor "unix:${MONITOR},server,nowait" -serial "file:${SERIAL}" \
     -nic "user,restrict=on,hostfwd=tcp::${SSH_PORT}-:22" \
     -pidfile "${PIDFILE}" -daemonize
 
 # ---- checks ----
 
 # sshd starts after first boot: its marker is checked once logged in
+splash_screens 40 &
+SPLASH_PID=$!
 check "SSH reachable" wait_for "SSH" ssh_listening
+kill "${SPLASH_PID}" 2>/dev/null || true
 if [ -n "${SETUP}" ]; then
     check "setup: SSH key login as the new user" wait_for "key login" ssh_run true
     check "setup: password logins refused" password_login_refused
@@ -115,6 +119,9 @@ check "core services active" services_active
 check "Docker answers" docker_answers
 check "device identity recorded" record_identity
 check "less works in an SSH terminal" less_works
+check "splash: kura is the default theme" splash_theme_default
+check "splash: theme in the initrd that boots" splash_in_initrd
+check "login screen has the Kura look (login.png)" login_screen
 
 if [ "${FAILED}" -ne 0 ]; then
     collect_diagnostics

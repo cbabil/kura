@@ -14,6 +14,9 @@ PC_GRUB_CFG="EFI/debian/grub.cfg"                     # Debian's signed GRUB has
 PC_EFI_FILES="$(dirname "${BASH_SOURCE[0]}")/efi-files.list"
 # The screen (listed last) is the main console; ttyS0 serves VMs
 PC_CONSOLE_ARGS="console=ttyS0,115200 console=tty0"
+# Quiet boot into the Plymouth splash (ADR-018); the serial console keeps the
+# text log
+PC_SPLASH_ARGS="quiet splash plymouth.ignore-serial-consoles loglevel=3"
 
 # pc_partition_table <efi-mib>: sfdisk script, 1 MiB aligned. Partition 1 is
 # the EFI partition: first boot reads kura-setup.json from it.
@@ -36,7 +39,7 @@ pc_efi_files() { grep -v '^#' "${PC_EFI_FILES}"; }
 # pointing at the newest kernel (and .old at the previous one), so kernel
 # updates take effect.
 pc_grub_cfg() {
-    local args="root=PARTUUID=$2 ro quiet ${PC_CONSOLE_ARGS}"
+    local args="root=PARTUUID=$2 ro ${PC_SPLASH_ARGS} ${PC_CONSOLE_ARGS}"
     cat <<EOF
 set timeout=3
 set default=0

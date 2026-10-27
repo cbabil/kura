@@ -1,0 +1,82 @@
+<!doctype html>
+<!--
+  Source of the boot splash artwork (Plymouth theme "kura",
+  overlay/x86_64/usr/share/plymouth/themes/kura/). Same palette and fonts as
+  banner.html. #logo renders logo.png (transparent, the theme paints the
+  navy background), #dot renders dot.png, #preview a full screen for review.
+  Render commands at the end of this file.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #0f172a; --bg2: #0b1120; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #a970ff; --logo: #9146ff; --glyph-glow: rgba(145, 70, 255, .35);
+  }
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    background: transparent; color: var(--text);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  body.preview { width: 960px; height: 540px; background: linear-gradient(var(--bg), var(--bg2)); }
+  .card {
+    width: 560px; height: 350px; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start; text-align: center;
+  }
+  body.preview .card { position: absolute; left: 200px; top: 30px; }
+  .glyph {
+    font-family: "Hiragino Mincho ProN", serif; font-size: 190px; line-height: 1;
+    margin-top: 8px;
+    background: linear-gradient(170deg, #b88cff 0%, var(--logo) 55%, #6d28d9 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 28px var(--glyph-glow));
+  }
+  .kicker {
+    margin-top: 22px; font-family: Menlo, monospace; font-size: 11px;
+    letter-spacing: 6px; color: var(--accent); padding-left: 6px;
+  }
+  h1 { margin-top: 10px; font-size: 64px; font-weight: 700; letter-spacing: -2.5px; line-height: 1; }
+  .tag { margin-top: 12px; font-size: 17px; color: var(--muted); letter-spacing: -.1px; }
+  .tag b { color: var(--text); font-weight: 600; }
+  .dots { display: none; }
+  body.preview .dots {
+    display: flex; gap: 14px; position: absolute; left: 0; right: 0; top: 470px;
+    justify-content: center;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--logo); }
+  .dot.dim { opacity: .3; }
+  body.dotonly { width: 16px; height: 16px; }
+  body.dotonly .card { display: none; }
+  body.dotonly .solo { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--logo); }
+  .solo { display: none; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="glyph">蔵</div>
+    <div class="kicker">THE STOREHOUSE</div>
+    <h1>Kura</h1>
+    <p class="tag">The lightweight OS for your <b>home server</b>.</p>
+  </div>
+  <div class="dots"><i class="dot"></i><i class="dot dim"></i><i class="dot dim"></i></div>
+  <div class="solo"></div>
+  <script>
+    const mode = location.hash.slice(1);
+    if (mode === "preview") document.body.className = "preview";
+    if (mode === "dot") document.body.className = "dotonly";
+  </script>
+</body>
+</html>
+<!--
+  CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  THEME=overlay/x86_64/usr/share/plymouth/themes/kura
+  "$CHROME" --headless --hide-scrollbars --default-background-color=00000000 \
+    --window-size=560,350 --force-device-scale-factor=2 \
+    --screenshot="$THEME/logo.png" "file://$PWD/.github/splash.html"
+  "$CHROME" --headless --hide-scrollbars --default-background-color=00000000 \
+    --window-size=16,16 --force-device-scale-factor=2 \
+    --screenshot="$THEME/dot.png" "file://$PWD/.github/splash.html#dot"
+  "$CHROME" --headless --hide-scrollbars --window-size=960,540 --force-device-scale-factor=2 \
+    --screenshot=splash-preview.png "file://$PWD/.github/splash.html#preview"
+-->

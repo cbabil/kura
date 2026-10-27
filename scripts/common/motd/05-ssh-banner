@@ -1,5 +1,5 @@
 #!/bin/bash
-# 05-ssh-banner — KURA ASCII art banner (SSH sessions only)
+# 05-ssh-banner — the Kura logo, 蔵 and the tagline (SSH sessions only, ADR-018)
 
 # SSH_CONNECTION is not set when pam_motd runs; detect via process ancestry
 _is_ssh() {
@@ -12,18 +12,38 @@ _is_ssh() {
 }
 _is_ssh || exit 0
 
-# Brand color from brand.env (fallback: #9146FF)
+# Brand colour and tagline from brand.env (fallbacks as in brand-defaults.sh)
 BRAND_ENV="/etc/kura/brand.env"
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
-_c="${BRAND_COLOR:-#9146FF}"
-G=$(printf '\033[38;2;%d;%d;%dm' "0x${_c:1:2}" "0x${_c:3:2}" "0x${_c:5:2}")
+# rgb <hex>: a 24-bit foreground colour (SSH terminals draw it exactly)
+rgb() { printf '\033[38;2;%d;%d;%dm' "0x${1:0:2}" "0x${1:2:2}" "0x${1:4:2}"; }
 R=$'\033[0m'
+MUTED=$(rgb 94a3b8)
+TEXT=$(rgb e2e8f0)
+LIGHT=$(rgb a970ff)
 
+# The logo (as in scripts/common/issue.sh) in a vertical gradient: light
+# purple at the top, the brand colour at the bottom, as 蔵 on the boot splash
+LOGO=(
+    "██   ██ ██    ██ ██████   █████"
+    "██  ██  ██    ██ ██   ██ ██   ██"
+    "█████   ██    ██ ██████  ███████"
+    "██  ██  ██    ██ ██   ██ ██   ██"
+    "██   ██  ██████  ██   ██ ██   ██"
+)
+brand="${BRAND_COLOR:-#9146FF}"
+top=(0xb8 0x8c 0xff)
+bottom=("0x${brand:1:2}" "0x${brand:3:2}" "0x${brand:5:2}")
+last=$(( ${#LOGO[@]} - 1 ))
 echo ""
-printf "${G}  ██   ██ ██    ██ ██████   █████${R}\n"
-printf "${G}  ██  ██  ██    ██ ██   ██ ██   ██${R}\n"
-printf "${G}  █████   ██    ██ ██████  ███████${R}\n"
-printf "${G}  ██  ██  ██    ██ ██   ██ ██   ██${R}\n"
-printf "${G}  ██   ██  ██████  ██   ██ ██   ██${R}\n"
+for i in "${!LOGO[@]}"; do
+    colour=$(printf '\033[38;2;%d;%d;%dm' \
+        $(( top[0] + (bottom[0] - top[0]) * i / last )) \
+        $(( top[1] + (bottom[1] - top[1]) * i / last )) \
+        $(( top[2] + (bottom[2] - top[2]) * i / last )))
+    printf '  %s%s%s\n' "${colour}" "${LOGO[i]}" "${R}"
+done
 echo ""
-printf "${G}  Welcome to %s${R}\n" "${BRAND_NAME:-Kura}"
+printf '  %s蔵 · THE STOREHOUSE%s\n' "${LIGHT}" "${R}"
+printf '  %s%s%s\n' "${TEXT}" "${BRAND_TAGLINE:-The lightweight OS for your home server.}" "${R}"
+printf '  %s%s%s\n' "${MUTED}" "────────────────────────────────────────" "${R}"

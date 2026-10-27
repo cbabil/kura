@@ -18,3 +18,8 @@ amd64-microcode
 qemu-guest-agent
 
 # NOTE: Docker is baked into every image (see packages-common.list).
+
+# Boot splash (theme kura, overlay/x86_64/usr/share/plymouth/themes/kura);
+# Plymouth's initramfs hook copies fontconfig's files for any graphical theme
+plymouth
+fontconfig
