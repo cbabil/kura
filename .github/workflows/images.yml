@@ -177,6 +177,7 @@ jobs:
             install/
             !boot-*/disk.img
             !boot-*/id_ed25519*
+            !boot-*/monitor.sock
             !install/*.img
             !install/serve/
             !install/installed/disk.img

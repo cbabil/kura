@@ -10,6 +10,8 @@
 DEFAULT_BRAND="kura"
 DEFAULT_NAME="Kura"
 DEFAULT_COLOR="#9146FF"
+# README banner tagline: login screen and SSH welcome (OS_ISSUE overrides)
+DEFAULT_TAGLINE="The lightweight OS for your home server."
 DEFAULT_HOSTNAME="kura"
 # Login user (SSH password auth, sudo). Its default password is public, so it
 # is expired at build time (scripts/common/passwords.sh).

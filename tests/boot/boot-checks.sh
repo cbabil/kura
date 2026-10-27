@@ -105,6 +105,46 @@ secure_boot_on() {
     [ "${value}" = "1" ]
 }
 
+
+# screendump <png>: the guest's screen, through the QEMU monitor socket
+screendump() {
+    python3 - "${MONITOR}" "$1" <<'PY'
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX)
+s.settimeout(10)
+s.connect(sys.argv[1])
+time.sleep(0.3)
+s.recv(65536)
+s.sendall(("screendump %s -f png\n" % sys.argv[2]).encode())
+time.sleep(1)
+s.close()
+PY
+}
+
+# splash_screens <seconds>: a screenshot every 2 s while the system boots
+# (splash-NN.png), run in the background: the Plymouth splash shows in some
+splash_screens() {
+    local n
+    for n in $(seq -w 1 $(( $1 / 2 ))); do
+        sleep 2
+        screendump "${OUT}/splash-${n}.png" 2>/dev/null || true
+    done
+}
+
+# The PC image's boot splash (ADR-018): the theme is the default and is in
+# the initrd that boots
+splash_theme_default() { [ "$(ssh_run /usr/sbin/plymouth-set-default-theme)" = kura ]; }
+splash_in_initrd() {
+    ssh_run 'lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -q "themes/kura/kura.script"'
+}
+
+# login_screen: the console's login screen has the Kura look; saved as
+# login.png
+login_screen() {
+    screendump "${OUT}/login.png" && [ -s "${OUT}/login.png" ] &&
+        ssh_run 'grep -q "T H E   S T O R E H O U S E" /etc/issue'
+}
+
 # /boot/efi is mounted from fstab, and the APT hook's sync finds nothing newer
 efi_partition_current() {
     ssh_run "findmnt -no FSTYPE /boot/efi" | grep -qx vfat &&

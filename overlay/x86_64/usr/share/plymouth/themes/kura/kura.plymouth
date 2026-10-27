@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Kura
+Description=蔵 · The storehouse: the lightweight OS for your home server (ADR-018)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/kura
+ScriptFile=/usr/share/plymouth/themes/kura/kura.script
