@@ -15,7 +15,9 @@ setup() {
  "rpi5-arm64":{"url":"https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-rpi5-arm64.img.zst",
    "sha256":"aa","size":400,"extract_sha256":"bb","extract_size":2000},
  "x86_64":{"url":"https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64-amd64.img.zst",
-   "sha256":"cc","size":500,"extract_sha256":"dd","extract_size":3000}}}
+   "sha256":"cc","size":500,"extract_sha256":"dd","extract_size":3000}},
+ "installers":{"x86_64":{"url":"https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64-installer.img.zst",
+   "sha256":"ee","size":40,"extract_sha256":"ff","extract_size":130}}}
 JSON
 }
 
@@ -24,7 +26,7 @@ entry() { echo "$output" | jq -r ".os_list[0]$1"; }
 @test "make-etchwise-list: one Pi 5 entry with the image's download and unpacked hashes" {
     run "${SCRIPT}" "${MANIFEST}"
     [ "$status" -eq 0 ]
-    [ "$(echo "$output" | jq '.os_list | length')" = "2" ]
+    [ "$(echo "$output" | jq '.os_list | length')" = "3" ]
     [ "$(entry .name)" = "Kura 0.1.0" ]
     [ "$(entry .url)" = "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-rpi5-arm64.img.zst" ]
     [ "$(entry .image_download_size)" = "400" ]
@@ -35,7 +37,20 @@ entry() { echo "$output" | jq -r ".os_list[0]$1"; }
     [ "$(entry '.devices | join(",")')" = "pi5-64bit" ]
 }
 
-pc() { echo "$output" | jq -r ".os_list[1]$1"; }
+installer() { echo "$output" | jq -r ".os_list[1]$1"; }
+pc() { echo "$output" | jq -r ".os_list[2]$1"; }
+
+@test "make-etchwise-list: the PC installer comes first for the NUC, with first-boot setup" {
+    run "${SCRIPT}" "${MANIFEST}"
+    [ "$status" -eq 0 ]
+    [ "$(installer .name)" = "Kura 0.1.0 installer (PC)" ]
+    [ "$(installer .url)" = "https://github.com/cbabil/kura/releases/download/v0.1.0/kura-0.1.0-x86_64-installer.img.zst" ]
+    [ "$(installer .image_download_sha256)" = "ee" ]
+    [ "$(installer .extract_sha256)" = "ff" ]
+    [ "$(installer '.devices | join(",")')" = "x86-64" ]
+    [ "$(installer .init_format)" = "kura" ]
+    matches "$(installer .description)" "*internal drive*"
+}
 
 @test "make-etchwise-list: one PC entry for the Intel NUC and other x86-64 machines" {
     run "${SCRIPT}" "${MANIFEST}"

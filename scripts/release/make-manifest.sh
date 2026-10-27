@@ -1,16 +1,18 @@
 #!/bin/bash
-# scripts/release/make-manifest.sh <tag> <owner/repo> <pi-image> <pc-image>
+# scripts/release/make-manifest.sh <tag> <owner/repo> <pi-image> <pc-image> <pc-installer-image>
 #
 # Prints the release manifest (projects-docs/kura/architecture/updates.md, section 2)
 # for one Kura release: version, channel, release date, and the download
 # url/sha256/size of each image, plus the unpacked image's size and sha256
-# (what an imager writes and verifies). The release workflow signs it next to
+# (what an imager writes and verifies). `bundles` are what a device runs
+# (and later updates to); `installers` hold the PC installer (ADR-017), which
+# is only written to a USB key. The release workflow signs it next to
 # the images. Needs jq, and zstd for a .zst image.
 
 set -euo pipefail
 
-[ $# -eq 4 ] || { echo "Usage: $0 <tag> <owner/repo> <pi-image> <pc-image>" >&2; exit 2; }
-TAG="$1" REPO="$2" PI_IMAGE="$3" PC_IMAGE="$4"
+[ $# -eq 5 ] || { echo "Usage: $0 <tag> <owner/repo> <pi-image> <pc-image> <pc-installer-image>" >&2; exit 2; }
+TAG="$1" REPO="$2" PI_IMAGE="$3" PC_IMAGE="$4" INSTALLER_IMAGE="$5"
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/hash.sh"
@@ -43,5 +45,7 @@ jq -n --arg version "${TAG#v}" \
       --arg released "$(date -u +%Y-%m-%d)" \
       --argjson rpi "$(asset "${PI_IMAGE}")" \
       --argjson x86 "$(asset "${PC_IMAGE}")" \
+      --argjson installer "$(asset "${INSTALLER_IMAGE}")" \
       '{version: $version, channel: "stable", released: $released,
-        bundles: {"rpi5-arm64": $rpi, "x86_64": $x86}}'
+        bundles: {"rpi5-arm64": $rpi, "x86_64": $x86},
+        installers: {"x86_64": $installer}}'

@@ -261,7 +261,7 @@ zstd -dc kura-*-x86_64-amd64-*.img.zst | sudo dd of=/dev/sdX bs=4M status=progre
 sync
 ```
 
-Plug it into the NUC, pick it in the boot menu (F10 on most NUCs), and wait for first boot to finish (it grows the root partition to the whole drive). It also runs in a VM: `qemu-system-x86_64 -machine q35 -bios /usr/share/ovmf/OVMF.fd -drive file=kura.img,format=raw,if=virtio -m 2048 -enable-kvm`. Installing onto the NUC's internal disk is not offered yet.
+Plug it into the NUC, pick it in the boot menu (F10 on most NUCs), and wait for first boot to finish (it grows the root partition to the whole drive). It also runs in a VM: `qemu-system-x86_64 -machine q35 -bios /usr/share/ovmf/OVMF.fd -drive file=kura.img,format=raw,if=virtio -m 2048 -enable-kvm`. To install Kura on the NUC's internal drive instead, write **Kura installer (PC)** to a USB key (about 40 MB to download) and boot the NUC from it with an Ethernet cable plugged in. It downloads the latest Kura PC image, checks it, writes it to the internal drive (it stops if it finds no internal drive or more than one, and waits 10 seconds so you can cancel with any key), hands over the Etchwise setup, and turns the PC off. Remove the key and turn the NUC on. Build it with `./build.sh build pc-installer`.
 
 ### Docker
 

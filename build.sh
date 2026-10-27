@@ -142,6 +142,7 @@ print_build_all_summary() {
     echo -e "${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
     print_build_section "docker"
     print_build_section "pc"
+    print_build_section "pc-installer"
     print_build_section "rpi5"
     echo -e "${GREEN}║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
@@ -156,6 +157,7 @@ print_build_section() {
     case "${TARGET}" in
         rpi5)   TARGET_DIR="${RELEASE_DIR}/${VERSION}/arm64" ;;
         pc)     TARGET_DIR="${RELEASE_DIR}/${VERSION}/pc" ;;
+        pc-installer) TARGET_DIR="${RELEASE_DIR}/${VERSION}/pc-installer" ;;
         docker) TARGET_DIR="${RELEASE_DIR}/${VERSION}/docker" ;;
     esac
 
@@ -166,6 +168,7 @@ print_build_section() {
     case "${TARGET}" in
         rpi5)   TARGET_LABEL="RPi5 SD Card Image" ;;
         pc)     TARGET_LABEL="x86_64 PC Disk Image" ;;
+        pc-installer) TARGET_LABEL="x86_64 PC Installer Image" ;;
         docker) TARGET_LABEL="Docker Rootfs Tarball" ;;
     esac
 
@@ -495,6 +498,20 @@ create_pc_image() {
 }
 
 # ============================================================================
+# create_pc_installer -- the small USB image that installs Kura on a PC's
+# internal drive (ADR-017)
+# ============================================================================
+
+create_pc_installer() {
+    local OUTPUT_DIR="${RELEASE_DIR}/${VERSION}/pc-installer"
+
+    rm -f "${OUTPUT_DIR}"/${ARTIFACT_PREFIX}-*.img* "${OUTPUT_DIR}"/SHA512SUMS* 2>/dev/null || true
+
+    "${SCRIPTS_DIR}/pc-installer/create-image.sh" "${OUTPUT_DIR}" \
+        "${OS_DEBIAN_SUITE}" "${OS_DEBIAN_MIRROR}" "${OS_TMP}"
+}
+
+# ============================================================================
 # package_release -- generate checksums and GPG signatures
 # ============================================================================
 
@@ -505,6 +522,7 @@ package_release() {
     case "${TARGET}" in
         rpi5)   TARGET_DIR="${RELEASE_DIR}/${VERSION}/arm64" ;;
         pc)     TARGET_DIR="${RELEASE_DIR}/${VERSION}/pc" ;;
+        pc-installer) TARGET_DIR="${RELEASE_DIR}/${VERSION}/pc-installer" ;;
         docker) TARGET_DIR="${RELEASE_DIR}/${VERSION}/docker" ;;
         *)      return 0 ;;
     esac
@@ -620,6 +638,7 @@ build_target() {
     case "${TARGET}" in
         rpi5)   TARGET_LABEL="RPi5 SD Card Image (arm64)" ;;
         pc)     TARGET_LABEL="x86_64 PC Disk Image (amd64, UEFI)" ;;
+        pc-installer) TARGET_LABEL="x86_64 PC Installer Image (amd64, UEFI)" ;;
         docker) TARGET_LABEL="Docker Rootfs Tarball" ;;
     esac
 
@@ -634,6 +653,17 @@ build_target() {
     echo -e "  Release:  ${RELEASE_DIR}/${VERSION}/"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
+
+    # The PC installer is a separate pipeline (its own mmdebstrap, no Kura
+    # rootfs): ADR-017
+    if [ "${TARGET}" = "pc-installer" ]; then
+        create_pc_installer
+        package_release "pc-installer"
+        if [ "${_BUILD_ALL:-0}" -eq 0 ]; then
+            print_build_summary "pc-installer" "${BUILD_START}"
+        fi
+        return 0
+    fi
 
     # Docker is a separate pipeline (its own mmdebstrap)
     if [ "${TARGET}" = "docker" ]; then
@@ -731,6 +761,7 @@ show_help() {
     echo "Build targets:"
     echo "  docker             Docker rootfs tarball (fastest validation)"
     echo "  pc                 x86_64 PC disk image (UEFI, e.g. Intel NUC)"
+    echo "  pc-installer       Small USB image that installs the PC image on a PC's drive"
     echo "  rpi5               ARM64 RPi5 SD card image"
     echo "  all                Build all targets"
     echo ""
@@ -769,6 +800,7 @@ case "${1:-help}" in
                 echo -e "${GREEN}  ✓ Docker complete — continuing with PC...${NC}"
                 echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
                 build_target "pc"
+                build_target "pc-installer"
                 echo ""
                 echo -e "${GREEN}────────────────────────────────────────────────────────────────${NC}"
                 echo -e "${GREEN}  ✓ PC complete — continuing with RPi5...${NC}"
@@ -780,11 +812,11 @@ case "${1:-help}" in
                 SECS=$(( ELAPSED % 60 ))
                 print_build_all_summary "${MINS}" "${SECS}"
                 ;;
-            docker|pc|rpi5)
+            docker|pc|pc-installer|rpi5)
                 build_target "${TARGET}"
                 ;;
             *)
-                print_error "Unknown target: ${TARGET}. Use 'docker', 'pc', 'rpi5', or 'all'."
+                print_error "Unknown target: ${TARGET}. Use 'docker', 'pc', 'pc-installer', 'rpi5', or 'all'."
                 exit 1
                 ;;
         esac

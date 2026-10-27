@@ -372,3 +372,9 @@ stub_boot_fat() {  # a FAT boot partition holding BOOT's files
     local os_config="${REPO_ROOT}/packages/os-config/src/os-config"
     file_has "${os_config}" "SAFE_SSID_RE='${SSID_RE}'"
 }
+
+@test "disk_partition: nvme and mmc disks take a p before the number" {
+    [ "$(disk_partition nvme0n1 1)" = "nvme0n1p1" ]
+    [ "$(disk_partition mmcblk0 1)" = "mmcblk0p1" ]
+    [ "$(disk_partition sda 1)" = "sda1" ]
+}

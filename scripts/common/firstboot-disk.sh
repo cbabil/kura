@@ -1,7 +1,8 @@
 #!/bin/bash
 # scripts/common/firstboot-disk.sh
-# Disk helpers for first boot (firstboot.sh, firstboot-setup.sh): the root
-# disk, the boot partition, mounting a partition for one step. Installed next
+# Disk helpers for first boot (firstboot.sh, firstboot-setup.sh) and the PC
+# installer: the root disk, the boot partition, mounting a partition for one
+# step, wiping a file. Installed next
 # to firstboot.sh by install-firstboot.sh. Defines functions only.
 
 # root_disk: "<root-device> <parent-disk>"; fails when / is not on a disk
@@ -14,15 +15,31 @@ root_disk() {
     echo "${root_dev} ${disk}"
 }
 
+# disk_partition <disk> <n>: partition <n>'s name (nvme0n1 -> nvme0n1p1,
+# sda -> sda1)
+disk_partition() {
+    case "$1" in
+        *[0-9]) echo "$1p$2" ;;
+        *) echo "$1$2" ;;
+    esac
+}
+
 # boot_partition: partition 1 of the root disk (the Pi's FAT boot partition)
 boot_partition() {
     local disk
     disk=$(root_disk) || return 1
-    disk="${disk#* }"
-    case "${disk}" in
-        *[0-9]) echo "/dev/${disk}p1" ;;
-        *) echo "/dev/${disk}1" ;;
-    esac
+    echo "/dev/$(disk_partition "${disk#* }" 1)"
+}
+
+# wipe_file <file>: overwrite in place before deleting (best effort: the
+# card's flash controller may still keep old copies)
+wipe_file() {
+    local size
+    size=$(wc -c < "$1" | tr -d ' ')
+    if [ "${size}" -gt 0 ]; then
+        dd if=/dev/zero of="$1" bs="${size}" count=1 conv=notrunc 2>/dev/null || true
+    fi
+    sync
 }
 
 is_fat_partition() { [ -b "$1" ] && [ "$(blkid -o value -s TYPE "$1" 2>/dev/null)" = "vfat" ]; }

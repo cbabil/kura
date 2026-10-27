@@ -22,10 +22,11 @@ disk_image_cleanup() {
 }
 
 # disk_image_attach <img>: loop device with partitions (<loop>p1, p2...) in
-# DISK_IMAGE_LOOP; cleaned up on exit
+# DISK_IMAGE_LOOP; cleaned up on exit, unless the caller has its own EXIT trap
+# (which must then call disk_image_cleanup)
 disk_image_attach() {
     modprobe loop 2>/dev/null || true
-    trap disk_image_cleanup EXIT
+    [ -n "$(trap -p EXIT)" ] || trap disk_image_cleanup EXIT
     DISK_IMAGE_LOOP=$(losetup --show --partscan -f "$1")
 }
 
