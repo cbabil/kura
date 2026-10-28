@@ -10,7 +10,8 @@
 # over the setup file, mark the key and power off. The internal drive is
 # then booted alone by boot-test.sh --installed, which runs the usual checks
 # (setup applied, SSH key login, Secure Boot, first boot, root grown...).
-# Images may be .img or .img.zst. Needs what boot-test.sh needs, plus
+# The installer's screen is saved every few seconds (installer-NN.png, at
+# 1920x1080 as on a NUC). Images may be .img or .img.zst. Needs what boot-test.sh needs, plus
 # python3 for the HTTP server.
 
 set -euo pipefail
@@ -26,6 +27,7 @@ BOOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "${OUT}/serve" "${OUT}/installed"
 OUT="$(cd "${OUT}" && pwd)"
 SERIAL="${OUT}/serial.log" REPORT="${OUT}/report.txt"
+MONITOR="${OUT}/monitor.sock"
 KEY="${OUT}/installed/id_ed25519"
 LOGIN_PASS="Kura-$(openssl rand -hex 8)"
 : > "${REPORT}"
@@ -35,8 +37,11 @@ else ACCEL=(-accel tcg); WAIT_SECS=2400; fi
 OVMF_CODE=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd
 OVMF_VARS=/usr/share/OVMF/OVMF_VARS_4M.ms.fd
 
-HTTP_PID=""
-stop_server() { [ -n "${HTTP_PID}" ] && kill "${HTTP_PID}" 2>/dev/null || true; }
+HTTP_PID="" SCREENS_PID=""
+stop_server() {
+    [ -n "${SCREENS_PID}" ] && kill "${SCREENS_PID}" 2>/dev/null
+    [ -n "${HTTP_PID}" ] && kill "${HTTP_PID}" 2>/dev/null || true
+}
 trap stop_server EXIT
 
 # shellcheck source=tests/boot/boot-checks.sh
@@ -45,6 +50,16 @@ source "${BOOT_DIR}/boot-checks.sh"
 source "${BOOT_DIR}/../../scripts/pc-installer/installer-image.sh"
 # shellcheck source=scripts/common/hash.sh
 source "${BOOT_DIR}/../../scripts/common/hash.sh"
+
+# installer_screens: a screenshot every 4 s while the installer runs
+# (installer-NN.png, at most 99), run in the background
+installer_screens() {
+    local n
+    for n in $(seq -w 1 99); do
+        sleep 4
+        [ -S "${MONITOR}" ] && screendump "${OUT}/installer-${n}.png" 2>/dev/null || true
+    done
+}
 
 # efi_has <disk-image> <file>: <file> is on the image's EFI partition
 efi_has() { mdir -i "$1@@$(( PC_EFI_START * 512 ))" "::/$2" >/dev/null 2>&1; }
@@ -92,6 +107,9 @@ truncate -s 8G "${INTERNAL}"
 # ---- install ----
 
 cp "${OVMF_VARS}" "${OUT}/ovmf-vars.fd"
+rm -f "${OUT}"/installer-*.png "${MONITOR}"
+installer_screens &
+SCREENS_PID=$!
 report "Installing from ${INSTALLER} (UEFI Secure Boot, ${ACCEL[*]}, wait ${WAIT_SECS}s)"
 install_status=0
 timeout "${WAIT_SECS}" qemu-system-x86_64 -machine q35,smm=on -m 2048 -smp 2 "${ACCEL[@]}" \
@@ -103,7 +121,11 @@ timeout "${WAIT_SECS}" qemu-system-x86_64 -machine q35,smm=on -m 2048 -smp 2 "${
     -drive "if=none,id=internal,format=raw,file=${INTERNAL}" \
     -device virtio-blk-pci,drive=internal,bootindex=1 \
     -nic user,model=virtio-net-pci \
-    -display none -monitor none -serial "file:${SERIAL}" -no-reboot || install_status=$?
+    -vga none -device VGA,xres=1920,yres=1080 \
+    -display none -monitor "unix:${MONITOR},server,nowait" -serial "file:${SERIAL}" \
+    -no-reboot || install_status=$?
+kill "${SCREENS_PID}" 2>/dev/null || true
+report "Installer screenshots: $(find "${OUT}" -maxdepth 1 -name 'installer-*.png' | wc -l)"
 
 key_lacks() { ! efi_has "${KEY_IMG}" "$1"; }
 

@@ -1,7 +1,8 @@
 # config/packages-pc-installer.list — the PC installer's build rootfs
 # (scripts/pc-installer/create-image.sh). Nothing here is installed on a
 # device: the image takes the signed boot files and kernel, and the initrd
-# takes busybox, the tools below with their libraries, modules and firmware.
+# takes busybox, the tools below with their libraries, modules and firmware,
+# and console-setup-linux's Terminus 16x32 font.
 linux-image-amd64
 shim-signed
 grub-efi-amd64-signed
@@ -15,3 +16,4 @@ fdisk
 kmod
 cpio
 firmware-realtek
+console-setup-linux

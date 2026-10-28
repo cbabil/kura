@@ -4,7 +4,7 @@
 # packages of config/packages-pc-installer.list: busybox for the basics, the
 # few dynamic tools the installer needs with their libraries, the kernel
 # modules of modules.list with their dependencies, Realtek NIC firmware, CA
-# certificates, and the installer scripts. The tree is assembled inside the
+# certificates, the Terminus 16x32 console font, and the installer scripts. The tree is assembled inside the
 # rootfs (/tmp/initrd) so ldd, modprobe and depmod run in a chroot.
 #
 # Usage: build-initrd.sh <rootfs> <kernel-version> <output-initrd>
@@ -73,8 +73,11 @@ fi
 
 echo "  Installer..."
 mkdir -p "${TREE}/${LIB_DIR}"
-cp "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/udhcpc.script" "${SCRIPT_DIR}/modules.list" \
+cp "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/run.sh" "${SCRIPT_DIR}/screen.sh" "${SCRIPT_DIR}/ui.sh" \
+    "${SCRIPT_DIR}/udhcpc.script" "${SCRIPT_DIR}/modules.list" \
     "${SCRIPT_DIR}/../common/firstboot-disk.sh" "${TREE}/${LIB_DIR}/"
+# 16x32 cells: 120x33 on a 1920x1080 screen; busybox setfont wants it unpacked
+gzip -dc "${ROOTFS}/usr/share/consolefonts/Uni3-Terminus32x16.psf.gz" > "${TREE}/${LIB_DIR}/font.psf"
 chmod 755 "${TREE}/${LIB_DIR}/udhcpc.script"
 sed -e "s|__BRAND__|${BRAND}|g" -e "s|__BRAND_NAME__|${OS_NAME}|g" \
     -e "s|__LABEL__|${INSTALLER_LABEL}|g" "${SCRIPT_DIR}/init" > "${TREE}/init"
@@ -84,7 +87,7 @@ chmod 755 "${TREE}/init"
 echo "  Checking the tree..."
 applets=$(chroot "${TREE}" /usr/bin/busybox --list)
 for applet in mount umount findfs seq sleep ip udhcpc mkfifo mktemp tee sha256sum head cut \
-        blockdev readlink basename ls wc dd grep cat cp rm rmdir mkdir sync ln tr poweroff; do
+        blockdev readlink basename ls wc dd grep cat cp rm rmdir mkdir sync ln tr poweroff setfont; do
     grep -qx "${applet}" <<< "${applets}" || { echo "ERROR: busybox lacks ${applet}" >&2; exit 1; }
 done
 for tool in "${TOOLS[@]}"; do
