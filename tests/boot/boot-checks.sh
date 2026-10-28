@@ -138,6 +138,9 @@ splash_in_initrd() {
     ssh_run 'lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -q "themes/kura/kura.script"'
 }
 
+# setup_shown: kura-issue has put the setup outcome on the login screen
+setup_shown() { ssh_run 'grep -q "setup applied" /etc/issue'; }
+
 # login_screen: the console's login screen has the Kura look; saved as
 # login.png
 login_screen() {

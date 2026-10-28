@@ -85,3 +85,48 @@ reset_device_identity() {
     install -d "${rootfs}/etc/systemd/system"
     ln -sf /dev/null "${rootfs}/etc/systemd/system/systemd-firstboot.service"
 }
+
+# install_login_screen <rootfs> <brand> <os-name> <scripts-dir>
+# Installs kura-issue (ADR-019) with issue.sh, and runs it at boot and every
+# minute: when the screen changed, it rewrites /etc/issue with this device's
+# facts and has agetty redraw the prompts. It is ordered after nothing that
+# can retry (a failing first boot keeps restarting), and the prompt never
+# waits for it; until it runs, the screen built into the image shows.
+install_login_screen() {
+    local rootfs="$1" brand="$2" name="$3" src="$4"
+    local units="${rootfs}/usr/lib/systemd/system"
+
+    install -d "${rootfs}/usr/lib/${brand}" "${units}"
+    sed "s|__BRAND__|${brand}|g" "${src}/kura-issue" > "${rootfs}/usr/lib/${brand}/kura-issue"
+    chmod 0755 "${rootfs}/usr/lib/${brand}/kura-issue"
+    install -m 0644 "${src}/issue.sh" "${rootfs}/usr/lib/${brand}/issue.sh"
+
+    cat > "${units}/${brand}-issue.service" <<EOF
+[Unit]
+Description=${name} login screen
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/${brand}/kura-issue
+# Runs every minute: keep its start/finish lines out of the journal
+LogLevelMax=notice
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat > "${units}/${brand}-issue.timer" <<EOF
+[Unit]
+Description=${name} login screen, kept current
+
+[Timer]
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-issue.service"
+    enable_unit "${rootfs}" timers.target "/usr/lib/systemd/system/${brand}-issue.timer"
+}

@@ -17,7 +17,11 @@ COUNTRY_RE='^[A-Z]{2}$'
 TZ_RE='^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+){0,2}$'
 KEYBOARD_RE='^[a-z]{2,8}(,[a-z]{2,8})*$'
 
-setup_error() { echo "ERROR: setup: $*" >&2; }
+# The last error, kept for the login screen's setup line (setup-status,
+# written by firstboot-setup.sh)
+SETUP_LAST_ERROR=""
+# shellcheck disable=SC2034
+setup_error() { SETUP_LAST_ERROR="$*"; echo "ERROR: setup: $*" >&2; }
 
 # setup_get <file> <jq-path>: the value, or nothing when null or missing
 setup_get() { jq -r "($2) | if . == null then empty else . end" "$1"; }

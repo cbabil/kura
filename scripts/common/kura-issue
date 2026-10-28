@@ -1,0 +1,71 @@
+#!/bin/bash
+# scripts/common/kura-issue — installed as /usr/lib/__BRAND__/kura-issue
+# Renders the console login screen (issue.sh, ADR-019) with this device's
+# facts: version, uptime, disk use, services and the outcome of the imager's
+# setup. When the screen changed, writes /etc/issue and asks agetty to redraw
+# the prompts nobody has started typing at. Run at boot and every minute by
+# __BRAND__-issue.service / .timer. Paths can be overridden (KURA_*) for tests.
+
+# shellcheck disable=SC2034  # the LOGIN_* facts are read by kura_issue (issue.sh)
+set -uo pipefail
+# Count characters, not bytes, whatever locale systemd gives us
+export LC_ALL=C.UTF-8
+
+# shellcheck disable=SC1091
+source "$(dirname "$0")/issue.sh"
+
+BRAND_ENV="${KURA_BRAND_ENV:-/etc/kura/brand.env}"
+UPTIME_FILE="${KURA_UPTIME:-/proc/uptime}"
+PASSWD_FILE="${KURA_PASSWD:-/etc/passwd}"
+SETUP_STATUS="${KURA_SETUP_STATUS:-/var/lib/__BRAND__/setup-status}"
+ISSUE="${KURA_ISSUE:-/etc/issue}"
+# The login user's uid, as LOGIN_UID in firstboot-setup.sh
+LOGIN_UID=1000
+# Shown with a dot each (motd/40-status also shows the config unit)
+SERVICES=(docker ssh NetworkManager)
+SERVICE_NAMES=(docker ssh network)
+
+# shellcheck disable=SC1090
+[ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+
+# human_uptime <seconds>: "3 min" in the first hour, then "5 h", then "4 days",
+# so the screen (and /etc/issue) changes at most hourly once the device is up
+human_uptime() {
+    if [ "$1" -lt 3600 ]; then echo "$(( $1 / 60 )) min"
+    elif [ "$1" -lt 86400 ]; then echo "$(( $1 / 3600 )) h"
+    else echo "$(( $1 / 86400 )) days"; fi
+}
+
+# console_cols: tty1's width (the layout depends on it), 80 when unknown
+console_cols() {
+    local size
+    size=$(stty size < /dev/tty1 2>/dev/null) || { echo 80; return; }
+    echo "${size#* }"
+}
+
+read -r up _ < "${UPTIME_FILE}" 2>/dev/null || up=0
+disk=$(df --output=pcent / 2>/dev/null | tail -n 1)
+disk="${disk// /}"
+
+LOGIN_VERSION="${BRAND_NAME:-Kura} ${BRAND_VERSION:-}"
+LOGIN_UPTIME="$(human_uptime "${up%.*}") · disk ${disk:-?} used"
+LOGIN_USER=$(awk -F: -v uid="${LOGIN_UID}" '$3 == uid { print $1; exit }' "${PASSWD_FILE}" 2>/dev/null)
+LOGIN_SERVICES=""
+i=0
+while read -r state; do
+    LOGIN_SERVICES+="${SERVICE_NAMES[i]}:${state} "
+    i=$(( i + 1 ))
+done < <(timeout 2 systemctl is-active "${SERVICES[@]}" 2>/dev/null)
+LOGIN_SETUP=""
+[ -f "${SETUP_STATUS}" ] && read -r LOGIN_SETUP < "${SETUP_STATUS}"
+LOGIN_COLS="${LOGIN_COLS:-$(console_cols)}"
+
+screen=$(kura_issue "${BRAND_TAGLINE:-}" "${BRAND_COLOR:+${BRAND_COLOR#\#}}") || exit 1
+# Unchanged (most minutes once the device is up): compared in memory, so the
+# disk is not written and nothing is redrawn
+[ -f "${ISSUE}" ] && [ "${screen}" = "$(<"${ISSUE}")" ] && exit 0
+# $(...) dropped the screen's two closing newlines; the .new file sits next to
+# /etc/issue so mv replaces it atomically
+tmp="${ISSUE}.new"
+printf '%s\n\n' "${screen}" > "${tmp}" && mv "${tmp}" "${ISSUE}" || { rm -f "${tmp}"; exit 1; }
+agetty --reload 2>/dev/null || true

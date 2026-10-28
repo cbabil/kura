@@ -111,6 +111,29 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     [ "$(conf .hostname)" = "kura" ]
 }
 
+@test "apply_setup_dir: records that the setup was applied (the login screen shows it)" {
+    full_setup
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = "applied" ]
+}
+
+@test "apply_setup_dir: records why an invalid file was ignored" {
+    echo '{"version":1,"user":{"name":"root","passwordHash":"'"${HASH}"'"}}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "ignored: invalid user name (taken by a system account or group)" ]
+}
+
+@test "apply_setup_dir: a step that fails without a reason points at the journal" {
+    full_setup
+    usermod() { return 1; }
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -ne 0 ]
+    file_has "${SETUP_ROOT}/var/lib/kura/setup-status" "incomplete, retrying: a step failed (journalctl -u kura-firstboot)"
+}
+
 @test "apply_setup_dir: bad Wi-Fi settings skip the Wi-Fi only" {
     echo '{"version":1,"hostname":"lab","wifi":{"ssid":"Bob'"'"'s phone","psk":"password1"}}' \
         > "${BOOT}/kura-setup.json"

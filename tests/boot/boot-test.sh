@@ -92,6 +92,7 @@ qemu-system-x86_64 -machine q35,smm=on -m 4096 -smp 2 "${ACCEL[@]}" \
     -drive "if=pflash,format=raw,unit=0,readonly=on,file=${OVMF_CODE}" \
     -drive "if=pflash,format=raw,unit=1,file=${OUT}/ovmf-vars.fd" \
     -drive "file=${DISK},format=raw,if=virtio" \
+    -vga none -device VGA,xres=1920,yres=1080 \
     -display none -monitor "unix:${MONITOR},server,nowait" -serial "file:${SERIAL}" \
     -nic "user,restrict=on,hostfwd=tcp::${SSH_PORT}-:22" \
     -pidfile "${PIDFILE}" -daemonize
@@ -121,6 +122,9 @@ check "device identity recorded" record_identity
 check "less works in an SSH terminal" less_works
 check "splash: kura is the default theme" splash_theme_default
 check "splash: theme in the initrd that boots" splash_in_initrd
+if [ -n "${SETUP}" ]; then
+    check "login screen says the setup was applied" wait_for "kura-issue" setup_shown
+fi
 check "login screen has the Kura look (login.png)" login_screen
 
 if [ "${FAILED}" -ne 0 ]; then

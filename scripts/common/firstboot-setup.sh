@@ -168,20 +168,31 @@ remove_setup_file() {
     rm -f "$1" || { setup_error "could not delete ${SETUP_FILE}"; return 1; }
 }
 
+# record_setup_status <text>: the outcome the login screen shows (kura-issue)
+record_setup_status() {
+    install -d "${SETUP_ROOT}/var/lib/${SETUP_BRAND}"
+    printf '%s\n' "$1" | write_atomic "${SETUP_ROOT}/var/lib/${SETUP_BRAND}/setup-status" 644
+}
+
 # apply_setup_dir <mounted-boot-dir>
 apply_setup_dir() {
     local f="$1/${SETUP_FILE}"
     [ -f "${f}" ] || return 0
     if ! validate_setup "${f}"; then
+        record_setup_status "ignored: ${SETUP_LAST_ERROR}"
         setup_error "${SETUP_FILE} ignored; the image's defaults stay"
         remove_setup_file "${f}"
         return
     fi
+    SETUP_LAST_ERROR=""
     if ! apply_setup_file "${f}"; then
+        # Not every step names its failure; the journal has the details
+        record_setup_status "incomplete, retrying: ${SETUP_LAST_ERROR:-a step failed (journalctl -u ${SETUP_BRAND}-firstboot)}"
         setup_error "${SETUP_FILE} not fully applied; first boot will retry"
         return 1
     fi
-    remove_setup_file "${f}" && echo "Setup from ${SETUP_FILE} applied."
+    remove_setup_file "${f}" && record_setup_status "applied" &&
+        echo "Setup from ${SETUP_FILE} applied."
 }
 
 # apply_setup: apply the setup file from the boot partition, which is never

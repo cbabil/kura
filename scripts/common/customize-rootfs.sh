@@ -89,6 +89,20 @@ enable_unit "${ROOTFS}" multi-user.target /usr/lib/systemd/system/containerd.ser
 # First boot: SSH host keys, the imager's setup file, root partition growth,
 # hostname from user-data
 install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
+install_login_screen "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
+
+# ---- Console font: Terminus 16x32, the login screen's design size ----
+# (120x33 on a 1080p screen; console-setup applies it at boot). Uni3 has the
+# blocks, box drawing, bullet and triangle the screen draws (ADR-019).
+install -d "${ROOTFS}/etc/default"
+cat > "${ROOTFS}/etc/default/console-setup" <<'CONSOLEEOF'
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="Uni3"
+FONTFACE="Terminus"
+FONTSIZE="16x32"
+VIDEOMODE=
+CONSOLEEOF
 
 enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-config.service"
 
@@ -141,10 +155,10 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
     chmod 600 "${ROOTFS}/etc/${BRAND}/config.json"
 fi
 
-# ---- /etc/issue: the console login screen (ADR-018) ----
+# ---- /etc/issue: the console login screen (ADR-018, ADR-019) ----
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/issue.sh"
-kura_issue "${TAGLINE}" "${COLOR#\#}" > "${ROOTFS}/etc/issue"
+LOGIN_USER="" kura_issue "${TAGLINE}" "${COLOR#\#}" > "${ROOTFS}/etc/issue"
 
 # ---- Install dynamic MOTD scripts ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
