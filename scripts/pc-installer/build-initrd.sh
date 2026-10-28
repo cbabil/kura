@@ -27,7 +27,8 @@ BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 LIB_DIR="usr/lib/${BRAND}-installer"
 # Dynamic tools; busybox provides everything else
-TOOLS=(/usr/bin/bash /usr/bin/curl /usr/bin/zstd /usr/bin/jq /usr/sbin/sfdisk /usr/bin/kmod)
+# setfont comes from kbd: Debian's static busybox has no setfont applet
+TOOLS=(/usr/bin/bash /usr/bin/curl /usr/bin/zstd /usr/bin/jq /usr/sbin/sfdisk /usr/bin/kmod /usr/bin/setfont)
 TREE="${ROOTFS}/tmp/initrd"
 
 rm -rf "${TREE}"
@@ -76,7 +77,7 @@ mkdir -p "${TREE}/${LIB_DIR}"
 cp "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/run.sh" "${SCRIPT_DIR}/screen.sh" "${SCRIPT_DIR}/ui.sh" \
     "${SCRIPT_DIR}/udhcpc.script" "${SCRIPT_DIR}/modules.list" \
     "${SCRIPT_DIR}/../common/firstboot-disk.sh" "${TREE}/${LIB_DIR}/"
-# 16x32 cells: 120x33 on a 1920x1080 screen; busybox setfont wants it unpacked
+# 16x32 cells: 120x33 on a 1920x1080 screen; unpacked, so setfont needs no gzip
 gzip -dc "${ROOTFS}/usr/share/consolefonts/Uni3-Terminus32x16.psf.gz" > "${TREE}/${LIB_DIR}/font.psf"
 chmod 755 "${TREE}/${LIB_DIR}/udhcpc.script"
 sed -e "s|__BRAND__|${BRAND}|g" -e "s|__BRAND_NAME__|${OS_NAME}|g" \
@@ -87,7 +88,7 @@ chmod 755 "${TREE}/init"
 echo "  Checking the tree..."
 applets=$(chroot "${TREE}" /usr/bin/busybox --list)
 for applet in mount umount findfs seq sleep ip udhcpc mkfifo mktemp tee sha256sum head cut \
-        blockdev readlink basename ls wc dd grep cat cp rm rmdir mkdir sync ln tr poweroff setfont; do
+        blockdev readlink basename ls wc dd grep cat cp rm rmdir mkdir sync ln tr poweroff; do
     grep -qx "${applet}" <<< "${applets}" || { echo "ERROR: busybox lacks ${applet}" >&2; exit 1; }
 done
 for tool in "${TOOLS[@]}"; do

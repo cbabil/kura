@@ -79,15 +79,13 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033\\]P[0-9A-F]\\{7\\}/
 }
 
 @test "ui.sh: console-safe characters only (no CJK, no emoji)" {
-    local char
-    while read -r char; do
-        case "${char}" in █|░|─|√|›|▲|·|'') ;; *) echo "unexpected ${char}"; return 1 ;; esac
-    done < <(LC_ALL=en_US.UTF-8 grep -o '[^ -~]' "${REPO_ROOT}/scripts/pc-installer/ui.sh" | sort -u)
+    # perl decodes UTF-8 itself, so this holds in any locale (CI has no en_US)
+    [ -z "$(perl -CS -Mutf8 -ne 'print for /[^\x00-\x7F█░─√›▲·]/g' < "${REPO_ROOT}/scripts/pc-installer/ui.sh")" ]
 }
 
 # ---- In the initrd ----
 
-@test "build-initrd: copies the screen scripts and Terminus 16x32, uncompressed for busybox setfont" {
+@test "build-initrd: copies the screen scripts and Terminus 16x32, uncompressed for setfont" {
     local build="${REPO_ROOT}/scripts/pc-installer/build-initrd.sh"
     for file in install.sh run.sh screen.sh ui.sh; do
         grep -q "\${SCRIPT_DIR}/${file}" "${build}"
@@ -97,8 +95,10 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033\\]P[0-9A-F]\\{7\\}/
     grep -qx "console-setup-linux" "${REPO_ROOT}/config/packages-pc-installer.list"
 }
 
-@test "build-initrd: checks busybox has setfont" {
-    grep -A2 "^for applet in" "${REPO_ROOT}/scripts/pc-installer/build-initrd.sh" | grep -qw setfont
+@test "build-initrd: setfont comes from kbd (Debian's static busybox has none)" {
+    grep -qx kbd "${REPO_ROOT}/config/packages-pc-installer.list"
+    grep "^TOOLS=" "${REPO_ROOT}/scripts/pc-installer/build-initrd.sh" | grep -q "/usr/bin/setfont"
+    ! grep -A2 "^for applet in" "${REPO_ROOT}/scripts/pc-installer/build-initrd.sh" | grep -qw setfont
 }
 
 @test "init: loads the font, then draws through ui.sh before looking for the key" {

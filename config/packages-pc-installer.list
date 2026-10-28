@@ -17,3 +17,4 @@ kmod
 cpio
 firmware-realtek
 console-setup-linux
+kbd
