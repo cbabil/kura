@@ -169,6 +169,12 @@ kura_issue_env() {
     file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'CODESET="Uni3"'
 }
 
+@test "console font: the package's cached setup is dropped, so the first boot applies Terminus" {
+    # console-setup reuses /etc/console-setup/cached_* made at install, with the
+    # default font, and would ignore /etc/default/console-setup
+    file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'rm -f "${ROOTFS}"/etc/console-setup/cached_*'
+}
+
 @test "with no user name (the image's own screen), the connect line says <user>" {
     LOGIN_USER=""
     run kura_issue

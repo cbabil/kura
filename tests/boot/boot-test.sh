@@ -125,6 +125,7 @@ check "splash: theme in the initrd that boots" splash_in_initrd
 if [ -n "${SETUP}" ]; then
     check "login screen says the setup was applied" wait_for "kura-issue" setup_shown
 fi
+check "console font is Terminus 16x32" console_font
 check "login screen has the Kura look (login.png)" login_screen
 
 if [ "${FAILED}" -ne 0 ]; then

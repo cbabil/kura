@@ -103,6 +103,10 @@ FONTFACE="Terminus"
 FONTSIZE="16x32"
 VIDEOMODE=
 CONSOLEEOF
+# console-setup reuses the font setup it cached when it was installed (the
+# default font) and would ignore this file; without the cache, the first boot
+# runs setupcon with it and caches the Terminus setup
+rm -f "${ROOTFS}"/etc/console-setup/cached_*
 
 enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-config.service"
 

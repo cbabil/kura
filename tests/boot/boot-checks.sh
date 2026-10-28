@@ -138,6 +138,9 @@ splash_in_initrd() {
     ssh_run 'lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -q "themes/kura/kura.script"'
 }
 
+# console_font: the first boot cached the Terminus 16x32 font setup
+console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setup_font.sh'; }
+
 # setup_shown: kura-issue has put the setup outcome on the login screen
 setup_shown() { ssh_run 'grep -q "setup applied" /etc/issue'; }
 
