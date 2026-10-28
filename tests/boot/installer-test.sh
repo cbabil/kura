@@ -39,7 +39,9 @@ OVMF_VARS=/usr/share/OVMF/OVMF_VARS_4M.ms.fd
 
 HTTP_PID="" SCREENS_PID=""
 stop_server() {
-    [ -n "${SCREENS_PID}" ] && kill "${SCREENS_PID}" 2>/dev/null
+    # Already stopped after the install, so this kill may fail: never let the
+    # EXIT trap turn a passing run into a failure (set -e applies in traps)
+    [ -n "${SCREENS_PID}" ] && kill "${SCREENS_PID}" 2>/dev/null || true
     [ -n "${HTTP_PID}" ] && kill "${HTTP_PID}" 2>/dev/null || true
 }
 trap stop_server EXIT
