@@ -60,8 +60,13 @@ finished() {
     printf '%s%s1%s  Remove the USB key.\n' "${UI_PAD}" "$(ui_color F)" "$(ui_color 7)"
     printf '%s%s2%s  Turn the PC on: it starts Kura from the internal drive.\n' \
         "${UI_PAD}" "$(ui_color F)" "$(ui_color 7)"
-    [ -z "$2" ] || printf '%s%s3%s  From another computer: %s ssh %s %s\n' "${UI_PAD}" "$(ui_color F)" \
-        "$(ui_color 7)" "$(ui_color D 4)" "$2" "$(ui_color 7 0)"
+    if [ -n "$2" ]; then
+        printf '%s%s3%s  Log in as %s%s%s with SSH: Kura'"'"'s login screen shows the address and the command.\n' \
+            "${UI_PAD}" "$(ui_color F)" "$(ui_color 7)" "$(ui_color D)" "$2" "$(ui_color 7)"
+    else
+        printf '%s%s3%s  Kura'"'"'s login screen shows the address and the SSH command.\n' \
+            "${UI_PAD}" "$(ui_color F)" "$(ui_color 7)"
+    fi
 }
 
 # install_kura <key-disk> <countdown-seconds>

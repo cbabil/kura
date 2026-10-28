@@ -46,8 +46,18 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033[78]//g' <<< "$outpu
         "wifi":{"ssid":"Home"}}' > "${KEY_DIR}/kura-setup.json"
     run setup_info
     [ "$output" = "user ana, SSH key, hostname den, Wi-Fi" ]
+    # only the user name: Kura has no .local name; its login screen shows the address
     run setup_login
-    [ "$output" = "ana@den.local" ]
+    [ "$output" = "ana" ]
+}
+
+@test "finished: points to Kura's login screen for the address, never a .local name" {
+    ui_color() { :; }; show() { :; }; ui_done() { echo "$*"; }
+    run finished vda ana
+    output_has "Log in as ana with SSH: Kura's login screen shows the address and the command."
+    ! output_has ".local"
+    run finished vda ""
+    output_has "Kura's login screen shows the address and the SSH command."
 }
 
 @test "written_bytes: sectors written times 512, 0 without a stat file" {

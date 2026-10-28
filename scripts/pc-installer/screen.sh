@@ -55,10 +55,10 @@ setup_info() {
              (.wifi.ssid // empty | "Wi-Fi") ] | join(", ")' "${file}" 2>/dev/null
 }
 
-# setup_login: "<user>@<hostname>.local" from the setup file, or nothing
+# setup_login: the user name from the setup file, or nothing (Kura has no
+# .local name; its login screen shows the address and the ssh command)
 setup_login() {
-    jq -r 'select(.user.name and .hostname) | "\(.user.name)@\(.hostname).local"' \
-        "${KEY_DIR}/${INSTALLER_SETUP_FILE}" 2>/dev/null || true
+    jq -r '.user.name // empty' "${KEY_DIR}/${INSTALLER_SETUP_FILE}" 2>/dev/null || true
 }
 
 # countdown <seconds>: the seconds left over a shrinking bar; fails as soon
