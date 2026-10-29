@@ -23,7 +23,8 @@ install_firstboot() {
 
     install -d "${rootfs}/usr/lib/${brand}" "${units}"
     local script
-    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh; do
+    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh \
+            firstboot-password.sh; do
         sed "s|__BRAND_NAME__|${name}|g; s|__BRAND__|${brand}|g" "${src}/${script}" \
             > "${rootfs}/usr/lib/${brand}/${script}"
         chmod 0755 "${rootfs}/usr/lib/${brand}/${script}"

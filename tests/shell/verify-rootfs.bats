@@ -133,3 +133,26 @@ make_complete_rootfs() {
     [ "$status" -ne 0 ]
     output_has "not in the sudo group"
 }
+
+@test "verify_rootfs: fails when an APT source skips signature checks (trusted=yes)" {
+    mkdir -p "${ROOTFS}/etc/apt/sources.list.d"
+    echo "deb [trusted=yes] http://example.com/debian trixie main" > "${ROOTFS}/etc/apt/sources.list.d/x.list"
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -eq 1 ]
+    output_has "trusted=yes"
+}
+
+@test "verify_rootfs: fails on trusted: yes in a deb822 source too" {
+    mkdir -p "${ROOTFS}/etc/apt/sources.list.d"
+    printf 'Types: deb\nURIs: http://example.com\nTrusted: yes\n' > "${ROOTFS}/etc/apt/sources.list.d/x.sources"
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -eq 1 ]
+}
+
+@test "verify_rootfs: updates and the clock sync are required" {
+    rootfs_required_files kura | grep -qx "usr/bin/unattended-upgrade"
+    rootfs_required_files kura | grep -qx "etc/apt/apt.conf.d/20auto-upgrades"
+    rootfs_required_files kura | grep -qx "usr/lib/systemd/systemd-timesyncd"
+    rootfs_required_links kura | grep -qx "etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer"
+    rootfs_required_links kura | grep -qx "etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service"
+}

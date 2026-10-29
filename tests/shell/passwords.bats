@@ -22,6 +22,17 @@ setup() {
     }
 }
 
+@test "set_passwords: the public default is marked for a one-time password at first boot" {
+    set_passwords "${ROOTFS}"
+    [ -f "${ROOTFS}/var/lib/kura/default-password" ]
+}
+
+@test "set_passwords: a private password is kept (no one-time password)" {
+    OS_USER_PASSWD="s3cret"
+    set_passwords "${ROOTFS}"
+    [ ! -e "${ROOTFS}/var/lib/kura/default-password" ]
+}
+
 @test "set_passwords: root is locked unless OS_ROOT_PASSWD is set" {
     set_passwords "${ROOTFS}"
     [ "$(cat "${STDIN}")" = "admin:admin" ]

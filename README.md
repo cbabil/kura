@@ -106,7 +106,7 @@ sudo kura build pc
 GitHub Actions builds the Pi image, the PC image and the PC installer on every push to `dev` that changes build inputs, and on manual runs (**Actions → Images → Run workflow**). The PC image is also booted headless under UEFI **without internet**, once with a `kura-setup.json` on its EFI partition and once without, to check that:
 - first boot finishes and grows the root partition;
 - the setup file is applied (SSH key login as the new user, passwords off, hostname, Wi-Fi, time zone) and deleted;
-- without it, the default password only reaches a forced change;
+- without it, the one-time password on the login screen only reaches a forced change, and `admin`/`admin` is refused;
 - the core services are running and Docker answers;
 - two boots of the same image get different SSH host keys and machine IDs;
 - the PC installer, booted from a virtual USB key with a setup file, installs the PC image on a blank virtual drive, which is then booted and checked the same way.
@@ -127,7 +127,7 @@ Pushing a `v*` tag builds the images and publishes a GitHub Release with the Pi 
 scripts/release/verify-release.sh kura-0.4.1-rpi5-arm64-20261027-0001.img.zst v0.4.1
 ```
 
-Release images are built from `.env.example`: the `admin` password must be replaced at the first login and root has no password (see [Default Credentials](#default-credentials)).
+Release images are built from `.env.example`: first boot gives `admin` a one-time password, shown on the device's screen and replaced at the first login, and root has no password (see [Default Credentials](#default-credentials)).
 
 ## Configuration
 
@@ -236,10 +236,10 @@ Each directory also holds `SHA512SUMS`. `NNNN` is an auto-incremented build sequ
 
 | User | Password | SSH Access |
 |------|----------|------------|
-| `admin` | `admin`, expired: the first SSH or console login must set a new one | Password auth |
+| `admin` | a one-time password, shown on the device's login screen; the first SSH or console login must set a new one | Password auth |
 | `root` | locked | None by password; use `sudo` from `admin` |
 
-The `admin` password only gets you to the change-password prompt, so no device keeps it. Root has no password: with root locked, systemd's emergency mode can't open a shell, so a system that won't boot is repaired from another machine (or build with a private `OS_ROOT_PASSWD`). Change the defaults in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building; set `OS_USER_PASSWD_EXPIRE="false"` to keep a private `OS_USER_PASSWD`.
+The image is built with `admin`/`admin`, but first boot replaces it with a random one-time password before SSH starts, so nobody on your network can log in with a password they could guess. Connect a screen to read it, or set your user and password (or an SSH key) with [Etchwise](#etchwise), which skips it. The one-time password only gets you to the change-password prompt. Root has no password: with root locked, systemd's emergency mode can't open a shell, so a system that won't boot is repaired from another machine (or build with a private `OS_ROOT_PASSWD`). Change the defaults in `.env` (`OS_USER`, `OS_USER_PASSWD`, `OS_ROOT_PASSWD`) before building; set `OS_USER_PASSWD_EXPIRE="false"` to keep a private `OS_USER_PASSWD`.
 
 ### Etchwise
 
@@ -251,7 +251,7 @@ Etchwise (a multi-device imager based on Raspberry Pi Imager) lists Kura under R
 | Intel NUC | **Kura &lt;version&gt; installer (PC)**: puts Kura on the PC's internal drive | about 27 MB |
 | Intel NUC | **Kura &lt;version&gt; (PC)**: runs from the USB drive or SSD it is written to | about 390 MB |
 
-Its setup screens become `kura-setup.json` on the boot partition (the EFI partition on a PC); first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay (`admin`/`admin` with a forced change); the login screen then says "setup ignored" and why. **The user name must be a new name**: lowercase letters, digits, `_` or `-`, at most 32 characters, and not a name the system already has (such as `root`, `daemon` or `docker`). Format and rules: `scripts/common/firstboot-setup.sh`.
+Its setup screens become `kura-setup.json` on the boot partition (the EFI partition on a PC); first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay (`admin` with the one-time password on the login screen); the login screen then says "setup ignored" and why. **The user name must be a new name**: lowercase letters, digits, `_` or `-`, at most 32 characters, and not a name the system already has (such as `root`, `daemon` or `docker`). Format and rules: `scripts/common/firstboot-setup.sh`.
 
 ### RPi5 - Flash SD Card
 
@@ -263,7 +263,7 @@ sudo dd if=release/<version>/arm64/kura-*.img of=/dev/sdX bs=4M status=progress 
 sync
 ```
 
-Boot the Pi on your network and wait for first boot to finish (it grows the root partition). The console login screen shows the address and the exact `ssh` command; with the defaults that is `ssh admin@<address>`. If the root partition is too small for the image, the build stops and names the `OS_ROOTFS_SIZE` to set.
+Boot the Pi on your network and wait for first boot to finish (it grows the root partition). The console login screen shows the address and the exact `ssh` command; with the defaults that is `ssh admin@<address>`, with the one-time password shown under it. If the root partition is too small for the image, the build stops and names the `OS_ROOTFS_SIZE` to set.
 
 ### PC (Intel NUC) - USB drive or SSD
 

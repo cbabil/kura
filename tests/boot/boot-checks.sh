@@ -2,7 +2,7 @@
 # tests/boot/boot-checks.sh
 # Checks run from the host by boot-test.sh against the booted guest. Source
 # this file; it uses boot-test.sh's settings (REPORT, OUT, SSH_PORT,
-# LOGIN_USER, LOGIN_PASS, DEFAULT_PASS, KEY, BRAND, WAIT_SECS).
+# LOGIN_USER, LOGIN_PASS, ONE_TIME_PASS, KEY, BRAND, WAIT_SECS).
 #
 # QEMU's user networking forwards IPv4 only: use 127.0.0.1, never localhost
 # (ssh-keyscan stops at localhost's IPv6 address).
@@ -73,10 +73,24 @@ sudo_run() { ssh_run "echo '${LOGIN_PASS}' | sudo -S -p '' $1"; }
 
 ssh_listening() { ssh-keyscan -p "${SSH_PORT}" -T 5 127.0.0.1 2>/dev/null | grep -q .; }
 
-# The default password must only reach a forced password change (first-login.exp
+# console_password: the one-time password (firstboot-password.sh) as the owner
+# reads it on the login screen, which the serial console shows too
+console_password() {
+    local pw
+    pw=$(LC_ALL=C grep -aoE '[a-km-np-z2-9]{4}-[a-km-np-z2-9]{4}-[a-km-np-z2-9]{4} · one-time' "${SERIAL}" | tail -1)
+    [ -n "${pw}" ] && ONE_TIME_PASS="${pw%% *}"
+}
+
+# The image's public default password (admin) never logs in over SSH
+default_password_refused() {
+    ! sshpass -p "${PUBLIC_DEFAULT_PASS}" ssh "${SSH_OPTS[@]}" -o PubkeyAuthentication=no \
+        "${LOGIN_USER}@127.0.0.1" true 2>/dev/null
+}
+
+# The one-time password must only reach a forced password change (first-login.exp
 # fails if it gets a shell); from then on LOGIN_PASS is the password.
 first_login_changes_password() {
-    "$(dirname "$0")/first-login.exp" "${SSH_PORT}" "${LOGIN_USER}" "${DEFAULT_PASS}" "${LOGIN_PASS}" \
+    "$(dirname "$0")/first-login.exp" "${SSH_PORT}" "${LOGIN_USER}" "${ONE_TIME_PASS}" "${LOGIN_PASS}" \
         > "${OUT}/first-login.log" 2>&1 || return 1
     ssh_run true
 }

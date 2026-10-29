@@ -2,13 +2,15 @@
 # lib/ssh.sh — SSH hardening via drop-in config
 
 apply_ssh_hardening() {
-    local dropin_dir="/etc/ssh/sshd_config.d"
+    local dropin_dir="${SSH_DROPIN_DIR:-/etc/ssh/sshd_config.d}"
     mkdir -p "${dropin_dir}"
 
     cat <<'EOF' | write_file "${dropin_dir}/99-hardening.conf"
 PermitRootLogin prohibit-password
 X11Forwarding no
 MaxAuthTries 3
+LoginGraceTime 30
+MaxStartups 10:30:60
 AllowAgentForwarding no
 AllowTcpForwarding no
 PrintLastLog yes

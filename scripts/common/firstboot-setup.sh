@@ -31,6 +31,9 @@ LOGIN_UID=1000                        # the image's login user and group (custom
 source "$(dirname "${BASH_SOURCE[0]}")/firstboot-setup-check.sh"
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/firstboot-disk.sh"
+# replace_default_password, forget_one_time_password
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/firstboot-password.sh"
 
 sshd_conf() { echo "${SETUP_ROOT}/etc/ssh/sshd_config.d/10-${SETUP_BRAND}.conf"; }
 
@@ -76,7 +79,8 @@ setup_user() {
     [ -n "${hash}" ] || return 0
     # chpasswd reads the hash on stdin; chage -d -1 clears the forced change
     # without trusting the clock (a Pi has no RTC)
-    printf '%s:%s\n' "${name}" "${hash}" | chpasswd -e && chage -d -1 "${name}"
+    printf '%s:%s\n' "${name}" "${hash}" | chpasswd -e && chage -d -1 "${name}" &&
+        forget_one_time_password
 }
 
 # setup_ssh <enabled> <password-auth> [keys...]

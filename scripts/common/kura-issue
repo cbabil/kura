@@ -13,11 +13,16 @@ export LC_ALL=C.UTF-8
 
 # shellcheck disable=SC1091
 source "$(dirname "$0")/issue.sh"
+# wipe_file, for the one-time password
+# shellcheck disable=SC1091
+source "$(dirname "$0")/firstboot-disk.sh"
 
 BRAND_ENV="${KURA_BRAND_ENV:-/etc/kura/brand.env}"
 UPTIME_FILE="${KURA_UPTIME:-/proc/uptime}"
 PASSWD_FILE="${KURA_PASSWD:-/etc/passwd}"
 SETUP_STATUS="${KURA_SETUP_STATUS:-/var/lib/__BRAND__/setup-status}"
+SHADOW_FILE="${KURA_SHADOW:-/etc/shadow}"
+ONE_TIME_PASSWORD="${KURA_ONE_TIME_PASSWORD:-/var/lib/__BRAND__/one-time-password}"
 ISSUE="${KURA_ISSUE:-/etc/issue}"
 # The login user's uid, as LOGIN_UID in firstboot-setup.sh
 LOGIN_UID=1000
@@ -59,6 +64,16 @@ done < <(timeout 2 systemctl is-active "${SERVICES[@]}" 2>/dev/null)
 LOGIN_SETUP=""
 [ -f "${SETUP_STATUS}" ] && read -r LOGIN_SETUP < "${SETUP_STATUS}"
 LOGIN_COLS="${LOGIN_COLS:-$(console_cols)}"
+# The one-time password (firstboot-password.sh), until the owner changed it
+LOGIN_PASSWORD=""
+if [ -f "${ONE_TIME_PASSWORD}" ]; then
+    if awk -F: -v u="${LOGIN_USER}" '$1 == u && $3 == "0" { found = 1 } END { exit !found }' "${SHADOW_FILE}"; then
+        read -r LOGIN_PASSWORD < "${ONE_TIME_PASSWORD}"
+    else
+        wipe_file "${ONE_TIME_PASSWORD}"
+        rm -f "${ONE_TIME_PASSWORD}"
+    fi
+fi
 
 screen=$(kura_issue "${BRAND_TAGLINE:-}" "${BRAND_COLOR:+${BRAND_COLOR#\#}}") || exit 1
 # Unchanged (most minutes once the device is up): compared in memory, so the

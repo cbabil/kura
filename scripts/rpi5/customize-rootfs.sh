@@ -9,7 +9,23 @@ set -euo pipefail
 
 ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../common/brand-defaults.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../common/auto-updates.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/boot-files.sh"
+BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
+
 echo "Applying RPi5-specific customization..."
+
+# ---- The Pi's kernel and firmware updates install themselves too ----
+# shellcheck disable=SC2016  # ${distro_codename} is unattended-upgrades' variable
+add_update_origin "${ROOTFS}" "${BRAND}" raspi 'origin=Raspberry Pi Foundation,codename=${distro_codename}'
+# ...and a new kernel reaches the boot partition the Pi boots from
+divert_raspi_firmware_hooks "${ROOTFS}"
+install_pi_boot_hook "${ROOTFS}" "${BRAND}"
 
 # NOTE: APT repos (RPi archive, non-free-firmware) configured in configure-repos.sh
 # NOTE: Docker is baked into every image (packages-common.list) and enabled

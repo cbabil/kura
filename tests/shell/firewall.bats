@@ -26,9 +26,26 @@ setup() {
 @test "_build_iptables_rules: SSH is the only inbound port opened" {
     run _build_iptables_rules
     [ "$status" -eq 0 ]
-    run grep -E -- "^-A INPUT .*--dport" <<< "$output"
-    [ "${#lines[@]}" -eq 1 ]
-    [ "${lines[0]}" = "-A INPUT -p tcp --dport 22 -j ACCEPT" ]
+    [ -z "$(grep -E -- "^-A INPUT .*--dport" <<< "$output" | grep -v -- "--dport 22 ")" ]
+    [ "$(grep -E -- "-j ACCEPT$" <<< "$output" | grep -c -- "--dport")" -eq 1 ]
+    grep -qxF -- "-A INPUT -p tcp --dport 22 -j ACCEPT" <<< "$output"
+}
+
+# A source opening more than 60 new SSH connections a minute is dropped,
+# before the ACCEPT (a flood guard: OpenSSH's PerSourcePenalties already slows
+# sources that fail to log in); established sessions match ESTABLISHED first.
+@test "_build_iptables_rules: new SSH connections are rate-limited per source" {
+    run _build_iptables_rules
+    [ "$status" -eq 0 ]
+    local set="-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name ssh --set"
+    local drop="-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name ssh --update --seconds 60 --hitcount 61 -j DROP"
+    local accept="-A INPUT -p tcp --dport 22 -j ACCEPT"
+    local n_set n_drop n_accept
+    n_set=$(grep -nxF -- "${set}" <<< "$output" | cut -d: -f1)
+    n_drop=$(grep -nxF -- "${drop}" <<< "$output" | cut -d: -f1)
+    n_accept=$(grep -nxF -- "${accept}" <<< "$output" | cut -d: -f1)
+    [ -n "${n_set}" ] && [ -n "${n_drop}" ] && [ -n "${n_accept}" ]
+    [ "${n_set}" -lt "${n_drop}" ] && [ "${n_drop}" -lt "${n_accept}" ]
 }
 
 @test "apply_firewall: skips non-strict preset" {

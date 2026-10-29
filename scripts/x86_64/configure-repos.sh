@@ -14,4 +14,5 @@ source "$(dirname "$0")/../common/apt-components.sh"
 
 echo "Configuring x86 APT repositories..."
 add_non_free_firmware "${ROOTFS}"
+add_debian_updates "${ROOTFS}"
 echo "x86 APT repositories configured."

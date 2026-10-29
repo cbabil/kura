@@ -75,6 +75,7 @@ stub_all_ok() {
     apply_setup() { log_call apply_setup; }
     resize_root() { log_call resize_root; }
     apply_cloud_hostname() { log_call apply_cloud_hostname; }
+    replace_default_password() { log_call replace_default_password; }
 }
 
 @test "run_firstboot: runs every step and marks first boot done" {
@@ -85,6 +86,14 @@ stub_all_ok() {
     file_has "${CALLS}" "resize_root"
     file_has "${CALLS}" "apply_cloud_hostname"
     [ -f "${BATS_TEST_TMPDIR}/done" ]
+}
+
+# After the setup file (whose password replaces the default), before sshd
+@test "run_firstboot: the public default password is replaced right after the setup" {
+    stub_all_ok
+    run run_firstboot "${BATS_TEST_TMPDIR}/done"
+    [ "$status" -eq 0 ]
+    [ "$(sed -n 2p "${CALLS}")" = "replace_default_password" ]
 }
 
 @test "run_firstboot: does nothing once marked done" {

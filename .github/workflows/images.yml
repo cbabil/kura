@@ -5,7 +5,8 @@ name: Images
 # with a kura-setup.json (as Etchwise writes it), once without, checking first
 # boot, the setup, SSH, Docker and device identity. The PC installer then
 # installs that image on a blank virtual drive, which is booted and checked.
-# Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD).
+# Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD);
+# first boot replaces the default password with a one-time password.
 # Artifacts count against the Actions storage quota, so they live one day and
 # dev pushes upload none. release.yml calls this workflow on v* tags and
 # publishes both images in the same run.

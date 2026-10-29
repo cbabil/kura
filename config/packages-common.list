@@ -13,6 +13,10 @@ jq
 
 # Security
 auditd
+# Security updates install themselves (scripts/common/auto-updates.sh); the
+# clock must be right for TLS and APT
+unattended-upgrades
+systemd-timesyncd
 
 # Containers (from Docker's APT repo, added for every target by build.sh).
 # Baked in so containers can run without first installing Docker.

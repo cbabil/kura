@@ -17,6 +17,8 @@ source "$(dirname "$0")/../common/brand-defaults.sh"
 source "$(dirname "$0")/../common/image-size.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/../common/disk-image.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/boot-files.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 VERSION="${OS_VERSION:-2.0}"
@@ -68,66 +70,16 @@ mkfs.ext4 -F "${LOOP}p2"
 disk_image_mount "${LOOP}p1"
 BOOT_MNT="${DISK_IMAGE_MNT}"
 
-# Copy kernel (try vmlinuz first, then Image)
-if ls "${ROOTFS}"/boot/vmlinuz-* 1>/dev/null 2>&1; then
-    cp "${ROOTFS}"/boot/vmlinuz-* "${BOOT_MNT}/vmlinuz"
-    echo "  Copied kernel: vmlinuz"
-elif [ -f "${ROOTFS}/boot/Image" ]; then
-    cp "${ROOTFS}/boot/Image" "${BOOT_MNT}/"
-    echo "  Copied kernel: Image"
-else
-    echo "ERROR: No kernel found in ${ROOTFS}/boot/"
-    exit 1
-fi
+# Kernel (as vmlinuz, config.txt's kernel=), device tree and overlays; the
+# device's kernel hook copies later kernels the same way (boot-files.sh)
+copy_kernel_files "${ROOTFS}" "${BOOT_MNT}"
 
-# Copy device tree (try multiple paths)
-DTB_COPIED=false
-for dtb_path in \
-    "${ROOTFS}"/boot/dtbs/*/broadcom/bcm2712-rpi-5-b.dtb \
-    "${ROOTFS}/boot/broadcom/bcm2712-rpi-5-b.dtb" \
-    "${ROOTFS}/boot/bcm2712-rpi-5-b.dtb" \
-    "${ROOTFS}/usr/lib/linux-image-"*/broadcom/bcm2712-rpi-5-b.dtb; do
-    # shellcheck disable=SC2086
-    if ls ${dtb_path} 1>/dev/null 2>&1; then
-        # shellcheck disable=SC2086
-        cp ${dtb_path} "${BOOT_MNT}/bcm2712-rpi-5-b.dtb"
-        DTB_COPIED=true
-        echo "  Copied DTB: bcm2712-rpi-5-b.dtb"
-        break
-    fi
-done
-if [ "${DTB_COPIED}" = "false" ]; then
-    echo "WARNING: DTB bcm2712-rpi-5-b.dtb not found -- boot may fail"
-fi
-
-# Copy DTB overlays (try multiple paths)
-for overlay_path in \
-    "${ROOTFS}"/boot/dtbs/*/overlays \
-    "${ROOTFS}/boot/overlays" \
-    "${ROOTFS}/usr/lib/linux-image-"*/overlays; do
-    # shellcheck disable=SC2086
-    if ls -d ${overlay_path} 1>/dev/null 2>&1; then
-        # shellcheck disable=SC2086
-        cp -r ${overlay_path} "${BOOT_MNT}/"
-        echo "  Copied DTB overlays"
-        break
-    fi
-done
-
-# Copy RPi firmware files (try multiple paths)
+# RPi firmware files
 for fw_file in start4.elf fixup4.dat bootcode.bin; do
-    FW_COPIED=false
-    for fw_path in \
-        "${ROOTFS}/boot/firmware/${fw_file}" \
-        "${ROOTFS}/usr/lib/raspi-firmware/${fw_file}" \
-        "${ROOTFS}/boot/${fw_file}"; do
-        if [ -f "${fw_path}" ]; then
-            cp "${fw_path}" "${BOOT_MNT}/"
-            FW_COPIED=true
-            break
-        fi
-    done
-    if [ "${FW_COPIED}" = "false" ]; then
+    if fw_path=$(first_existing "${ROOTFS}/boot/firmware/${fw_file}" \
+            "${ROOTFS}/usr/lib/raspi-firmware/${fw_file}" "${ROOTFS}/boot/${fw_file}"); then
+        cp "${fw_path}" "${BOOT_MNT}/"
+    else
         echo "WARNING: Firmware file ${fw_file} not found"
     fi
 done

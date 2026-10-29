@@ -26,8 +26,12 @@ usr/lib/${b}/firstboot.sh
 usr/lib/${b}/firstboot-setup.sh
 usr/lib/${b}/firstboot-setup-check.sh
 usr/lib/${b}/firstboot-disk.sh
+usr/lib/${b}/firstboot-password.sh
 usr/lib/systemd/system/${b}-firstboot.service
 usr/lib/systemd/system/${b}-ssh-keygen.service
+usr/bin/unattended-upgrade
+etc/apt/apt.conf.d/20auto-upgrades
+usr/lib/systemd/systemd-timesyncd
 EOF
 }
 
@@ -44,6 +48,9 @@ ${w}/multi-user.target.wants/${b}-firstboot.service
 ${w}/multi-user.target.wants/${b}-ssh-keygen.service
 ${w}/sysinit.target.wants/${b}-security.service
 ${w}/network-online.target.wants/NetworkManager-wait-online.service
+${w}/timers.target.wants/apt-daily.timer
+${w}/timers.target.wants/apt-daily-upgrade.timer
+${w}/sysinit.target.wants/systemd-timesyncd.service
 EOF
 }
 
@@ -90,6 +97,12 @@ verify_rootfs() {
     fi
     if ! root_password_locked "${rootfs}"; then
         echo "  root's password is not locked" >&2
+        status=1
+    fi
+    # Every package must be signature-checked
+    if grep -rqiE '\[[^]]*trusted=yes|^Trusted:[[:space:]]*yes' \
+            "${rootfs}/etc/apt/sources.list" "${rootfs}/etc/apt/sources.list.d" 2>/dev/null; then
+        echo "  an APT source skips signature checks (trusted=yes)" >&2
         status=1
     fi
     if ! login_user_has_sudo "${rootfs}"; then

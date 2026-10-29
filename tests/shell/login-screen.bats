@@ -114,6 +114,28 @@ kura_issue_env() {
     file_has "${BATS_TEST_TMPDIR}/calls" "agetty --reload"
 }
 
+@test "one-time password: shown on the screen with what to do" {
+    LOGIN_PASSWORD="abcd-efgh-jkmn"
+    run kura_issue
+    output_has "Password"
+    output_has "abcd-efgh-jkmn"
+    output_has "one-time"
+}
+
+@test "kura-issue: shows the one-time password until the owner has changed it" {
+    kura_issue_env
+    echo "abcd-efgh-jkmn" > "${BATS_TEST_TMPDIR}/otp"
+    printf 'chris:$y$x:0:0:99999:7:::\n' > "${BATS_TEST_TMPDIR}/shadow"
+    export KURA_ONE_TIME_PASSWORD="${BATS_TEST_TMPDIR}/otp" KURA_SHADOW="${BATS_TEST_TMPDIR}/shadow"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    file_has "${KURA_ISSUE}" "abcd-efgh-jkmn"
+    # changed at first login: the last-change day is no longer 0
+    printf 'chris:$y$new:20400:0:99999:7:::\n' > "${BATS_TEST_TMPDIR}/shadow"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    ! file_has "${KURA_ISSUE}" "abcd-efgh-jkmn"
+    [ ! -e "${BATS_TEST_TMPDIR}/otp" ]
+}
+
 @test "kura-issue: an ignored setup shows its reason" {
     kura_issue_env
     echo "ignored: invalid user name (taken by a system account or group)" > "${KURA_SETUP_STATUS}"

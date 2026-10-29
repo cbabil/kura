@@ -54,6 +54,8 @@ run_firstboot() {
     [ -f "${done_flag}" ] && return 0
 
     apply_setup || status=1
+    # after the setup file, whose password would replace it
+    replace_default_password || status=1
     resize_root || { echo "WARNING: root partition resize failed" >&2; status=1; }
     apply_cloud_hostname
 

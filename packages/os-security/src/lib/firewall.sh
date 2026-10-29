@@ -30,9 +30,11 @@ apply_firewall() {
     fi
 }
 
-# Inbound: SSH only. Ports published by containers reach them through Docker's
-# own FORWARD rules, added when dockerd starts after this ruleset (os-security
-# runs before sysinit.target).
+# Inbound: SSH only, at most 60 new connections a minute per source (a flood
+# guard: OpenSSH 10's PerSourcePenalties already slows sources whose logins
+# fail; open sessions match ESTABLISHED first). Ports published by
+# containers reach them through Docker's own FORWARD rules, added when
+# dockerd starts after this ruleset (os-security runs before sysinit.target).
 _build_iptables_rules() {
     cat <<'RULES'
 *filter
@@ -41,6 +43,8 @@ _build_iptables_rules() {
 :OUTPUT ACCEPT [0:0]
 -A INPUT -i lo -j ACCEPT
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name ssh --set
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -m recent --name ssh --update --seconds 60 --hitcount 61 -j DROP
 -A INPUT -p tcp --dport 22 -j ACCEPT
 COMMIT
 RULES

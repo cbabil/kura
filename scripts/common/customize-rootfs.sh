@@ -17,6 +17,8 @@ source "$(dirname "$0")/brand-defaults.sh"
 source "$(dirname "$0")/systemd-units.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/install-firstboot.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/auto-updates.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 # Validate BRAND (must be lowercase alphanumeric with hyphens, no shell metacharacters)
@@ -112,6 +114,9 @@ enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-conf
 
 # sysinit.target (security runs early)
 enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-security.service"
+
+# ---- Security updates install themselves; the clock stays in sync ----
+install_auto_updates "${ROOTFS}" "${BRAND}"
 
 
 # Ensure /etc/resolv.conf is a regular writable file (not a stale symlink).

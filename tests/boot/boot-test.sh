@@ -6,8 +6,9 @@
 # NO internet (user networking with restrict=on). The disk is grown by 2 GiB
 # first, as a bigger USB drive would be.
 #
-# Default: the image as shipped. The default password only reaches a forced
-# change (first-login.exp).
+# Default: the image as shipped. Its public default password is replaced at
+# first boot by a one-time password, read from the login screen on the serial
+# console, which only reaches a forced change (first-login.exp).
 # --setup: a kura-setup.json is put on the EFI partition first, as Etchwise
 # writes it (new user with a password hash and an SSH key, password logins
 # off, hostname, Wi-Fi, time zone); the checks prove it was applied and deleted.
@@ -32,7 +33,10 @@ SSH_PORT="${3:-2222}"
 SETUP="${4:-}"
 BRAND="${KURA_TEST_BRAND:-kura}"
 LOGIN_USER="${KURA_TEST_USER:-admin}"
-DEFAULT_PASS="${KURA_TEST_PASS:-admin}"
+# The image's public default password, and the one-time password that
+# replaces it at first boot, read from the console (default mode)
+PUBLIC_DEFAULT_PASS="${KURA_TEST_PASS:-admin}"
+ONE_TIME_PASS=""
 # Set at first login (default mode), by the setup file (--setup), or given
 # by KURA_TEST_LOGIN_PASS (--installed)
 LOGIN_PASS="${KURA_TEST_LOGIN_PASS:-Kura-$(openssl rand -hex 8)}"
@@ -110,7 +114,8 @@ if [ -n "${SETUP}" ]; then
     check "setup: hostname, Wi-Fi, time zone applied" setup_applied
     check "setup: file deleted from the EFI partition" setup_file_gone
 else
-    check "first login replaces the default password" first_login_changes_password
+    check "one-time password on the login screen" wait_for "one-time password" console_password
+    check "first login replaces the one-time password" first_login_changes_password
 fi
 check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
 check "Secure Boot on" secure_boot_on
@@ -127,6 +132,8 @@ if [ -n "${SETUP}" ]; then
 fi
 check "console font is Terminus 16x32" console_font
 check "login screen has the Kura look (login.png)" login_screen
+# Last: a failed login counts against this source in sshd's penalties
+[ -n "${SETUP}" ] || check "the public default password is refused" default_password_refused
 
 if [ "${FAILED}" -ne 0 ]; then
     collect_diagnostics

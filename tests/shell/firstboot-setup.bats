@@ -272,6 +272,15 @@ reject() {  # reject <json> <word expected in the message>
     [ "$status" -ne 0 ]
 }
 
+@test "setup_user: a password from the setup file replaces the one-time password" {
+    mkdir -p "${SETUP_ROOT}/var/lib/kura"
+    touch "${SETUP_ROOT}/var/lib/kura/default-password"
+    echo "abcd-efgh-jkmn" > "${SETUP_ROOT}/var/lib/kura/one-time-password"
+    setup_user chris "${HASH}"
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/default-password" ]
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/one-time-password" ]
+}
+
 @test "setup_user: keeping the name only sets the password" {
     run setup_user admin "${HASH}"
     [ "$status" -eq 0 ]

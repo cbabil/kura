@@ -19,6 +19,7 @@
 #   LOGIN_UPTIME    "3 min · disk 3% used"  LOGIN_COLS     console width
 #   LOGIN_SERVICES  "docker:active ssh:failed ..."
 #   LOGIN_SETUP     "applied", "ignored: <reason>", ... or empty
+#   LOGIN_PASSWORD  the one-time password, until the owner changed it
 # Source this file; it defines functions and constants only.
 
 ISSUE_LOGO=(
@@ -100,6 +101,8 @@ issue_panel() {
     issue_row Host "${ISSUE_BRIGHT}" '\n'
     issue_row Address "${ISSUE_BRIGHT}" '\4'
     issue_row Connect "${ISSUE_LIGHT}" "ssh ${LOGIN_USER:-<user>}@\\4"
+    [ -z "${LOGIN_PASSWORD:-}" ] ||
+        issue_row Password "${ISSUE_AMBER}" "${LOGIN_PASSWORD} · one-time, choose yours at login"
     issue_row System "${ISSUE_TEXT}" "${system}"
     [ -z "${LOGIN_UPTIME:-}" ] || issue_row Uptime "${ISSUE_TEXT}" "${LOGIN_UPTIME}"
     [ -z "${LOGIN_SERVICES:-}${LOGIN_SETUP:-}" ] || issue_bar

@@ -45,6 +45,12 @@ set_passwords() {
         && { [ -n "${root}" ] || chroot "${rootfs}" passwd -l root; } \
         && { ! login_password_expires || chroot "${rootfs}" chage -d 0 "${user}"; } \
         || rc=1
+    # The public default never reaches the network: first boot replaces it
+    # with a one-time password (firstboot-password.sh)
+    local state="${rootfs}/var/lib/${OS_BRAND:-${DEFAULT_BRAND}}"
+    if [ "${rc}" -eq 0 ] && [ "${passwd}" = "${DEFAULT_USER_PASSWD}" ]; then
+        install -d "${state}" && : > "${state}/default-password" || rc=1
+    fi
     umount_chroot "${rootfs}"
     return "${rc}"
 }

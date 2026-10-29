@@ -96,9 +96,10 @@ sync_root() {
     done
 }
 
-@test "x86 configure-repos: adds non-free-firmware (DEB822 and sources.list)" {
+@test "x86 configure-repos: adds non-free-firmware and the update suites (DEB822 and sources.list)" {
     local rootfs="${BATS_TEST_TMPDIR}/rootfs"
     mkdir -p "${rootfs}/etc/apt/sources.list.d"
+    printf 'ID=debian\nVERSION_CODENAME=trixie\n' > "${rootfs}/etc/os-release"
     printf 'Types: deb\nSuites: trixie\nComponents: main\n' > "${rootfs}/etc/apt/sources.list.d/debian.sources"
     run "${REPO_ROOT}/scripts/x86_64/configure-repos.sh" "${rootfs}"
     [ "$status" -eq 0 ]
@@ -107,6 +108,7 @@ sync_root() {
     echo "deb http://deb.debian.org/debian trixie main" > "${rootfs}/etc/apt/sources.list"
     run "${REPO_ROOT}/scripts/x86_64/configure-repos.sh" "${rootfs}"
     file_has "${rootfs}/etc/apt/sources.list" "trixie main non-free-firmware"
+    file_has "${rootfs}/etc/apt/sources.list" "trixie-security main non-free-firmware"
 }
 
 @test "x86 customize-rootfs: installs the EFI sync run after every APT change" {
