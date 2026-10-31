@@ -251,7 +251,7 @@ Etchwise (a multi-device imager based on Raspberry Pi Imager) lists Kura under R
 | Intel NUC | **Kura &lt;version&gt; installer (PC)**: puts Kura on the PC's internal drive | about 27 MB |
 | Intel NUC | **Kura &lt;version&gt; (PC)**: runs from the USB drive or SSD it is written to | about 390 MB |
 
-Its setup screens become `kura-setup.json` on the boot partition (the EFI partition on a PC); first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay (`admin` with the one-time password on the login screen); the login screen then says "setup ignored" and why. **The user name must be a new name**: lowercase letters, digits, `_` or `-`, at most 32 characters, and not a name the system already has (such as `root`, `daemon` or `docker`). Format and rules: `scripts/common/firstboot-setup.sh`.
+Its setup screens become `kura-setup.json` on the boot partition (the EFI partition on a PC); first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay (`admin` with the one-time password on the login screen); the login screen then says "setup ignored" and why. A valid file with Wi-Fi settings Kura can't use or an unknown time zone is applied without them, and the screen says "setup partly applied" and what was left out. **The user name must be a new name**: lowercase letters, digits, `_` or `-`, at most 32 characters, and not a name the system already has (such as `root`, `daemon` or `docker`). Format and rules: `scripts/common/firstboot-setup.sh`.
 
 ### RPi5 - Flash SD Card
 

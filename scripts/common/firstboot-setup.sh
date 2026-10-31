@@ -107,7 +107,6 @@ setup_ssh() {
 # next loads (next boot); until then the world domain applies.
 setup_wifi_config() {
     SETUP_PSK="$2" edit_config '.networkConfig.wifi.enable = true
-        | .networkConfig.wifi.defaultInterface //= "wlan0"
         | .networkConfig.wifi.networks = [{ssid: $s, psk: $ENV.SETUP_PSK, hidden: $h}]' \
         --arg s "$1" --argjson h "${3:-false}" || return 1
     [ -n "$4" ] || return 0
@@ -119,6 +118,7 @@ setup_wifi_config() {
 setup_timezone() {
     if [ ! -f "${SETUP_ROOT}/usr/share/zoneinfo/$1" ]; then
         echo "WARNING: setup: unknown time zone $1; keeping UTC" >&2
+        setup_skipped "time zone kept as UTC (unknown zone)"
         return 0
     fi
     ln -sf "/usr/share/zoneinfo/$1" "${SETUP_ROOT}/etc/localtime" &&
@@ -137,6 +137,8 @@ apply_wifi() {
     local f="$1"
     if ! validate_wifi "${f}"; then
         echo "WARNING: setup: Wi-Fi settings skipped; the rest is applied" >&2
+        setup_skipped "Wi-Fi skipped (${SETUP_LAST_ERROR})"
+        SETUP_LAST_ERROR=""
         return 0
     fi
     setup_wifi_config "$(setup_get "${f}" .wifi.ssid)" "$(setup_get "${f}" .wifi.psk)" \
@@ -195,7 +197,7 @@ apply_setup_dir() {
         setup_error "${SETUP_FILE} not fully applied; first boot will retry"
         return 1
     fi
-    remove_setup_file "${f}" && record_setup_status "applied" &&
+    remove_setup_file "${f}" && record_setup_status "${SETUP_SKIPPED:+partly }applied${SETUP_SKIPPED:+: ${SETUP_SKIPPED}}" &&
         echo "Setup from ${SETUP_FILE} applied."
 }
 

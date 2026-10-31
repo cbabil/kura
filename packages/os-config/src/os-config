@@ -20,7 +20,7 @@ setup_wifi() {
     [[ "${wifi_enabled}" == "true" ]] || return 0
 
     local iface count
-    iface=$(jq -r '.networkConfig.wifi.defaultInterface // "wlan0"' "${CONFIG_PATH}")
+    iface=$(jq -r '.networkConfig.wifi.defaultInterface // empty' "${CONFIG_PATH}")
     count=$(jq '.networkConfig.wifi.networks | length' "${CONFIG_PATH}" 2>/dev/null)
     [[ -n "${count}" ]] && [[ "${count}" -gt 0 ]] || return 0
 
@@ -61,15 +61,17 @@ keyfile_escape() {
     printf '%s' "${v}"
 }
 
-# write_connection <ssid> <psk> <hidden:true|false> <iface>: NetworkManager keyfile
+# write_connection <ssid> <psk> <hidden:true|false> <iface|"">: NetworkManager
+# keyfile. With no interface, any Wi-Fi device can use it (names differ by
+# hardware: wlan0 on a Pi, wlp2s0 on a PC).
 write_connection() {
-    local hidden=""
+    local hidden="" iface=""
     [[ "$3" == "true" ]] && hidden=$'\nhidden=true'
+    [[ -n "$4" ]] && iface=$'\ninterface-name='"$4"
     cat <<NMEOF
 [connection]
 id=$1
-type=wifi
-interface-name=$4
+type=wifi${iface}
 
 [wifi]
 mode=infrastructure

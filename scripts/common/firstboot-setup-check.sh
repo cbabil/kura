@@ -23,6 +23,10 @@ SETUP_LAST_ERROR=""
 # shellcheck disable=SC2034
 setup_error() { SETUP_LAST_ERROR="$*"; echo "ERROR: setup: $*" >&2; }
 
+# What was left out of an applied setup, for the same line
+SETUP_SKIPPED=""
+setup_skipped() { SETUP_SKIPPED+="${SETUP_SKIPPED:+, }$*"; }
+
 # setup_get <file> <jq-path>: the value, or nothing when null or missing
 setup_get() { jq -r "($2) | if . == null then empty else . end" "$1"; }
 

@@ -144,6 +144,31 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     [ "$(conf .networkConfig.wifi.enable)" = "false" ]
 }
 
+@test "apply_setup_dir: a skipped Wi-Fi shows on the login screen, with why" {
+    echo '{"version":1,"hostname":"lab","wifi":{"ssid":"Bob'"'"'s phone","psk":"password1"}}' \
+        > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "partly applied: Wi-Fi skipped (invalid SSID)" ]
+}
+
+@test "apply_setup_dir: an unknown time zone shows too, and both skips are listed" {
+    echo '{"version":1,"wifi":{"ssid":"Home"},"timezone":"Mars/Olympus"}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "partly applied: Wi-Fi skipped (missing Wi-Fi password), time zone kept as UTC (unknown zone)" ]
+}
+
+@test "apply_setup_dir: a later unnamed failure is not blamed on the skipped Wi-Fi" {
+    echo '{"version":1,"wifi":{"ssid":"Home"},"keyboard":"fr"}' > "${BOOT}/kura-setup.json"
+    setup_keyboard() { return 1; }
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -ne 0 ]
+    file_has "${SETUP_ROOT}/var/lib/kura/setup-status" "incomplete, retrying: a step failed"
+}
+
 @test "apply_setup_dir: a failed step keeps the file so first boot retries" {
     full_setup
     # shellcheck disable=SC2329  # invoked by apply_setup_dir
@@ -322,7 +347,7 @@ reject() {  # reject <json> <word expected in the message>
     [ "$status" -eq 0 ]
     [ "$(conf .networkConfig.wifi.enable)" = "true" ]
     [ "$(conf '.networkConfig.wifi.networks[0] | [.ssid, .psk, .hidden] | join(",")')" = "Home Net,password1,true" ]
-    [ "$(conf .networkConfig.wifi.defaultInterface)" = "wlan0" ]
+    [ "$(conf .networkConfig.wifi.defaultInterface)" = "null" ]
     file_has "${SETUP_ROOT}/etc/modprobe.d/cfg80211.conf" "options cfg80211 ieee80211_regdom=FR"
 }
 
