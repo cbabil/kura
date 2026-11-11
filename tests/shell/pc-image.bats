@@ -41,7 +41,9 @@ setup() {
     # by name: the font built into the signed GRUB (none loads from disk
     # under Secure Boot)
     output_has 'loadfont unicode'
-    output_has "set gfxmode=auto"
+    # a 720p menu, so the built-in 16 px font reads larger (no other font
+    # loads under Secure Boot) ...
+    output_has "set gfxmode=1280x720,1024x768,auto"
     # the firmware's display only: GRUB's native VM drivers leave Linux
     # with the wrong screen format
     # all_video holds the drivers: unloaded first, or GRUB refuses the rest
@@ -57,6 +59,15 @@ setup() {
     output_has "set menu_color_highlight=black/light-magenta"
     # the look comes before the entries
     [ "$(grep -n 'theme=' <<< "$output" | cut -d: -f1)" -lt "$(grep -n 'menuentry' <<< "$output" | head -1 | cut -d: -f1)" ]
+}
+
+@test "pc_grub_cfg: each entry goes back to the screen's best mode before Linux starts" {
+    run pc_grub_cfg 1111-uuid 2222-partuuid Kura
+    output_has "function best_mode {"
+    output_has "    set gfxmode=auto"
+    [ "$(grep -c '^    best_mode$' <<< "$output")" -eq 2 ]
+    # before the kernel is loaded
+    [ "$(grep -n '^    best_mode$' <<< "$output" | head -1 | cut -d: -f1)" -lt "$(grep -n 'linux /vmlinuz ' <<< "$output" | cut -d: -f1)" ]
 }
 
 @test "the GRUB theme: navy, light text, the selected entry on Kura's light purple" {

@@ -68,6 +68,11 @@ SHA_0=$(printf '0%.0s' {1..64})
     [ "$(pc_grub_look)" = "$(head -n "$(pc_grub_look | wc -l)" <<< "$output")" ]
 }
 
+@test "installer_grub_cfg: the installer starts at the screen's best mode" {
+    run installer_grub_cfg KURA-INST Kura
+    [ "$(grep -n '^    best_mode$' <<< "$output" | cut -d: -f1)" -lt "$(grep -n 'linux /kura/vmlinuz' <<< "$output" | cut -d: -f1)" ]
+}
+
 @test "installer_grub_cfg: extra kernel arguments (the boot test's kura.manifest=)" {
     run installer_grub_cfg KURA-INST Kura "kura.manifest=http://10.0.2.2:8088/manifest.json"
     output_has "linux /kura/vmlinuz quiet console=ttyS0,115200 console=tty0 kura.manifest=http://10.0.2.2:8088/manifest.json"

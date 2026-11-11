@@ -134,6 +134,7 @@ key_lacks() { ! efi_has "${KEY_IMG}" "$1"; }
 check "installer powered off by itself" test "${install_status}" -eq 0
 check "installer says Kura is installed" grep -q "Kura is installed on" "${SERIAL}"
 check "installer's screen drawn in its colours" installer_drawn
+check "installer at the screen's full resolution" installer_full_size
 check "image downloaded from the manifest" grep -q "kura-pc.img.zst" "${OUT}/http.log"
 check "setup file handed to the installed system" efi_has "${INTERNAL}" kura-setup.json
 check "setup file removed from the key" key_lacks kura-setup.json

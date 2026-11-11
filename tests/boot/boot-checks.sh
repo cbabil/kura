@@ -202,6 +202,18 @@ sys.exit(1)
 PY
 }
 
+# installer_full_size: the installer's last screens are at the display's
+# resolution (1920 wide here): the boot menu's smaller mode was left
+installer_full_size() {
+    python3 - "${OUT}" <<'PY'
+import glob, struct, sys
+last = sorted(glob.glob(sys.argv[1] + "/installer-*.png"))[-1]
+width = struct.unpack(">I", open(last, "rb").read()[16:20])[0]
+print("  %s is %d wide" % (last.rsplit("/", 1)[-1], width))
+sys.exit(0 if width == 1920 else 1)
+PY
+}
+
 # grub_themed: GRUB's menu in Kura's look (ADR-021) on one of the first
 # screens: the navy background and the light purple selected entry
 grub_themed() { screens_show "${OUT}/grub-*.png" 0f172a a970ff; }

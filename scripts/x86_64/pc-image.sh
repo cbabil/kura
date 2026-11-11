@@ -35,7 +35,9 @@ EOF
 pc_efi_files() { grep -v '^#' "${PC_EFI_FILES}"; }
 
 # pc_grub_look: GRUB's menu in Kura's look (ADR-021): the screen's best
-# mode, the theme from the EFI partition (${prefix}, where Debian's signed
+# mode for Linux, a 720p menu (the built-in 16 px font is the only one
+# that loads under Secure Boot, so a lower mode is what makes it larger;
+# each entry calls best_mode to go back up), the theme from the EFI partition (${prefix}, where Debian's signed
 # GRUB reads grub.cfg) with the Unicode font built into that GRUB (under
 # Secure Boot it loads no font from disk), and that mode kept for Linux, so the
 # console and the splash start at the screen's resolution. Without graphics
@@ -56,11 +58,19 @@ insmod gfxterm
 insmod gfxmenu
 insmod png
 if loadfont unicode; then
-    set gfxmode=auto
+    set gfxmode=1280x720,1024x768,auto
     terminal_output gfxterm
     set theme=${prefix}/themes/kura/theme.txt
+    set kura_menu=gfx
 fi
 set gfxpayload=keep
+function best_mode {
+    if [ "${kura_menu}" = gfx ]; then
+        terminal_output console
+        set gfxmode=auto
+        terminal_output gfxterm
+    fi
+}
 EOF
 }
 
@@ -79,11 +89,13 @@ insmod ext2
 search --no-floppy --fs-uuid --set=root $1
 
 menuentry "$3" {
+    best_mode
     linux /vmlinuz ${args}
     initrd /initrd.img
 }
 
 menuentry "$3 (previous kernel)" {
+    best_mode
     linux /vmlinuz.old ${args}
     initrd /initrd.img.old
 }
