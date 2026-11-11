@@ -155,12 +155,13 @@ splash_screens() {
     done
 }
 
-# grub_themed: GRUB's menu in Kura's look (ADR-021) on one of the first
-# screens: the navy background and the light purple selected entry. Reads
-# QEMU's PNGs (8-bit RGB or RGBA) with zlib only.
-grub_themed() {
-    python3 - "${OUT}" <<'PY'
-import glob, struct, sys, zlib
+# screens_show <file-glob> <background> <rrggbb>...: one of the screenshots
+# is mostly the background colour and has all the others (sampled every 7th
+# pixel: not a multiple of 4, where a 24/32-bit mix-up still looks right).
+# Reads QEMU's PNGs (8-bit RGB or RGBA) with zlib only.
+screens_show() {
+    python3 - "$@" <<'PY'
+import collections, glob, struct, sys, zlib
 
 def pixels(path):
     data = open(path, "rb").read()
@@ -174,7 +175,7 @@ def pixels(path):
             idat += body
         pos += size + 12
     bpp = 4 if kind == 6 else 3
-    raw, stride, prev, colours = zlib.decompress(idat), width * bpp, bytearray(width * bpp), set()
+    raw, stride, prev, colours = zlib.decompress(idat), width * bpp, bytearray(width * bpp), collections.Counter()
     for y in range(height):
         f, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
         for i in range(stride):
@@ -187,18 +188,28 @@ def pixels(path):
                 p = a + b - c
                 pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
                 line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
-        colours.update(bytes(line[i:i + 3]) for i in range(0, stride, bpp * 8))
+        colours.update(bytes(line[i:i + 3]) for i in range(0, stride, bpp * 7))
         prev = line
     return colours
 
-for name in sorted(glob.glob(sys.argv[1] + "/grub-*.png")):
+wanted = [bytes.fromhex(c) for c in sys.argv[2:]]
+for name in sorted(glob.glob(sys.argv[1])):
     seen = pixels(name)
-    if bytes.fromhex("a970ff") in seen and bytes.fromhex("0f172a") in seen:
-        print("  GRUB menu in " + name.rsplit("/", 1)[-1])
+    if seen[wanted[0]] * 2 > sum(seen.values()) and all(c in seen for c in wanted):
+        print("  found in " + name.rsplit("/", 1)[-1])
         sys.exit(0)
 sys.exit(1)
 PY
 }
+
+# grub_themed: GRUB's menu in Kura's look (ADR-021) on one of the first
+# screens: the navy background and the light purple selected entry
+grub_themed() { screens_show "${OUT}/grub-*.png" 0f172a a970ff; }
+
+# installer_drawn: the installer's own screen, readable: its navy
+# background, the logo's two purples and the green of a finished step (a
+# wrong screen format from the boot loader shows none of them)
+installer_drawn() { screens_show "${OUT}/installer-*.png" 0f172a a970ff 9146ff 23ce6b; }
 
 # The PC image's boot splash (ADR-018): the theme is the default and is in
 # the initrd that boots

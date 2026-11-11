@@ -42,6 +42,12 @@ setup() {
     # under Secure Boot)
     output_has 'loadfont unicode'
     output_has "set gfxmode=auto"
+    # the firmware's display only: GRUB's native VM drivers leave Linux
+    # with the wrong screen format
+    output_has "rmmod video_bochs"
+    output_has "rmmod video_cirrus"
+    output_has "insmod efi_gop"
+    [ -z "$(grep all_video <<< "$output")" ]
     output_has "terminal_output gfxterm"
     output_has 'set theme=${prefix}/themes/kura/theme.txt'
     output_has "set gfxpayload=keep"
