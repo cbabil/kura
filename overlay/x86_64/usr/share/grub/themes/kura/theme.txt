@@ -1,8 +1,8 @@
 # Kura's GRUB menu (ADR-021): the login screen's navy, light text, and the
 # selected entry on Kura's light purple. select_*.png are one pixel of
 # #a970ff, stretched behind the selected entry. Installed on the EFI
-# partition (scripts/x86_64/efi-files.list) with GRUB's unicode.pf2, the
-# only font loaded, which every label uses.
+# partition (scripts/x86_64/efi-files.list); every label uses the Unicode
+# font built into Debian's signed GRUB, the only font loaded.
 
 title-text: ""
 desktop-color: "#0f172a"

@@ -348,7 +348,6 @@ DEPS
     done
 }
 
-@test "the installer key gets GRUB's Kura theme from the overlay, and its font from grub-common" {
+@test "the installer key gets GRUB's Kura theme from the overlay" {
     file_has "${REPO_ROOT}/scripts/pc-installer/create-image.sh" 'overlay/x86_64/usr/share/grub/themes/kura'
-    grep -qx grub-common "${REPO_ROOT}/config/packages-pc-installer.list"
 }

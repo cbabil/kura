@@ -38,7 +38,9 @@ setup() {
 
 @test "pc_grub_cfg: the menu in Kura's colours, the screen's best mode kept for Linux" {
     run pc_grub_cfg 1111-uuid 2222-partuuid Kura
-    output_has 'loadfont ${prefix}/fonts/unicode.pf2'
+    # by name: the font built into the signed GRUB (none loads from disk
+    # under Secure Boot)
+    output_has 'loadfont unicode'
     output_has "set gfxmode=auto"
     output_has "terminal_output gfxterm"
     output_has 'set theme=${prefix}/themes/kura/theme.txt'
@@ -70,11 +72,8 @@ EOF
 
 @test "the GRUB theme and font go on the EFI partition, and are kept current" {
     local list="${REPO_ROOT}/scripts/x86_64/efi-files.list"
-    file_has "${list}" "usr/share/grub/unicode.pf2 EFI/debian/fonts/unicode.pf2"
     file_has "${list}" "usr/share/grub/themes/kura/theme.txt EFI/debian/themes/kura/theme.txt"
     file_has "${list}" "usr/share/grub/themes/kura/select_c.png EFI/debian/themes/kura/select_c.png"
-    # unicode.pf2 comes with grub-common
-    grep -qx grub-common "${REPO_ROOT}/config/packages-x86_64.list"
 }
 
 @test "pc_fstab: root checked at boot and remounted read-only on errors; EFI partition private" {

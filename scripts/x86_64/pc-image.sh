@@ -35,8 +35,9 @@ EOF
 pc_efi_files() { grep -v '^#' "${PC_EFI_FILES}"; }
 
 # pc_grub_look: GRUB's menu in Kura's look (ADR-021): the screen's best
-# mode, the theme and its font from the EFI partition (${prefix}, where
-# Debian's signed GRUB reads grub.cfg), and that mode kept for Linux, so the
+# mode, the theme from the EFI partition (${prefix}, where Debian's signed
+# GRUB reads grub.cfg) with the Unicode font built into that GRUB (under
+# Secure Boot it loads no font from disk), and that mode kept for Linux, so the
 # console and the splash start at the screen's resolution. Without graphics
 # GRUB keeps its text menu, in the closest colours it has.
 pc_grub_look() {
@@ -47,7 +48,7 @@ insmod all_video
 insmod gfxterm
 insmod gfxmenu
 insmod png
-if loadfont ${prefix}/fonts/unicode.pf2; then
+if loadfont unicode; then
     set gfxmode=auto
     terminal_output gfxterm
     set theme=${prefix}/themes/kura/theme.txt

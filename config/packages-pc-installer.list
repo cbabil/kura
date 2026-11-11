@@ -6,8 +6,6 @@
 linux-image-amd64
 shim-signed
 grub-efi-amd64-signed
-# unicode.pf2, the font of GRUB's Kura theme
-grub-common
 busybox-static
 bash
 curl
