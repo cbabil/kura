@@ -358,6 +358,8 @@ POLICYEOF
     if [ -n "${PACKAGES}" ]; then
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get update -qq 2>&1 | grep -v "^$" || true
+        # The bootstrap's packages too get the latest security fixes
+        chroot "${ROOTFS}" apt-get upgrade -y -qq
         # shellcheck disable=SC2086
         chroot "${ROOTFS}" apt-get install -y -qq --no-install-recommends ${PACKAGES}
     fi

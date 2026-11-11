@@ -6,7 +6,7 @@ apply_filesystem_hardening() {
         [/tmp]="noexec,nosuid,nodev"
         [/var/tmp]="noexec,nosuid,nodev"
         [/dev/shm]="noexec,nosuid,nodev"
-        [/home]="nodev"
+        [/home]="nosuid,nodev"
     )
 
     for mp in "${!mount_opts[@]}"; do
@@ -26,7 +26,7 @@ _update_fstab() {
         [/tmp]="noexec,nosuid,nodev"
         [/var/tmp]="noexec,nosuid,nodev"
         [/dev/shm]="noexec,nosuid,nodev"
-        [/home]="nodev"
+        [/home]="nosuid,nodev"
     )
 
     local tmp_file

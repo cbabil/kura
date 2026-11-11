@@ -13,6 +13,10 @@ jq
 
 # Security
 auditd
+# Security updates install themselves (scripts/common/auto-updates.sh); the
+# clock must be right for TLS and APT
+unattended-upgrades
+systemd-timesyncd
 
 # Containers (from Docker's APT repo, added for every target by build.sh).
 # Baked in so containers can run without first installing Docker.
@@ -27,8 +31,11 @@ openssl
 tzdata
 console-setup
 
-# Grow the root partition on first boot (growpart)
+# Grow the root partition on first boot (growpart), or lay out the disk
+# (sfdisk, LVM volumes)
 cloud-guest-utils
+fdisk
+lvm2
 
 # Networking
 network-manager

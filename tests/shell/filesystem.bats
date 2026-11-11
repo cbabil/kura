@@ -120,3 +120,8 @@ _test_update_fstab() {
 @test "the Pi image also mounts its root read-write (no fstab ships)" {
     file_has "${BATS_TEST_DIRNAME}/../../scripts/rpi5/cmdline.txt" "root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rw"
 }
+
+@test "hardening keeps nosuid on /home, which the disk layout mounts nosuid,nodev" {
+    run grep -c '\[/home\]="nosuid,nodev"' "${BATS_TEST_DIRNAME}/../../packages/os-security/src/lib/filesystem.sh"
+    [ "$output" = "2" ]
+}

@@ -9,7 +9,25 @@ set -euo pipefail
 
 ROOTFS="${1:?Usage: $0 <rootfs-dir>}"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../common/brand-defaults.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../common/auto-updates.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/boot-files.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/strip-rootfs.sh"
+BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
+
 echo "Applying RPi5-specific customization..."
+
+# ---- The Pi's kernel and firmware updates install themselves too ----
+# shellcheck disable=SC2016  # ${distro_codename} is unattended-upgrades' variable
+add_update_origin "${ROOTFS}" "${BRAND}" raspi 'origin=Raspberry Pi Foundation,codename=${distro_codename}'
+# ...and a new kernel reaches the boot partition the Pi boots from
+divert_raspi_firmware_hooks "${ROOTFS}"
+install_pi_boot_hook "${ROOTFS}" "${BRAND}"
 
 # NOTE: APT repos (RPi archive, non-free-firmware) configured in configure-repos.sh
 # NOTE: Docker is baked into every image (packages-common.list) and enabled
@@ -29,16 +47,14 @@ echo "Stripping docs/man/locales/firmware..."
 rm -rf "${ROOTFS}/usr/share/doc"
 rm -rf "${ROOTFS}/usr/share/man"
 rm -rf "${ROOTFS}/usr/share/info"
-# RPi firmware lives on the boot partition, not in /usr/lib/firmware
-rm -rf "${ROOTFS}/usr/lib/firmware"
+strip_firmware "${ROOTFS}"
+require_dm_mod "${ROOTFS}"
 find "${ROOTFS}/usr/share/locale" -mindepth 1 -maxdepth 1 \
     ! -name 'C' ! -name 'en_US' -exec rm -rf {} + 2>/dev/null || true
 
 # Strip i18n/translations
 rm -rf "${ROOTFS}/usr/share/i18n/charmaps"
 rm -rf "${ROOTFS}/usr/share/i18n/locales"
-find "${ROOTFS}/usr/share/zoneinfo" -mindepth 1 -maxdepth 1 \
-    -type d ! -name 'UTC' ! -name 'Etc' -exec rm -rf {} + 2>/dev/null || true
 
 # Strip unused kernel modules (keep essential: fs, net, block, USB)
 if [ -d "${ROOTFS}/lib/modules" ]; then

@@ -17,6 +17,8 @@ source "$(dirname "$0")/brand-defaults.sh"
 source "$(dirname "$0")/systemd-units.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/install-firstboot.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/auto-updates.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 # Validate BRAND (must be lowercase alphanumeric with hyphens, no shell metacharacters)
@@ -89,11 +91,32 @@ enable_unit "${ROOTFS}" multi-user.target /usr/lib/systemd/system/containerd.ser
 # First boot: SSH host keys, the imager's setup file, root partition growth,
 # hostname from user-data
 install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
+install_login_screen "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
+
+# ---- Console font: Terminus 16x32, the login screen's design size ----
+# (120x33 on a 1080p screen; console-setup applies it at boot). Uni3 has the
+# blocks, box drawing, bullet and triangle the screen draws (ADR-019).
+install -d "${ROOTFS}/etc/default"
+cat > "${ROOTFS}/etc/default/console-setup" <<'CONSOLEEOF'
+ACTIVE_CONSOLES="/dev/tty[1-6]"
+CHARMAP="UTF-8"
+CODESET="Uni3"
+FONTFACE="Terminus"
+FONTSIZE="16x32"
+VIDEOMODE=
+CONSOLEEOF
+# console-setup reuses the font setup it cached when it was installed (the
+# default font) and would ignore this file; without the cache, the first boot
+# runs setupcon with it and caches the Terminus setup
+rm -f "${ROOTFS}"/etc/console-setup/cached_*
 
 enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-config.service"
 
 # sysinit.target (security runs early)
 enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-security.service"
+
+# ---- Security updates install themselves; the clock stays in sync ----
+install_auto_updates "${ROOTFS}" "${BRAND}"
 
 
 # Ensure /etc/resolv.conf is a regular writable file (not a stale symlink).
@@ -141,10 +164,10 @@ if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
     chmod 600 "${ROOTFS}/etc/${BRAND}/config.json"
 fi
 
-# ---- /etc/issue: the console login screen (ADR-018) ----
+# ---- /etc/issue: the console login screen (ADR-018, ADR-019) ----
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/issue.sh"
-kura_issue "${TAGLINE}" "${COLOR#\#}" > "${ROOTFS}/etc/issue"
+LOGIN_USER="" kura_issue "${TAGLINE}" "${COLOR#\#}" > "${ROOTFS}/etc/issue"
 
 # ---- Install dynamic MOTD scripts ----
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -152,9 +175,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rm -rf "${ROOTFS}/etc/update-motd.d"/*
 
 install -d -m 0755 "${ROOTFS}/etc/update-motd.d"
-for script in 05-ssh-banner 10-banner 40-status 80-commands; do
+for script in 05-ssh-banner 10-status; do
     install -m 0755 "${SCRIPT_DIR}/motd/${script}" "${ROOTFS}/etc/update-motd.d/${script}"
 done
+# The panel 10-status draws, in the login screen's look
+install -m 0644 "${SCRIPT_DIR}/motd.sh" "${ROOTFS}/usr/lib/${BRAND}/motd.sh"
 
 # Empty static motd (dynamic scripts handle everything)
 : > "${ROOTFS}/etc/motd"

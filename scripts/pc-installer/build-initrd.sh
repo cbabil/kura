@@ -4,7 +4,7 @@
 # packages of config/packages-pc-installer.list: busybox for the basics, the
 # few dynamic tools the installer needs with their libraries, the kernel
 # modules of modules.list with their dependencies, Realtek NIC firmware, CA
-# certificates, and the installer scripts. The tree is assembled inside the
+# certificates, the Terminus 16x32 console font, and the installer scripts. The tree is assembled inside the
 # rootfs (/tmp/initrd) so ldd, modprobe and depmod run in a chroot.
 #
 # Usage: build-initrd.sh <rootfs> <kernel-version> <output-initrd>
@@ -27,7 +27,8 @@ BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 OS_NAME="${OS_NAME:-${DEFAULT_NAME}}"
 LIB_DIR="usr/lib/${BRAND}-installer"
 # Dynamic tools; busybox provides everything else
-TOOLS=(/usr/bin/bash /usr/bin/curl /usr/bin/zstd /usr/bin/jq /usr/sbin/sfdisk /usr/bin/kmod)
+# setfont comes from kbd: Debian's static busybox has no setfont applet
+TOOLS=(/usr/bin/bash /usr/bin/curl /usr/bin/zstd /usr/bin/jq /usr/sbin/sfdisk /usr/bin/kmod /usr/bin/setfont)
 TREE="${ROOTFS}/tmp/initrd"
 
 rm -rf "${TREE}"
@@ -73,8 +74,11 @@ fi
 
 echo "  Installer..."
 mkdir -p "${TREE}/${LIB_DIR}"
-cp "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/udhcpc.script" "${SCRIPT_DIR}/modules.list" \
+cp "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/run.sh" "${SCRIPT_DIR}/screen.sh" "${SCRIPT_DIR}/ui.sh" \
+    "${SCRIPT_DIR}/udhcpc.script" "${SCRIPT_DIR}/modules.list" \
     "${SCRIPT_DIR}/../common/firstboot-disk.sh" "${TREE}/${LIB_DIR}/"
+# 16x32 cells: 120x33 on a 1920x1080 screen; unpacked, so setfont needs no gzip
+gzip -dc "${ROOTFS}/usr/share/consolefonts/Uni3-Terminus32x16.psf.gz" > "${TREE}/${LIB_DIR}/font.psf"
 chmod 755 "${TREE}/${LIB_DIR}/udhcpc.script"
 sed -e "s|__BRAND__|${BRAND}|g" -e "s|__BRAND_NAME__|${OS_NAME}|g" \
     -e "s|__LABEL__|${INSTALLER_LABEL}|g" "${SCRIPT_DIR}/init" > "${TREE}/init"

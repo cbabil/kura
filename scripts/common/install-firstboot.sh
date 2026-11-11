@@ -7,12 +7,16 @@
 source "$(dirname "${BASH_SOURCE[0]}")/systemd-units.sh"
 
 # install_firstboot <rootfs> <brand> <os-name> <scripts-dir>
-# Installs the first-boot script and two units:
+# Installs the first-boot scripts and three units:
 #   <brand>-ssh-keygen.service  generates SSH host keys before sshd starts.
 #                               (Neither unit orders itself before ssh.socket:
 #                               sockets come before basic.target, which both
 #                               follow, so that would be a cycle.)
 #                               Standalone so SSH never waits for first boot.
+#   <brand>-storage.service     builds the disk layout the setup file asks
+#                               for, once, early: before the disks are
+#                               mounted, journald writes to /var/log and
+#                               Docker starts.
 #   <brand>-firstboot.service   applies the imager's setup file, grows the
 #                               root partition and applies the hostname from
 #                               attached user-data, before sshd, os-config and
@@ -23,7 +27,8 @@ install_firstboot() {
 
     install -d "${rootfs}/usr/lib/${brand}" "${units}"
     local script
-    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh; do
+    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh \
+            firstboot-password.sh firstboot-storage.sh firstboot-storage-check.sh; do
         sed "s|__BRAND_NAME__|${name}|g; s|__BRAND__|${brand}|g" "${src}/${script}" \
             > "${rootfs}/usr/lib/${brand}/${script}"
         chmod 0755 "${rootfs}/usr/lib/${brand}/${script}"
@@ -66,6 +71,29 @@ StandardError=journal+console
 WantedBy=multi-user.target
 EOF
 
+    cat > "${units}/${brand}-storage.service" <<EOF
+[Unit]
+Description=${name} disk layout
+DefaultDependencies=no
+After=systemd-remount-fs.service systemd-udevd.service
+Before=local-fs.target boot-efi.mount tmp.mount systemd-journal-flush.service docker.service ${brand}-security.service ${brand}-firstboot.service
+ConditionPathExists=!/var/lib/${brand}/.storage-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/${brand}/firstboot-storage.sh
+# scratch mounts never under /tmp, which tmp.mount may cover
+Environment=TMPDIR=/run
+RemainAfterExit=yes
+TimeoutStartSec=900
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=local-fs.target
+EOF
+
+    enable_unit "${rootfs}" local-fs.target "/usr/lib/systemd/system/${brand}-storage.service"
     enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-ssh-keygen.service"
     enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-firstboot.service"
 }
@@ -84,4 +112,49 @@ reset_device_identity() {
     rm -f "${rootfs}/var/lib/dbus/machine-id"
     install -d "${rootfs}/etc/systemd/system"
     ln -sf /dev/null "${rootfs}/etc/systemd/system/systemd-firstboot.service"
+}
+
+# install_login_screen <rootfs> <brand> <os-name> <scripts-dir>
+# Installs kura-issue (ADR-019) with issue.sh, and runs it at boot and every
+# minute: when the screen changed, it rewrites /etc/issue with this device's
+# facts and has agetty redraw the prompts. It is ordered after nothing that
+# can retry (a failing first boot keeps restarting), and the prompt never
+# waits for it; until it runs, the screen built into the image shows.
+install_login_screen() {
+    local rootfs="$1" brand="$2" name="$3" src="$4"
+    local units="${rootfs}/usr/lib/systemd/system"
+
+    install -d "${rootfs}/usr/lib/${brand}" "${units}"
+    sed "s|__BRAND__|${brand}|g" "${src}/kura-issue" > "${rootfs}/usr/lib/${brand}/kura-issue"
+    chmod 0755 "${rootfs}/usr/lib/${brand}/kura-issue"
+    install -m 0644 "${src}/issue.sh" "${rootfs}/usr/lib/${brand}/issue.sh"
+
+    cat > "${units}/${brand}-issue.service" <<EOF
+[Unit]
+Description=${name} login screen
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/${brand}/kura-issue
+# Runs every minute: keep its start/finish lines out of the journal
+LogLevelMax=notice
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat > "${units}/${brand}-issue.timer" <<EOF
+[Unit]
+Description=${name} login screen, kept current
+
+[Timer]
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-issue.service"
+    enable_unit "${rootfs}" timers.target "/usr/lib/systemd/system/${brand}-issue.timer"
 }

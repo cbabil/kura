@@ -266,6 +266,9 @@ stub_install_tools() {
     run install_kura sda 0 < /dev/null
     [ "$status" -eq 0 ]
     cmp "${BATS_TEST_TMPDIR}/image.img" "${DEV_DIR}/nvme0n1"
+    output_has "Kura is installed on nvme0n1."
+    output_has "nvme0n1 · Samsung SSD · 274 GB"
+    output_has "100%"
     # read back from the drive, not the page cache
     file_has "${CALLS}" "blockdev --flushbufs ${DEV_DIR}/nvme0n1"
     file_has "${CALLS}" "sfdisk --relocate gpt-bak-std ${DEV_DIR}/nvme0n1"

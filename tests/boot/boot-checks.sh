@@ -2,7 +2,7 @@
 # tests/boot/boot-checks.sh
 # Checks run from the host by boot-test.sh against the booted guest. Source
 # this file; it uses boot-test.sh's settings (REPORT, OUT, SSH_PORT,
-# LOGIN_USER, LOGIN_PASS, DEFAULT_PASS, KEY, BRAND, WAIT_SECS).
+# LOGIN_USER, LOGIN_PASS, ONE_TIME_PASS, KEY, BRAND, WAIT_SECS).
 #
 # QEMU's user networking forwards IPv4 only: use 127.0.0.1, never localhost
 # (ssh-keyscan stops at localhost's IPv6 address).
@@ -14,7 +14,8 @@ SETUP_USER="tester"
 
 # make_setup_file <dest>: a kura-setup.json as Etchwise writes it (new user
 # with LOGIN_PASS's hash and a new SSH key at KEY, password logins off,
-# hostname, Wi-Fi, time zone)
+# hostname, Wi-Fi, time zone, and a disk layout: a 4 GiB root, /tmp capped at
+# 1 GiB, 1 GiB volumes for /var/log and /var/tmp, Docker on the rest)
 make_setup_file() {
     ssh-keygen -q -t ed25519 -N "" -C "kura-boot-test" -f "${KEY}"
     jq -n --arg user "${SETUP_USER}" --arg hash "$(openssl passwd -6 "${LOGIN_PASS}")" \
@@ -23,7 +24,9 @@ make_setup_file() {
         user: {name: $user, passwordHash: $hash},
         ssh: {enabled: true, passwordAuth: false, authorizedKeys: [$key]},
         wifi: {ssid: "CIWifi", psk: "password-ci", hidden: false, country: "FR"},
-        timezone: "Europe/Paris", keyboard: "fr"}' > "$1"
+        timezone: "Europe/Paris", keyboard: "fr",
+        storage: {rootGiB: 4, tmpGiB: 1, volumes: [{mount: "/var/log", sizeGiB: 1},
+            {mount: "/var/tmp", sizeGiB: 1}, {mount: "/var/lib/docker"}]}}' > "$1"
 }
 
 # wait_for <description> <command...>: poll every 10 s until the command
@@ -73,10 +76,24 @@ sudo_run() { ssh_run "echo '${LOGIN_PASS}' | sudo -S -p '' $1"; }
 
 ssh_listening() { ssh-keyscan -p "${SSH_PORT}" -T 5 127.0.0.1 2>/dev/null | grep -q .; }
 
-# The default password must only reach a forced password change (first-login.exp
+# console_password: the one-time password (firstboot-password.sh) as the owner
+# reads it on the login screen, which the serial console shows too
+console_password() {
+    local pw
+    pw=$(LC_ALL=C grep -aoE '[a-km-np-z2-9]{4}-[a-km-np-z2-9]{4}-[a-km-np-z2-9]{4} · one-time' "${SERIAL}" | tail -1)
+    [ -n "${pw}" ] && ONE_TIME_PASS="${pw%% *}"
+}
+
+# The image's public default password (admin) never logs in over SSH
+default_password_refused() {
+    ! sshpass -p "${PUBLIC_DEFAULT_PASS}" ssh "${SSH_OPTS[@]}" -o PubkeyAuthentication=no \
+        "${LOGIN_USER}@127.0.0.1" true 2>/dev/null
+}
+
+# The one-time password must only reach a forced password change (first-login.exp
 # fails if it gets a shell); from then on LOGIN_PASS is the password.
 first_login_changes_password() {
-    "$(dirname "$0")/first-login.exp" "${SSH_PORT}" "${LOGIN_USER}" "${DEFAULT_PASS}" "${LOGIN_PASS}" \
+    "$(dirname "$0")/first-login.exp" "${SSH_PORT}" "${LOGIN_USER}" "${ONE_TIME_PASS}" "${LOGIN_PASS}" \
         > "${OUT}/first-login.log" 2>&1 || return 1
     ssh_run true
 }
@@ -137,6 +154,39 @@ splash_theme_default() { [ "$(ssh_run /usr/sbin/plymouth-set-default-theme)" = k
 splash_in_initrd() {
     ssh_run 'lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -q "themes/kura/kura.script"'
 }
+
+# console_font: the first boot cached the Terminus 16x32 font setup
+console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setup_font.sh'; }
+
+# layout_built: the setup file's disk layout: the root sized, the volumes
+# mounted with their options, /var/tmp still world-writable, /tmp capped
+layout_built() {
+    local facts status root docker logopts mode tmpopts
+    facts=$(ssh_run "cat /var/lib/${BRAND}/storage-status
+        lsblk -bdno SIZE \$(findmnt -no SOURCE /)
+        findmnt -no SOURCE /var/lib/docker
+        findmnt -no OPTIONS /var/log
+        stat -c %a /var/tmp
+        findmnt -no OPTIONS /tmp")
+    # shellcheck disable=SC2001  # indent every line, not one substitution
+    sed 's/^/  /' <<< "${facts}" >> "${REPORT}"
+    { read -r status; read -r root; read -r docker; read -r logopts; read -r mode; read -r tmpopts; } <<< "${facts}"
+    [ "${status}" = "applied" ] && [ "${root}" = "4294967296" ] &&
+    [ "${docker}" = "/dev/mapper/${BRAND}-var--lib--docker" ] &&
+    [[ "${logopts}" == *noexec* ]] && [ "${mode}" = "1777" ] &&
+    [[ "${tmpopts}" =~ size=(1048576k|1G) ]]
+}
+
+# layout_after_restart: the layout comes back on the next boot (fstab, LVM
+# activation, and the root's PARTUUID unchanged by the resize)
+layout_after_restart() {
+    sudo_run "systemctl reboot" || true
+    sleep 20
+    wait_for "SSH after the restart" ssh_run true && layout_built
+}
+
+# setup_shown: kura-issue has put the setup outcome on the login screen
+setup_shown() { ssh_run 'grep -q "setup applied" /etc/issue'; }
 
 # login_screen: the console's login screen has the Kura look; saved as
 # login.png

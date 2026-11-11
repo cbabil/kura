@@ -90,6 +90,21 @@ setup_nm() { NM_DIR="${BATS_TEST_TMPDIR}/nm"; mkdir -p "${NM_DIR}"; }
     [ "$(file_mode "${f}")" = "600" ]
 }
 
+@test "setup_wifi: with no interface set, any Wi-Fi device can use the connection" {
+    # A PC's Wi-Fi is wlp2s0 or similar, never wlan0
+    setup_nm
+    local config="${BATS_TEST_TMPDIR}/no-iface.json"
+    echo '{"networkConfig":{"wifi":{"enable":true,"networks":[{"ssid":"Home","psk":"password1"}]}}}' > "${config}"
+    load_os_config "${config}" "${NM_DIR}"
+    setup_wifi
+    ! grep -q '^interface-name' "${NM_DIR}/Home.nmconnection"
+}
+
+@test "the image's config.json names no Wi-Fi interface" {
+    [ "$(jq -r '.networkConfig.wifi.defaultInterface // "none"' \
+        "${BATS_TEST_DIRNAME}/../../overlay/common/etc/kura/config.json")" = "none" ]
+}
+
 @test "setup_wifi: skips invalid SSIDs" {
     setup_nm
     load_os_config "$(wifi_config '[{"ssid":"GoodNetwork","psk":"pass1"},{"ssid":";evil","psk":"pass2"},{"ssid":"","psk":"pass3"}]')" "${NM_DIR}"

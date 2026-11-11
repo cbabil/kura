@@ -9,6 +9,9 @@
 #
 # Source this file; it defines functions only.
 
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/apt-components.sh"
+
 # shellcheck disable=SC2034
 DOCKER_APT_URL="https://download.docker.com/linux/debian"
 DOCKER_GPG_URL="${DOCKER_APT_URL}/gpg"
@@ -17,41 +20,8 @@ DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 DOCKER_KEYRING_PATH="etc/apt/keyrings/docker.asc"
 DOCKER_SOURCE_PATH="etc/apt/sources.list.d/docker.list"
 
-# pinned_docker_key <key-file> <out-file>
-# Writes only the key whose fingerprint is DOCKER_GPG_FINGERPRINT, armored.
-# Fails if the file doesn't contain it, so extra keys appended to a download
-# are never trusted by apt. Uses a throwaway GNUPGHOME so the build user's
-# keyring is never touched.
-pinned_docker_key() {
-    local key="$1" out="$2" home status=0
-    if ! command -v gpg >/dev/null 2>&1; then
-        echo "ERROR: gpg is required to verify the Docker signing key" >&2
-        return 1
-    fi
-    home=$(mktemp -d)
-    if ! GNUPGHOME="${home}" gpg --batch --quiet --import "${key}" 2>/dev/null; then
-        echo "ERROR: could not read a key from ${key}" >&2
-        status=1
-    elif ! GNUPGHOME="${home}" gpg --batch --list-keys "${DOCKER_GPG_FINGERPRINT}" \
-            >/dev/null 2>&1; then
-        echo "ERROR: Docker GPG key fingerprint mismatch: pinned key not in download" >&2
-        status=1
-    else
-        GNUPGHOME="${home}" gpg --batch --armor --export "${DOCKER_GPG_FINGERPRINT}" > "${out}"
-    fi
-    rm -rf "${home}"
-    return "${status}"
-}
-
-# rootfs_codename <rootfs-dir>
-# Prints VERSION_CODENAME from the rootfs os-release (parsed, not sourced).
-rootfs_codename() {
-    local rootfs="$1" file
-    file="${rootfs}/etc/os-release"
-    [ -f "${file}" ] || file="${rootfs}/usr/lib/os-release"
-    [ -f "${file}" ] || return 1
-    sed -n 's/^VERSION_CODENAME=//p' "${file}" | tr -d '"' | head -1
-}
+# pinned_docker_key <key-file> <out-file>: only Docker's pinned key (pinned_key)
+pinned_docker_key() { pinned_key "$1" "${DOCKER_GPG_FINGERPRINT}" "$2"; }
 
 # docker_apt_source_line <arch> <codename>
 docker_apt_source_line() {

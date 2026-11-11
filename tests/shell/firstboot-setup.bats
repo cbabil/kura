@@ -111,6 +111,29 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     [ "$(conf .hostname)" = "kura" ]
 }
 
+@test "apply_setup_dir: records that the setup was applied (the login screen shows it)" {
+    full_setup
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = "applied" ]
+}
+
+@test "apply_setup_dir: records why an invalid file was ignored" {
+    echo '{"version":1,"user":{"name":"root","passwordHash":"'"${HASH}"'"}}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "ignored: invalid user name (taken by a system account or group)" ]
+}
+
+@test "apply_setup_dir: a step that fails without a reason points at the journal" {
+    full_setup
+    usermod() { return 1; }
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -ne 0 ]
+    file_has "${SETUP_ROOT}/var/lib/kura/setup-status" "incomplete, retrying: a step failed (journalctl -u kura-firstboot)"
+}
+
 @test "apply_setup_dir: bad Wi-Fi settings skip the Wi-Fi only" {
     echo '{"version":1,"hostname":"lab","wifi":{"ssid":"Bob'"'"'s phone","psk":"password1"}}' \
         > "${BOOT}/kura-setup.json"
@@ -119,6 +142,66 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     output_has "Wi-Fi"
     [ "$(conf .hostname)" = "lab" ]
     [ "$(conf .networkConfig.wifi.enable)" = "false" ]
+}
+
+@test "apply_setup_dir: a skipped Wi-Fi shows on the login screen, with why" {
+    echo '{"version":1,"hostname":"lab","wifi":{"ssid":"Bob'"'"'s phone","psk":"password1"}}' \
+        > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "partly applied: Wi-Fi skipped (invalid SSID)" ]
+}
+
+@test "apply_setup_dir: an unknown time zone shows too, and both skips are listed" {
+    echo '{"version":1,"wifi":{"ssid":"Home"},"timezone":"Mars/Olympus"}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "partly applied: Wi-Fi skipped (missing Wi-Fi password), time zone kept as UTC (unknown zone)" ]
+}
+
+@test "apply_setup_dir: a disk layout that was not built shows too, with why" {
+    echo '{"version":1,"storage":{"rootGiB":16}}' > "${BOOT}/kura-setup.json"
+    mkdir -p "${SETUP_ROOT}/var/lib/kura"
+    echo "skipped: needs 34 GB, disk has 31 GB" > "${SETUP_ROOT}/var/lib/kura/storage-status"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "partly applied: storage kept as one root (needs 34 GB, disk has 31 GB)" ]
+    echo "failed: vgcreate" > "${SETUP_ROOT}/var/lib/kura/storage-status"
+    echo '{"version":1,"storage":{"rootGiB":16}}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
+      "partly applied: disk layout failed (vgcreate; journalctl -u kura-storage)" ]
+}
+
+@test "apply_setup_dir: caps /tmp at the size asked for" {
+    echo '{"version":1,"storage":{"tmpGiB":2}}' > "${BOOT}/kura-setup.json"
+    findmnt() { echo tmpfs; }
+    mount() { log_call "mount $*"; }
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    local dropin="${SETUP_ROOT}/etc/systemd/system/tmp.mount.d/kura.conf"
+    file_has "${dropin}" "[Mount]"
+    file_has "${dropin}" "Options=mode=1777,strictatime,nosuid,nodev,noexec,size=2G,nr_inodes=1m"
+    file_has "${CALLS}" "mount -o remount,size=2G,noexec /tmp"
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = "applied" ]
+}
+
+@test "apply_setup_dir: an invalid storage key leaves /tmp alone (the disk layout reports it)" {
+    echo '{"version":1,"storage":{"tmpGiB":0}}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ ! -e "${SETUP_ROOT}/etc/systemd/system/tmp.mount.d/kura.conf" ]
+}
+
+@test "apply_setup_dir: a later unnamed failure is not blamed on the skipped Wi-Fi" {
+    echo '{"version":1,"wifi":{"ssid":"Home"},"keyboard":"fr"}' > "${BOOT}/kura-setup.json"
+    setup_keyboard() { return 1; }
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -ne 0 ]
+    file_has "${SETUP_ROOT}/var/lib/kura/setup-status" "incomplete, retrying: a step failed"
 }
 
 @test "apply_setup_dir: a failed step keeps the file so first boot retries" {
@@ -249,6 +332,15 @@ reject() {  # reject <json> <word expected in the message>
     [ "$status" -ne 0 ]
 }
 
+@test "setup_user: a password from the setup file replaces the one-time password" {
+    mkdir -p "${SETUP_ROOT}/var/lib/kura"
+    touch "${SETUP_ROOT}/var/lib/kura/default-password"
+    echo "abcd-efgh-jkmn" > "${SETUP_ROOT}/var/lib/kura/one-time-password"
+    setup_user chris "${HASH}"
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/default-password" ]
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/one-time-password" ]
+}
+
 @test "setup_user: keeping the name only sets the password" {
     run setup_user admin "${HASH}"
     [ "$status" -eq 0 ]
@@ -290,7 +382,7 @@ reject() {  # reject <json> <word expected in the message>
     [ "$status" -eq 0 ]
     [ "$(conf .networkConfig.wifi.enable)" = "true" ]
     [ "$(conf '.networkConfig.wifi.networks[0] | [.ssid, .psk, .hidden] | join(",")')" = "Home Net,password1,true" ]
-    [ "$(conf .networkConfig.wifi.defaultInterface)" = "wlan0" ]
+    [ "$(conf .networkConfig.wifi.defaultInterface)" = "null" ]
     file_has "${SETUP_ROOT}/etc/modprobe.d/cfg80211.conf" "options cfg80211 ieee80211_regdom=FR"
 }
 

@@ -4,12 +4,16 @@
 # Kura PC image in the release manifest, pick the one internal disk, write
 # the image to it with both checksums checked, hand over kura-setup.json and
 # mark the USB key as used. Paths come from SYS_BLOCK, DEV_DIR, KEY_DIR and
-# CMDLINE_FILE so the tests can fake them. Defines functions only.
+# CMDLINE_FILE so the tests can fake them. The screen is redrawn whole for
+# each state (screen.sh, ui.sh). Defines functions only.
 
 # shellcheck disable=SC1091
 source "${INSTALLER_COMMON:-$(dirname "${BASH_SOURCE[0]}")/../common}/firstboot-disk.sh"
+# shellcheck source=SCRIPTDIR/screen.sh
+source "$(dirname "${BASH_SOURCE[0]}")/screen.sh"
+# shellcheck source=SCRIPTDIR/run.sh
+source "$(dirname "${BASH_SOURCE[0]}")/run.sh"
 
-SYS_BLOCK="${SYS_BLOCK:-/sys/block}"
 DEV_DIR="${DEV_DIR:-/dev}"
 KEY_DIR="${KEY_DIR:-/run/key}"
 CMDLINE_FILE="${CMDLINE_FILE:-/proc/cmdline}"
@@ -18,8 +22,8 @@ INSTALLED_MARK=".installed"
 LATEST_MANIFEST="https://github.com/${KURA_RELEASE_REPO:-cbabil/kura}/releases/latest/download/manifest.json"
 SHA256_RE='^[0-9a-f]{64}$'
 
-say() { printf '%s\n' "$*"; }
-fail() { printf '%s\n' "$*" >&2; return 1; }
+say() { ui_note "$*"; }
+fail() { ui_error "$*" >&2; return 1; }
 
 # gigabytes <bytes>: whole decimal GB, as drives are sold
 gigabytes() { echo "$(( $1 / 1000000000 )) GB"; }
@@ -117,19 +121,6 @@ pick_target() {
     fi
 }
 
-# countdown <seconds>: fails as soon as a key is pressed
-countdown() {
-    local left
-    for (( left = $1; left > 0; left-- )); do
-        printf '\rInstalling in %2d seconds; press any key to cancel. ' "${left}"
-        if read -r -s -n 1 -t 1 _; then
-            echo
-            return 1
-        fi
-    done
-    echo
-}
-
 # ---- Writing ----
 
 # stream_image <url> <sha256> <target>: download, decompress and write in one
@@ -177,44 +168,3 @@ mark_installed() {
 }
 
 already_installed() { [ -e "${KEY_DIR}/${INSTALLED_MARK}" ]; }
-
-# ---- The whole run ----
-
-# install_kura <key-disk> <countdown-seconds>
-install_kura() {
-    local manifest bundle url sha size esha target dev bytes model
-    if already_installed; then
-        say "Kura is already installed from this key: remove the USB key and turn the PC on again."
-        return 0
-    fi
-    net_up || fail "No network: plug in an Ethernet cable connected to the internet and try again." ||
-        return 1
-    manifest=$(mktemp) || return 1
-    fetch_manifest "$(manifest_url "${CMDLINE_FILE}")" "${manifest}" &&
-        bundle=$(manifest_bundle "${manifest}")
-    local status=$?
-    rm -f "${manifest}"
-    [ "${status}" -eq 0 ] || fail "The list of Kura releases could not be read." || return 1
-    read -r url sha size esha <<< "${bundle}"
-
-    target=$(pick_target "$1" "${size}") || return 1
-    read -r target bytes model <<< "${target}"
-    dev="${DEV_DIR}/${target}"
-    say "Kura will be installed on ${dev} (${model:-unknown drive}, $(gigabytes "${bytes}"))." \
-        "Everything on that drive will be erased."
-    countdown "$2" || { say "Cancelled. Nothing was written."; return 1; }
-
-    say "Downloading and writing Kura..."
-    # flushbufs drops the cached pages, so the check reads the drive itself
-    { stream_image "${url}" "${sha}" "${dev}" && sync && blockdev --flushbufs "${dev}" &&
-        verify_written "${dev}" "${size}" "${esha}"; } ||
-        fail "Kura was not installed, and the drive will not boot until it is." || return 1
-    blockdev --rereadpt "${dev}" 2>/dev/null || true
-    # The image's backup GPT sits where the image ended, not at the disk's end
-    sfdisk --relocate gpt-bak-std "${dev}" 2>/dev/null || true
-    blockdev --rereadpt "${dev}" 2>/dev/null || true
-    with_mount "${DEV_DIR}/$(disk_partition "${target}" 1)" hand_over_setup -t vfat ||
-        fail "Kura was installed, but its setup could not be copied." || return 1
-    mark_installed
-    say "Kura is installed on ${dev}. Remove the USB key; the PC turns off now."
-}

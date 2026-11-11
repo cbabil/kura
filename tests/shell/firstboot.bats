@@ -40,6 +40,16 @@ stub_resize_tools() {  # stub_resize_tools <root-device> <parent-disk>
     [ "$(sed -n 1p "${CALLS}")" = "growpart /dev/sda 1" ]
 }
 
+@test "resize_root: leaves a root the disk layout already sized" {
+    stub_resize_tools /dev/sda2 sda
+    SETUP_ROOT="${BATS_TEST_TMPDIR}/root"
+    mkdir -p "${SETUP_ROOT}/var/lib/__BRAND__"
+    echo applied > "${SETUP_ROOT}/var/lib/__BRAND__/storage-status"
+    run resize_root
+    [ "$status" -eq 0 ]
+    [ ! -e "${CALLS}" ]
+}
+
 @test "resize_root: skips a live system whose root is not a partition" {
     stub_resize_tools overlay ""
     run resize_root
@@ -75,6 +85,7 @@ stub_all_ok() {
     apply_setup() { log_call apply_setup; }
     resize_root() { log_call resize_root; }
     apply_cloud_hostname() { log_call apply_cloud_hostname; }
+    replace_default_password() { log_call replace_default_password; }
 }
 
 @test "run_firstboot: runs every step and marks first boot done" {
@@ -85,6 +96,14 @@ stub_all_ok() {
     file_has "${CALLS}" "resize_root"
     file_has "${CALLS}" "apply_cloud_hostname"
     [ -f "${BATS_TEST_TMPDIR}/done" ]
+}
+
+# After the setup file (whose password replaces the default), before sshd
+@test "run_firstboot: the public default password is replaced right after the setup" {
+    stub_all_ok
+    run run_firstboot "${BATS_TEST_TMPDIR}/done"
+    [ "$status" -eq 0 ]
+    [ "$(sed -n 2p "${CALLS}")" = "replace_default_password" ]
 }
 
 @test "run_firstboot: does nothing once marked done" {
@@ -111,7 +130,8 @@ stub_all_ok() {
     run install_firstboot "${ROOTFS}" kura "Kura" "${REPO_ROOT}/scripts/common"
     [ "$status" -eq 0 ]
     local script
-    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh; do
+    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh \
+            firstboot-storage.sh firstboot-storage-check.sh; do
         [ -x "${ROOTFS}/usr/lib/kura/${script}" ]
         run grep -c "__BRAND" "${ROOTFS}/usr/lib/kura/${script}"
         [ "$output" = "0" ]

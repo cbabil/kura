@@ -3,8 +3,8 @@
 # Enable 64-bit mode
 arm_64bit=1
 
-# Kernel settings
-kernel=Image
+# Kernel: the newest kernel, copied as vmlinuz (scripts/rpi5/boot-files.sh)
+kernel=vmlinuz
 
 # Device tree
 device_tree=bcm2712-rpi-5-b.dtb

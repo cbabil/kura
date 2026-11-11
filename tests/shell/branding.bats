@@ -34,27 +34,6 @@ setup() {
     output_has $'\e]P500ff88'
 }
 
-@test "kura_issue: logo, kicker and tagline as on the README banner" {
-    run kura_issue "${TAGLINE}"
-    output_has "██   ██ ██    ██ ██████   █████"
-    output_has "T H E   S T O R E H O U S E"
-    output_has "${TAGLINE}"
-}
-
-@test "kura_issue: host, address, SSH and system filled in by agetty at the prompt" {
-    run kura_issue "${TAGLINE}"
-    local value=$'\e[0;97m'
-    output_has "Host      ${value}\\n"
-    output_has "Address   ${value}\\4"
-    output_has "Connect   ${value}ssh <user>@\\4"
-    output_has 'System    '$'\e[0;37m''\S{PRETTY_NAME} · \m'
-}
-
-@test "kura_issue: only characters the console font can draw (no 蔵 here)" {
-    run kura_issue "${TAGLINE}"
-    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2500}\x{00B7}]/g')" ]
-}
-
 @test "customize-rootfs: /etc/issue is the new login screen, with OS_ISSUE as the tagline" {
     file_has "${REPO_ROOT}/scripts/common/brand-defaults.sh" "DEFAULT_TAGLINE=\"${TAGLINE}\""
     file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'TAGLINE="${OS_ISSUE:-${DEFAULT_TAGLINE}}"'
@@ -62,7 +41,7 @@ setup() {
     file_has "${REPO_ROOT}/.env.example" "OS_ISSUE=\"${TAGLINE}\""
 }
 
-@test "the old StraturaOS overlay issue and motd files are gone" {
+@test "the old-brand overlay issue and motd files are gone" {
     for f in overlay/rpi5/etc/issue overlay/rpi5/etc/motd overlay/x86_64/etc/issue overlay/x86_64/etc/motd; do
         [ ! -e "${REPO_ROOT}/${f}" ]
     done

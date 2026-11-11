@@ -6,6 +6,8 @@
 
 # shellcheck disable=SC2016  # jq programs are single-quoted on purpose
 
+# shellcheck disable=SC2034  # used by firstboot-setup.sh and firstboot-storage.sh
+SETUP_FILE="${SETUP_BRAND}-setup.json"   # on the boot partition
 SETUP_MAX_BYTES=65536
 USER_RE='^[a-z_][a-z0-9_-]{0,31}$'
 HOST_RE='^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'
@@ -17,7 +19,15 @@ COUNTRY_RE='^[A-Z]{2}$'
 TZ_RE='^[A-Za-z0-9_+-]+(/[A-Za-z0-9_+-]+){0,2}$'
 KEYBOARD_RE='^[a-z]{2,8}(,[a-z]{2,8})*$'
 
-setup_error() { echo "ERROR: setup: $*" >&2; }
+# The last error, kept for the login screen's setup line (setup-status,
+# written by firstboot-setup.sh)
+SETUP_LAST_ERROR=""
+# shellcheck disable=SC2034
+setup_error() { SETUP_LAST_ERROR="$*"; echo "ERROR: setup: $*" >&2; }
+
+# What was left out of an applied setup, for the same line
+SETUP_SKIPPED=""
+setup_skipped() { SETUP_SKIPPED+="${SETUP_SKIPPED:+, }$*"; }
 
 # setup_get <file> <jq-path>: the value, or nothing when null or missing
 setup_get() { jq -r "($2) | if . == null then empty else . end" "$1"; }

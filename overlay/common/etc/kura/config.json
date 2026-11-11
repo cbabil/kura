@@ -4,8 +4,7 @@
     "hostname": "kura",
     "networkConfig": {
         "wifi": {
-            "enable": false,
-            "defaultInterface": "wlan0"
+            "enable": false
         },
         "ethernet": {
             "enable": true,
