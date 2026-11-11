@@ -6,6 +6,7 @@
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
 setup() {
+    load test_helper
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/rpi5/strip-rootfs.sh"
     ROOTFS="${BATS_TEST_TMPDIR}/rootfs"
@@ -42,4 +43,34 @@ setup() {
     grep -q 'strip_firmware "${ROOTFS}"' "${script}"
     ! grep -q 'usr/lib/firmware"$' "${script}"
     ! grep -q 'zoneinfo' "${script}"
+}
+
+@test "require_dm_mod: passes with device-mapper as a module or built in" {
+    local mods="${ROOTFS}/lib/modules/6.12.47+rpt-rpi-2712"
+    mkdir -p "${mods}/kernel/drivers/md"
+    touch "${mods}/kernel/drivers/md/dm-mod.ko.xz"
+    run require_dm_mod "${ROOTFS}"
+    [ "$status" -eq 0 ]
+    rm "${mods}/kernel/drivers/md/dm-mod.ko.xz"
+    echo "kernel/drivers/md/dm-mod.ko" > "${mods}/modules.builtin"
+    run require_dm_mod "${ROOTFS}"
+    [ "$status" -eq 0 ]
+}
+
+@test "require_dm_mod: checks the Pi 5 kernel (2712), not another one" {
+    mkdir -p "${ROOTFS}/lib/modules/6.12.47+rpt-rpi-v8/kernel/drivers/md" "${ROOTFS}/lib/modules/6.12.47+rpt-rpi-2712/kernel"
+    touch "${ROOTFS}/lib/modules/6.12.47+rpt-rpi-v8/kernel/drivers/md/dm-mod.ko.xz"
+    run require_dm_mod "${ROOTFS}"
+    [ "$status" -ne 0 ]
+}
+
+@test "require_dm_mod: fails without device-mapper (no disk layout volumes)" {
+    mkdir -p "${ROOTFS}/lib/modules/6.12.47+rpt-rpi-2712/kernel"
+    run require_dm_mod "${ROOTFS}"
+    [ "$status" -ne 0 ]
+    output_has "dm-mod"
+}
+
+@test "the Pi build checks for device-mapper" {
+    file_has "${REPO_ROOT}/scripts/rpi5/customize-rootfs.sh" 'require_dm_mod "${ROOTFS}"'
 }

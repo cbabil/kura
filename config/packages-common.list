@@ -31,8 +31,11 @@ openssl
 tzdata
 console-setup
 
-# Grow the root partition on first boot (growpart)
+# Grow the root partition on first boot (growpart), or lay out the disk
+# (sfdisk, LVM volumes)
 cloud-guest-utils
+fdisk
+lvm2
 
 # Networking
 network-manager

@@ -6,6 +6,8 @@
 
 # shellcheck disable=SC2016  # jq programs are single-quoted on purpose
 
+# shellcheck disable=SC2034  # used by firstboot-setup.sh and firstboot-storage.sh
+SETUP_FILE="${SETUP_BRAND}-setup.json"   # on the boot partition
 SETUP_MAX_BYTES=65536
 USER_RE='^[a-z_][a-z0-9_-]{0,31}$'
 HOST_RE='^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'

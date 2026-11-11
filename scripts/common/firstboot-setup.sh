@@ -11,7 +11,12 @@
 #    "user":{"name":"chris","passwordHash":"$y$..."},
 #    "ssh":{"enabled":true,"passwordAuth":false,"authorizedKeys":["ssh-ed25519 ..."]},
 #    "wifi":{"ssid":"Home","psk":"<8-63 chars or 64 hex>","hidden":false,"country":"FR"},
-#    "timezone":"Europe/Paris", "keyboard":"fr"}
+#    "timezone":"Europe/Paris", "keyboard":"fr",
+#    "storage":{"rootGiB":16,"tmpGiB":1,"volumes":[...]}}
+#
+# The disk layout (storage) is built earlier in the boot by
+# firstboot-storage.sh; here only /tmp's size is applied, and the layout's
+# outcome joins the login screen's setup line.
 #
 # The file holds a password hash and the Wi-Fi key, so it is overwritten and
 # deleted once applied, and also when it is invalid (then the image's
@@ -23,12 +28,14 @@
 
 SETUP_BRAND="${SETUP_BRAND:-__BRAND__}"
 SETUP_ROOT="${SETUP_ROOT:-}"          # tests write under a scratch root
-SETUP_FILE="${SETUP_BRAND}-setup.json"
 LOGIN_UID=1000                        # the image's login user and group (customize-rootfs.sh)
 
 # validate_setup, validate_wifi and their helpers; boot_partition, with_mount
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/firstboot-setup-check.sh"
+# storage_applied, for resize_root (the disk layout is built earlier)
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/firstboot-storage-check.sh"
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/firstboot-disk.sh"
 # replace_default_password, forget_one_time_password
@@ -36,12 +43,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/firstboot-disk.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/firstboot-password.sh"
 
 sshd_conf() { echo "${SETUP_ROOT}/etc/ssh/sshd_config.d/10-${SETUP_BRAND}.conf"; }
-
-# write_atomic <file> <mode>: stdin to <file>, never visible half-written or
-# with a wider mode
-write_atomic() {
-    (umask 077 && cat > "$1.new") && chmod "$2" "$1.new" && mv "$1.new" "$1"
-}
 
 # edit_file <file> <awk-program> [awk args...]: rewrite in place, atomically
 edit_file() {
@@ -145,6 +146,35 @@ apply_wifi() {
         "$(jq -r '.wifi.hidden == true' "${f}")" "$(setup_get "${f}" .wifi.country)"
 }
 
+# setup_tmp <file>: cap /tmp (a RAM disk) at storage.tmpGiB, now and at
+# every boot. An invalid size is left to the disk layout to report.
+setup_tmp() {
+    local gib dir="${SETUP_ROOT}/etc/systemd/system/tmp.mount.d"
+    gib=$(jq -r '.storage.tmpGiB? | select(type == "number" and . == floor and . >= 1 and . <= 4096)' "$1" 2>/dev/null)
+    [ -n "${gib}" ] || return 0
+    if ! install -d "${dir}" ||
+        ! printf '[Mount]\nOptions=mode=1777,strictatime,nosuid,nodev,noexec,size=%sG,nr_inodes=1m\n' "${gib}" |
+            write_atomic "${dir}/${SETUP_BRAND}.conf" 644; then
+        setup_error "could not set the /tmp size"
+        return 1
+    fi
+    if [ "$(findmnt -no FSTYPE /tmp 2>/dev/null)" = "tmpfs" ]; then
+        mount -o "remount,size=${gib}G,noexec" /tmp || echo "WARNING: /tmp takes its size at the next boot" >&2
+    fi
+    return 0
+}
+
+# storage_note: a disk layout that was asked for but not built, for the
+# setup line
+storage_note() {
+    local s
+    s=$(cat "$(state_file storage-status)" 2>/dev/null) || return 0
+    case "${s}" in
+        skipped:*) setup_skipped "storage kept as one root (${s#skipped: })" ;;
+        failed:*) setup_skipped "disk layout failed (${s#failed: }; journalctl -u ${SETUP_BRAND}-storage)" ;;
+    esac
+}
+
 # apply_setup_file <file>: apply a validated file, user before SSH (keys go
 # to the final user)
 apply_setup_file() {
@@ -166,6 +196,8 @@ apply_setup_file() {
     [ -z "${v}" ] || setup_timezone "${v}" || return 1
     v=$(setup_get "${f}" .keyboard)
     [ -z "${v}" ] || setup_keyboard "${v}" || return 1
+    setup_tmp "${f}" || return 1
+    storage_note
 }
 
 # remove_setup_file <file>
@@ -175,10 +207,7 @@ remove_setup_file() {
 }
 
 # record_setup_status <text>: the outcome the login screen shows (kura-issue)
-record_setup_status() {
-    install -d "${SETUP_ROOT}/var/lib/${SETUP_BRAND}"
-    printf '%s\n' "$1" | write_atomic "${SETUP_ROOT}/var/lib/${SETUP_BRAND}/setup-status" 644
-}
+record_setup_status() { record_state setup-status "$1"; }
 
 # apply_setup_dir <mounted-boot-dir>
 apply_setup_dir() {

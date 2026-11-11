@@ -7,10 +7,10 @@
 # until the owner has changed it (it is expired: the first login must set
 # a new one). A password from the imager's setup file replaces it.
 #
-# Sourced by firstboot-setup.sh, whose LOGIN_UID and write_atomic it uses
-# (and firstboot-disk.sh's wipe_file). Defines functions only.
+# Sourced by firstboot-setup.sh, whose LOGIN_UID it uses (and
+# firstboot-disk.sh's wipe_file, write_atomic and state_file). Defines functions only.
 
-password_state() { echo "${SETUP_ROOT:-}/var/lib/${SETUP_BRAND}/$1"; }
+password_state() { state_file "$1"; }
 
 # one_time_password: 12 characters in three groups, no 0/o or 1/l (~59 bits)
 one_time_password() {

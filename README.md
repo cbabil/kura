@@ -23,7 +23,7 @@ A lightweight home-server OS built on Debian 13 (Trixie) for the Raspberry Pi 5 
 - **Debian-based**: Built on Debian 13 (Trixie) for broad hardware and package support
 - **mmdebstrap rootfs**: Reproducible, minimal root filesystem generation
 - **Docker built in**: Docker Engine and Compose from Docker's APT repository (signing key fingerprint pinned)
-- **First boot**: grows the root partition to fill the disk, generates this device's own SSH host keys and machine ID, and applies the settings an imager left on the boot partition (`kura-setup.json`)
+- **First boot**: grows the root partition to fill the disk (or builds the disk layout chosen in Etchwise), generates this device's own SSH host keys and machine ID, and applies the settings an imager left on the boot partition (`kura-setup.json`)
 - **Four targets**: RPi5 SD card image, x86_64 PC disk image (UEFI, Secure Boot, e.g. Intel NUC), a small PC installer USB image that puts Kura on a PC's internal drive, and a Docker rootfs
 - **Login screen**: a boot splash (PC) and a console login screen with the address, the exact `ssh` command, service status and whether the Etchwise setup was applied
 - **Security**: hardening at boot (kernel parameters, SSH, audit rules, firewall, filesystem mounts)
@@ -252,6 +252,8 @@ Etchwise (a multi-device imager based on Raspberry Pi Imager) lists Kura under R
 | Intel NUC | **Kura &lt;version&gt; (PC)**: runs from the USB drive or SSD it is written to | about 390 MB |
 
 Its setup screens become `kura-setup.json` on the boot partition (the EFI partition on a PC); first boot validates it, applies it before SSH starts, and deletes it (it holds the password hash and Wi-Fi key). An invalid file is ignored and the image defaults stay (`admin` with the one-time password on the login screen); the login screen then says "setup ignored" and why. A valid file with Wi-Fi settings Kura can't use or an unknown time zone is applied without them, and the screen says "setup partly applied" and what was left out. **The user name must be a new name**: lowercase letters, digits, `_` or `-`, at most 32 characters, and not a name the system already has (such as `root`, `daemon` or `docker`). Format and rules: `scripts/common/firstboot-setup.sh`.
+
+**Disk layout.** By default the root partition grows over the whole disk. Etchwise's Disk layout step can instead ask for a sized root, a cap on `/tmp` (in RAM) and separate volumes for `/var/log`, `/var/tmp`, `/home`, `/srv`, `/opt` and `/var/lib/docker`; one of them can take the rest of the disk. Early in the first boot, before those folders are in use, Kura sizes the root, puts the rest of the disk in an LVM volume group named `kura` (`sudo lvextend -r -L +10G kura/home` grows a volume later), makes one ext4 volume per folder and moves the folder's content onto it. A layout that doesn't fit the disk is not built: the root fills the disk as usual and the login screen says "setup partly applied: storage kept as one root (needs N GB, disk has M GB)". Format: `scripts/common/firstboot-storage-check.sh`.
 
 ### RPi5 - Flash SD Card
 

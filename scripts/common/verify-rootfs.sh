@@ -27,7 +27,12 @@ usr/lib/${b}/firstboot-setup.sh
 usr/lib/${b}/firstboot-setup-check.sh
 usr/lib/${b}/firstboot-disk.sh
 usr/lib/${b}/firstboot-password.sh
+usr/lib/${b}/firstboot-storage.sh
+usr/lib/${b}/firstboot-storage-check.sh
+usr/sbin/lvcreate
+usr/sbin/sfdisk
 usr/lib/systemd/system/${b}-firstboot.service
+usr/lib/systemd/system/${b}-storage.service
 usr/lib/systemd/system/${b}-ssh-keygen.service
 usr/bin/unattended-upgrade
 etc/apt/apt.conf.d/20auto-upgrades
@@ -45,6 +50,7 @@ ${w}/multi-user.target.wants/docker.service
 ${w}/multi-user.target.wants/containerd.service
 ${w}/multi-user.target.wants/${b}-config.service
 ${w}/multi-user.target.wants/${b}-firstboot.service
+${w}/local-fs.target.wants/${b}-storage.service
 ${w}/multi-user.target.wants/${b}-ssh-keygen.service
 ${w}/sysinit.target.wants/${b}-security.service
 ${w}/network-online.target.wants/NetworkManager-wait-online.service

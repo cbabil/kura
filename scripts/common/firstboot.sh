@@ -16,11 +16,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/firstboot-setup.sh"
 
 # resize_root: grow the root partition and filesystem to fill the disk.
 # The Pi image ships a small root partition; x86 disks vary. Skipped on the
-# live or container systems, whose root is not a partition.
+# live or container systems, whose root is not a partition, and when the disk
+# layout (firstboot-storage.sh) sized the root and used the rest.
 resize_root() {
     local root_dev root_disk root_part
+    storage_applied && return 0
     read -r root_dev root_disk < <(root_disk) || return 0
-    root_part=$(echo "${root_dev}" | sed -n 's/.*[^0-9]\([0-9][0-9]*\)$/\1/p')
+    root_part=$(partition_number "${root_dev}")
     [ -n "${root_part}" ] || return 0
     growpart "/dev/${root_disk}" "${root_part}" || true   # exits 1 if already full size
     resize2fs "${root_dev}"

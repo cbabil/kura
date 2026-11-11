@@ -40,6 +40,16 @@ stub_resize_tools() {  # stub_resize_tools <root-device> <parent-disk>
     [ "$(sed -n 1p "${CALLS}")" = "growpart /dev/sda 1" ]
 }
 
+@test "resize_root: leaves a root the disk layout already sized" {
+    stub_resize_tools /dev/sda2 sda
+    SETUP_ROOT="${BATS_TEST_TMPDIR}/root"
+    mkdir -p "${SETUP_ROOT}/var/lib/__BRAND__"
+    echo applied > "${SETUP_ROOT}/var/lib/__BRAND__/storage-status"
+    run resize_root
+    [ "$status" -eq 0 ]
+    [ ! -e "${CALLS}" ]
+}
+
 @test "resize_root: skips a live system whose root is not a partition" {
     stub_resize_tools overlay ""
     run resize_root
@@ -120,7 +130,8 @@ stub_all_ok() {
     run install_firstboot "${ROOTFS}" kura "Kura" "${REPO_ROOT}/scripts/common"
     [ "$status" -eq 0 ]
     local script
-    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh; do
+    for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh \
+            firstboot-storage.sh firstboot-storage-check.sh; do
         [ -x "${ROOTFS}/usr/lib/kura/${script}" ]
         run grep -c "__BRAND" "${ROOTFS}/usr/lib/kura/${script}"
         [ "$output" = "0" ]

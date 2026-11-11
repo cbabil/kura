@@ -48,6 +48,7 @@ rm -rf "${ROOTFS}/usr/share/doc"
 rm -rf "${ROOTFS}/usr/share/man"
 rm -rf "${ROOTFS}/usr/share/info"
 strip_firmware "${ROOTFS}"
+require_dm_mod "${ROOTFS}"
 find "${ROOTFS}/usr/share/locale" -mindepth 1 -maxdepth 1 \
     ! -name 'C' ! -name 'en_US' -exec rm -rf {} + 2>/dev/null || true
 

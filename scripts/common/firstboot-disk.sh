@@ -2,7 +2,7 @@
 # scripts/common/firstboot-disk.sh
 # Disk helpers for first boot (firstboot.sh, firstboot-setup.sh) and the PC
 # installer: the root disk, the boot partition, mounting a partition for one
-# step, wiping a file. Installed next
+# step, wiping a file, and first boot's records (write_atomic, record_state). Installed next
 # to firstboot.sh by install-firstboot.sh. Defines functions only.
 
 # root_disk: "<root-device> <parent-disk>"; fails when / is not on a disk
@@ -22,6 +22,25 @@ disk_partition() {
         *[0-9]) echo "$1p$2" ;;
         *) echo "$1$2" ;;
     esac
+}
+
+# partition_number <device>: /dev/nvme0n1p2 -> 2; nothing when not a partition
+partition_number() { [[ "$1" =~ [^0-9]([0-9]+)$ ]] && echo "${BASH_REMATCH[1]}"; }
+
+# write_atomic <file> <mode>: stdin to <file>, never visible half-written or
+# with a wider mode
+write_atomic() {
+    (umask 077 && cat > "$1.new") && chmod "$2" "$1.new" && mv "$1.new" "$1"
+}
+
+# state_file <name>: first boot's record <name> in /var/lib/<brand>
+state_file() { echo "${SETUP_ROOT:-}/var/lib/${SETUP_BRAND}/$1"; }
+
+# record_state <name> <text>: write that record (readable: the login screen
+# shows it)
+record_state() {
+    install -d "$(dirname "$(state_file "$1")")" &&
+        printf '%s\n' "$2" | write_atomic "$(state_file "$1")" 644
 }
 
 # boot_partition: partition 1 of the root disk (the Pi's FAT boot partition)

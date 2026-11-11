@@ -75,7 +75,8 @@ case "${IMAGE}" in
     *) cp "${IMAGE}" "${DISK}" ;;
 esac
 IMAGE_BYTES="${KURA_TEST_IMAGE_BYTES:-$(stat -c %s "${DISK}")}"
-truncate -s +2G "${DISK}"
+# room for the setup file's disk layout (sparse: costs nothing)
+truncate -s +6G "${DISK}"
 
 if [ "${SETUP}" = "--setup" ]; then
     LOGIN_USER="${SETUP_USER}"
@@ -113,6 +114,7 @@ if [ -n "${SETUP}" ]; then
     check "setup: password logins refused" password_login_refused
     check "setup: hostname, Wi-Fi, time zone applied" setup_applied
     check "setup: file deleted from the EFI partition" setup_file_gone
+    check "setup: disk layout built" layout_built
 else
     check "one-time password on the login screen" wait_for "one-time password" console_password
     check "first login replaces the one-time password" first_login_changes_password
@@ -132,6 +134,7 @@ if [ -n "${SETUP}" ]; then
 fi
 check "console font is Terminus 16x32" console_font
 check "login screen has the Kura look (login.png)" login_screen
+[ -z "${SETUP}" ] || check "setup: disk layout back after a restart" layout_after_restart
 # Last: a failed login counts against this source in sshd's penalties
 [ -n "${SETUP}" ] || check "the public default password is refused" default_password_refused
 

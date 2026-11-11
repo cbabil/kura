@@ -7,12 +7,16 @@
 source "$(dirname "${BASH_SOURCE[0]}")/systemd-units.sh"
 
 # install_firstboot <rootfs> <brand> <os-name> <scripts-dir>
-# Installs the first-boot script and two units:
+# Installs the first-boot scripts and three units:
 #   <brand>-ssh-keygen.service  generates SSH host keys before sshd starts.
 #                               (Neither unit orders itself before ssh.socket:
 #                               sockets come before basic.target, which both
 #                               follow, so that would be a cycle.)
 #                               Standalone so SSH never waits for first boot.
+#   <brand>-storage.service     builds the disk layout the setup file asks
+#                               for, once, early: before the disks are
+#                               mounted, journald writes to /var/log and
+#                               Docker starts.
 #   <brand>-firstboot.service   applies the imager's setup file, grows the
 #                               root partition and applies the hostname from
 #                               attached user-data, before sshd, os-config and
@@ -24,7 +28,7 @@ install_firstboot() {
     install -d "${rootfs}/usr/lib/${brand}" "${units}"
     local script
     for script in firstboot.sh firstboot-setup.sh firstboot-setup-check.sh firstboot-disk.sh \
-            firstboot-password.sh; do
+            firstboot-password.sh firstboot-storage.sh firstboot-storage-check.sh; do
         sed "s|__BRAND_NAME__|${name}|g; s|__BRAND__|${brand}|g" "${src}/${script}" \
             > "${rootfs}/usr/lib/${brand}/${script}"
         chmod 0755 "${rootfs}/usr/lib/${brand}/${script}"
@@ -67,6 +71,29 @@ StandardError=journal+console
 WantedBy=multi-user.target
 EOF
 
+    cat > "${units}/${brand}-storage.service" <<EOF
+[Unit]
+Description=${name} disk layout
+DefaultDependencies=no
+After=systemd-remount-fs.service systemd-udevd.service
+Before=local-fs.target boot-efi.mount tmp.mount systemd-journal-flush.service docker.service ${brand}-security.service ${brand}-firstboot.service
+ConditionPathExists=!/var/lib/${brand}/.storage-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/${brand}/firstboot-storage.sh
+# scratch mounts never under /tmp, which tmp.mount may cover
+Environment=TMPDIR=/run
+RemainAfterExit=yes
+TimeoutStartSec=900
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=local-fs.target
+EOF
+
+    enable_unit "${rootfs}" local-fs.target "/usr/lib/systemd/system/${brand}-storage.service"
     enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-ssh-keygen.service"
     enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-firstboot.service"
 }
