@@ -36,6 +36,47 @@ setup() {
     file_has <(echo "$output") "console=ttyS0,115200 console=tty0"
 }
 
+@test "pc_grub_cfg: the menu in Kura's colours, the screen's best mode kept for Linux" {
+    run pc_grub_cfg 1111-uuid 2222-partuuid Kura
+    output_has 'loadfont ${prefix}/fonts/unicode.pf2'
+    output_has "set gfxmode=auto"
+    output_has "terminal_output gfxterm"
+    output_has 'set theme=${prefix}/themes/kura/theme.txt'
+    output_has "set gfxpayload=keep"
+    # without graphics, the text menu: light purple instead of the white bar
+    output_has "set menu_color_highlight=black/light-magenta"
+    # the look comes before the entries
+    [ "$(grep -n 'theme=' <<< "$output" | cut -d: -f1)" -lt "$(grep -n 'menuentry' <<< "$output" | head -1 | cut -d: -f1)" ]
+}
+
+@test "the GRUB theme: navy, light text, the selected entry on Kura's light purple" {
+    local dir="${REPO_ROOT}/overlay/x86_64/usr/share/grub/themes/kura" piece
+    file_has "${dir}/theme.txt" 'desktop-color: "#0f172a"'
+    file_has "${dir}/theme.txt" 'item_color = "#e2e8f0"'
+    file_has "${dir}/theme.txt" 'selected_item_color = "#0f172a"'
+    file_has "${dir}/theme.txt" 'selected_item_pixmap_style = "select_*.png"'
+    file_has "${dir}/theme.txt" 'id = "__timeout__"'
+    for piece in nw n ne w c e sw s se; do
+        [ "$(head -c 8 "${dir}/select_${piece}.png" | od -An -tx1 | tr -d ' ')" = "89504e470d0a1a0a" ]
+    done
+    # the 1x1 pixel is #a970ff
+    python3 - "${dir}/select_c.png" <<'EOF'
+import sys, zlib
+data = open(sys.argv[1], 'rb').read()
+idat = data[data.index(b'IDAT') + 4:]
+assert zlib.decompress(idat[:idat.index(b'IEND') - 8])[1:4] == bytes.fromhex('a970ff')
+EOF
+}
+
+@test "the GRUB theme and font go on the EFI partition, and are kept current" {
+    local list="${REPO_ROOT}/scripts/x86_64/efi-files.list"
+    file_has "${list}" "usr/share/grub/unicode.pf2 EFI/debian/fonts/unicode.pf2"
+    file_has "${list}" "usr/share/grub/themes/kura/theme.txt EFI/debian/themes/kura/theme.txt"
+    file_has "${list}" "usr/share/grub/themes/kura/select_c.png EFI/debian/themes/kura/select_c.png"
+    # unicode.pf2 comes with grub-common
+    grep -qx grub-common "${REPO_ROOT}/config/packages-x86_64.list"
+}
+
 @test "pc_fstab: root checked at boot and remounted read-only on errors; EFI partition private" {
     run pc_fstab 2222-partuuid 3333-partuuid
     [ "$status" -eq 0 ]

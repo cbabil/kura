@@ -123,29 +123,50 @@ secure_boot_on() {
 }
 
 
-# screendump <png>: the guest's screen, through the QEMU monitor socket
+# screendump <file> [format]: the guest's screen (png, or ppm for checking
+# colours), through the QEMU monitor socket
 screendump() {
-    python3 - "${MONITOR}" "$1" <<'PY'
+    python3 - "${MONITOR}" "$1" "${2:-png}" <<'PY'
 import socket, sys, time
 s = socket.socket(socket.AF_UNIX)
 s.settimeout(10)
 s.connect(sys.argv[1])
 time.sleep(0.3)
 s.recv(65536)
-s.sendall(("screendump %s -f png\n" % sys.argv[2]).encode())
+s.sendall(("screendump %s -f %s\n" % (sys.argv[2], sys.argv[3])).encode())
 time.sleep(1)
 s.close()
 PY
 }
 
-# splash_screens <seconds>: a screenshot every 2 s while the system boots
-# (splash-NN.png), run in the background: the Plymouth splash shows in some
+# splash_screens <seconds>: first, for 20 s, a screen as fast as the
+# monitor gives them (about 1.3 s each: GRUB's menu is up for 3 s), as
+# grub-NN.ppm for grub_themed; then a screenshot every 2 s while the system
+# boots (splash-NN.png), where the Plymouth splash shows. Run in the
+# background.
 splash_screens() {
     local n
+    for n in $(seq -w 1 15); do
+        screendump "${OUT}/grub-${n}.ppm" ppm 2>/dev/null || true
+    done
     for n in $(seq -w 1 $(( $1 / 2 ))); do
         sleep 2
         screendump "${OUT}/splash-${n}.png" 2>/dev/null || true
     done
+}
+
+# grub_themed: GRUB's menu in Kura's look (ADR-021) on one of the first
+# screens: the navy background and the light purple selected entry
+grub_themed() {
+    python3 - "${OUT}" <<'PY'
+import glob, sys
+for name in sorted(glob.glob(sys.argv[1] + "/grub-*.ppm")):
+    data = open(name, "rb").read()
+    if b"\xa9\x70\xff" in data and b"\x0f\x17\x2a" in data:
+        print("  GRUB menu in " + name.rsplit("/", 1)[-1])
+        sys.exit(0)
+sys.exit(1)
+PY
 }
 
 # The PC image's boot splash (ADR-018): the theme is the default and is in

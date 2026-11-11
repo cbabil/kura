@@ -5,6 +5,8 @@ linux-image-amd64
 # EFI partition (no grub-install, no firmware boot entry)
 shim-signed
 grub-efi-amd64-signed
+# unicode.pf2, the font of GRUB's Kura theme (overlay/x86_64/usr/share/grub)
+grub-common
 
 # Firmware for real hardware (non-free-firmware, scripts/x86_64/configure-repos.sh):
 # Intel Wi-Fi/Bluetooth, Realtek network, Intel graphics and others

@@ -34,12 +34,35 @@ EOF
 # pc_efi_files: "<file in the rootfs> <file on the EFI partition>" lines
 pc_efi_files() { grep -v '^#' "${PC_EFI_FILES}"; }
 
+# pc_grub_look: GRUB's menu in Kura's look (ADR-021): the screen's best
+# mode, the theme and its font from the EFI partition (${prefix}, where
+# Debian's signed GRUB reads grub.cfg), and that mode kept for Linux, so the
+# console and the splash start at the screen's resolution. Without graphics
+# GRUB keeps its text menu, in the closest colours it has.
+pc_grub_look() {
+    cat <<'EOF'
+set menu_color_normal=light-gray/black
+set menu_color_highlight=black/light-magenta
+insmod all_video
+insmod gfxterm
+insmod gfxmenu
+insmod png
+if loadfont ${prefix}/fonts/unicode.pf2; then
+    set gfxmode=auto
+    terminal_output gfxterm
+    set theme=${prefix}/themes/kura/theme.txt
+fi
+set gfxpayload=keep
+EOF
+}
+
 # pc_grub_cfg <root-fs-uuid> <root-partuuid> <os-name>
 # Boots /vmlinuz and /initrd.img, the symlinks Debian's kernel packages keep
 # pointing at the newest kernel (and .old at the previous one), so kernel
 # updates take effect.
 pc_grub_cfg() {
     local args="root=PARTUUID=$2 ro ${PC_SPLASH_ARGS} ${PC_CONSOLE_ARGS}"
+    pc_grub_look
     cat <<EOF
 set timeout=3
 set default=0

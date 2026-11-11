@@ -57,6 +57,10 @@ KVER=$(basename "$(readlink -f "${ROOTFS}/vmlinuz")" | sed 's/^vmlinuz-//')
 echo "Building the initrd (kernel ${KVER})..."
 "${SCRIPT_DIR}/build-initrd.sh" "${ROOTFS}" "${KVER}" "${INITRD}"
 
+# GRUB's Kura theme, which this rootfs (no overlay) lacks
+mkdir -p "${ROOTFS}/usr/share/grub/themes"
+cp -r "${REPO_DIR}/overlay/x86_64/usr/share/grub/themes/kura" "${ROOTFS}/usr/share/grub/themes/"
+
 while read -r src _; do
     [ -f "${ROOTFS}/${src}" ] || { echo "ERROR: missing ${src}" >&2; exit 1; }
 done < <(installer_files)

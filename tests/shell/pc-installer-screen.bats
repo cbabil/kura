@@ -105,3 +105,15 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033[78]//g' <<< "$outpu
     [ "$(plain | grep 'Installing in' | head -1 | grep -o '█' | wc -l)" -eq 40 ]
     [ "$(plain | grep 'Installing in' | sed -n 2p | grep -o '█' | wc -l)" -eq 20 ]
 }
+
+@test "the countdown and progress fit the screen, so they redraw in place" {
+    export LC_ALL=C.UTF-8
+    local cols line
+    for cols in 80 100 120; do
+        UI_COLS=${cols}
+        output="$(countdown 1 < /dev/null; progress_lines 2600000000 3400000000 5)"
+        while IFS= read -r line; do
+            [ "${#line}" -le "${cols}" ] || { echo "${cols}: ${#line}: ${line}"; return 1; }
+        done <<< "$(plain)"
+    done
+}

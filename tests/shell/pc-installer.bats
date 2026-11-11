@@ -63,6 +63,11 @@ SHA_0=$(printf '0%.0s' {1..64})
     output_has "initrd /kura/initrd.img"
 }
 
+@test "installer_grub_cfg: the PC image's GRUB look (pc_grub_look), so the installer keeps the screen's best mode" {
+    run installer_grub_cfg KURA-INST Kura
+    [ "$(pc_grub_look)" = "$(head -n "$(pc_grub_look | wc -l)" <<< "$output")" ]
+}
+
 @test "installer_grub_cfg: extra kernel arguments (the boot test's kura.manifest=)" {
     run installer_grub_cfg KURA-INST Kura "kura.manifest=http://10.0.2.2:8088/manifest.json"
     output_has "linux /kura/vmlinuz quiet console=ttyS0,115200 console=tty0 kura.manifest=http://10.0.2.2:8088/manifest.json"
@@ -341,4 +346,9 @@ DEPS
             virtio_blk virtio_net vfat; do
         grep -qx "${module}" "${REPO_ROOT}/scripts/pc-installer/modules.list"
     done
+}
+
+@test "the installer key gets GRUB's Kura theme from the overlay, and its font from grub-common" {
+    file_has "${REPO_ROOT}/scripts/pc-installer/create-image.sh" 'overlay/x86_64/usr/share/grub/themes/kura'
+    grep -qx grub-common "${REPO_ROOT}/config/packages-pc-installer.list"
 }
