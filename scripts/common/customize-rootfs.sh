@@ -175,9 +175,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rm -rf "${ROOTFS}/etc/update-motd.d"/*
 
 install -d -m 0755 "${ROOTFS}/etc/update-motd.d"
-for script in 05-ssh-banner 10-banner 40-status 80-commands; do
+for script in 05-ssh-banner 10-status; do
     install -m 0755 "${SCRIPT_DIR}/motd/${script}" "${ROOTFS}/etc/update-motd.d/${script}"
 done
+# The panel 10-status draws, in the login screen's look
+install -m 0644 "${SCRIPT_DIR}/motd.sh" "${ROOTFS}/usr/lib/${BRAND}/motd.sh"
 
 # Empty static motd (dynamic scripts handle everything)
 : > "${ROOTFS}/etc/motd"

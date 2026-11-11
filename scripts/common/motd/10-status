@@ -1,0 +1,47 @@
+#!/bin/bash
+# 10-status — the message after login (scripts/common/motd.sh, installed in
+# /usr/lib/kura/), laid out as Ubuntu's, with this device's facts gathered
+# here. pam_motd runs it as root, so systemd and Docker answer; each query is
+# bounded by a timeout.
+
+# Count characters, not bytes, whatever locale pam_motd gives us
+export LC_ALL=C.UTF-8
+
+BRAND_ENV="/etc/kura/brand.env"
+# shellcheck disable=SC1090
+[ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+# shellcheck source=SCRIPTDIR/../motd.sh
+. "/usr/lib/${BRAND_PREFIX:-kura}/motd.sh" || exit 0
+# shellcheck disable=SC1091
+. /etc/os-release 2>/dev/null
+
+MOTD_WELCOME="${BRAND_NAME:-Kura} ${BRAND_VERSION:-} (${NAME:-Linux} ${VERSION_ID:-}, kernel $(uname -r) $(uname -m))"
+MOTD_DATE=$(date)
+
+read -r load _ < /proc/loadavg
+read -r disk_size disk_pcent < <(df -B1 --output=size,pcent / 2>/dev/null | tail -n 1)
+read -r memory swap < <(motd_meminfo /proc/meminfo)
+read -r _ _ iface _ addr _ < <(ip -o -4 addr show scope global 2>/dev/null)
+processes=$(find /proc -maxdepth 1 -name '[0-9]*' 2>/dev/null | grep -c .)
+users=$(who 2>/dev/null | awk '{ print $1 }' | sort -u | grep -c .)
+
+MOTD_LEFT=("System load:|${load}" "Usage of /:|${disk_pcent} of $(motd_gb "${disk_size:-0}")GB"
+           "Memory usage:|${memory}")
+[ -z "${swap}" ] || MOTD_LEFT+=("Swap usage:|${swap}")
+MOTD_RIGHT=("Processes:|${processes}" "Users logged in:|${users}")
+[ -z "${addr}" ] || MOTD_RIGHT+=("IPv4 address for ${iface}:|${addr%/*}")
+if running=$(timeout 3 docker ps -q 2>/dev/null) && all=$(timeout 3 docker ps -aq 2>/dev/null); then
+    running=$(grep -c . <<< "${running}") all=$(grep -c . <<< "${all}")
+    MOTD_RIGHT+=("Containers:|${running} running, $(( all - running )) stopped")
+fi
+
+# Updates install themselves daily (auto-updates.sh) and the device
+# restarts at 04:30 when they need it
+stamp=/var/lib/apt/periodic/upgrade-stamp
+MOTD_UPDATES=""
+[ -f "${stamp}" ] && MOTD_UPDATES=$(date -r "${stamp}" '+%b %-d %H:%M')
+MOTD_FAILED=$(timeout 2 systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -c .)
+MOTD_REBOOT=""
+[ -f /run/reboot-required ] && MOTD_REBOOT="04:30"
+
+motd_render
