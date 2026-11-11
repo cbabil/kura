@@ -44,10 +44,12 @@ setup() {
     output_has "set gfxmode=auto"
     # the firmware's display only: GRUB's native VM drivers leave Linux
     # with the wrong screen format
+    # all_video holds the drivers: unloaded first, or GRUB refuses the rest
+    [ "$(grep -n 'rmmod all_video' <<< "$output" | cut -d: -f1)" -lt "$(grep -n 'rmmod video_bochs' <<< "$output" | cut -d: -f1)" ]
     output_has "rmmod video_bochs"
     output_has "rmmod video_cirrus"
     output_has "insmod efi_gop"
-    [ -z "$(grep all_video <<< "$output")" ]
+    [ -z "$(grep 'insmod all_video' <<< "$output")" ]
     output_has "terminal_output gfxterm"
     output_has 'set theme=${prefix}/themes/kura/theme.txt'
     output_has "set gfxpayload=keep"
