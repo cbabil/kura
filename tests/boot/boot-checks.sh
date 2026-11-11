@@ -141,13 +141,13 @@ PY
 
 # splash_screens <seconds>: first, for 20 s, a screen as fast as the
 # monitor gives them (about 1.3 s each: GRUB's menu is up for 3 s), as
-# grub-NN.ppm for grub_themed; then a screenshot every 2 s while the system
+# grub-NN.png for grub_themed; then a screenshot every 2 s while the system
 # boots (splash-NN.png), where the Plymouth splash shows. Run in the
 # background.
 splash_screens() {
     local n
     for n in $(seq -w 1 15); do
-        screendump "${OUT}/grub-${n}.ppm" ppm 2>/dev/null || true
+        screendump "${OUT}/grub-${n}.png" 2>/dev/null || true
     done
     for n in $(seq -w 1 $(( $1 / 2 ))); do
         sleep 2
@@ -156,13 +156,44 @@ splash_screens() {
 }
 
 # grub_themed: GRUB's menu in Kura's look (ADR-021) on one of the first
-# screens: the navy background and the light purple selected entry
+# screens: the navy background and the light purple selected entry. Reads
+# QEMU's PNGs (8-bit RGB or RGBA) with zlib only.
 grub_themed() {
     python3 - "${OUT}" <<'PY'
-import glob, sys
-for name in sorted(glob.glob(sys.argv[1] + "/grub-*.ppm")):
-    data = open(name, "rb").read()
-    if b"\xa9\x70\xff" in data and b"\x0f\x17\x2a" in data:
+import glob, struct, sys, zlib
+
+def pixels(path):
+    data = open(path, "rb").read()
+    pos, idat, width, height, kind = 8, b"", 0, 0, 2
+    while pos < len(data):
+        size, tag = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + size]
+        if tag == b"IHDR":
+            width, height, _, kind = struct.unpack(">IIBB", body[:10])
+        elif tag == b"IDAT":
+            idat += body
+        pos += size + 12
+    bpp = 4 if kind == 6 else 3
+    raw, stride, prev, colours = zlib.decompress(idat), width * bpp, bytearray(width * bpp), set()
+    for y in range(height):
+        f, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for i in range(stride):
+            a = line[i - bpp] if i >= bpp else 0
+            b, c = prev[i], prev[i - bpp] if i >= bpp else 0
+            if f == 1: line[i] = (line[i] + a) & 255
+            elif f == 2: line[i] = (line[i] + b) & 255
+            elif f == 3: line[i] = (line[i] + (a + b) // 2) & 255
+            elif f == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        colours.update(bytes(line[i:i + 3]) for i in range(0, stride, bpp * 8))
+        prev = line
+    return colours
+
+for name in sorted(glob.glob(sys.argv[1] + "/grub-*.png")):
+    seen = pixels(name)
+    if bytes.fromhex("a970ff") in seen and bytes.fromhex("0f172a") in seen:
         print("  GRUB menu in " + name.rsplit("/", 1)[-1])
         sys.exit(0)
 sys.exit(1)

@@ -130,7 +130,6 @@ check "less works in an SSH terminal" less_works
 check "splash: kura is the default theme" splash_theme_default
 check "splash: theme in the initrd that boots" splash_in_initrd
 check "GRUB menu in Kura's colours" grub_themed
-rm -f "${OUT}"/grub-*.ppm    # uncompressed screens: not worth uploading
 if [ -n "${SETUP}" ]; then
     check "login screen says the setup was applied" wait_for "kura-issue" setup_shown
 fi
