@@ -10,12 +10,41 @@
 # state. Source this file; it defines functions only.
 
 UI_PAD="    "
+# The screen's width in characters; ui_fit measures it
+UI_COLS="${UI_COLS:-120}"
+# What the full layout needs: the logo with its caption, and enough rows
+UI_MIN_COLS=100
+UI_MIN_ROWS=30
 # Save and restore the cursor (ESC 7, ESC 8), for parts redrawn in place
 # shellcheck disable=SC2034  # used by screen.sh and run.sh
 UI_SAVE=$'\0337'
 # shellcheck disable=SC2034
 UI_RESTORE=$'\0338'
 UI_STEPS=("USB key" "Network" "Release" "Internal drive" "Write and check" "Hand over your setup")
+
+# ui_fit <font> <small-font>: Terminus 16x32 when the layout fits, else the
+# 8x16 one: without its graphics driver a PC keeps the firmware's low
+# resolution, where 16x32 cells leave too few columns and rows, and lines
+# that wrap or scroll break the parts redrawn in place. Sets UI_COLS.
+ui_fit() {
+    local font rows=0 cols=0
+    for font in "$1" "$2"; do
+        setfont -C /dev/tty1 "${font}" 2>/dev/null || true
+        read -r rows cols < <(stty -F /dev/tty1 size 2>/dev/null) || true
+        [ "${cols:-0}" -lt "${UI_MIN_COLS}" ] || [ "${rows:-0}" -lt "${UI_MIN_ROWS}" ] || break
+    done
+    UI_COLS=${cols:-80}
+    [ "${UI_COLS}" -gt 0 ] 2>/dev/null || UI_COLS=80
+    export UI_COLS
+}
+
+# ui_width <wanted> <beside>: <wanted> cells, fewer when the screen cannot
+# hold them with the padding and <beside> more characters on the line (the
+# callers count the text printed next to the bar)
+ui_width() {
+    local room=$(( UI_COLS - ${#UI_PAD} - $2 ))
+    if [ "$1" -lt "${room}" ]; then echo "$1"; else echo "${room}"; fi
+}
 
 # ui_color <fg> [bg]: SGR for palette indices given as hex digits; bold is
 # reset each time, as the console's bright colours are bold ones
@@ -43,8 +72,10 @@ ui_palette() {
     done
 }
 
-# ui_clear: background colour, empty screen, cursor home and hidden
-ui_clear() { printf '\033[0;37;40m\033[2J\033[H\033[?25l'; }
+# ui_clear: background colour, empty screen, cursor home and hidden, and no
+# line wrapping: a line too long is cut rather than scrolling the screen
+# under the parts redrawn in place
+ui_clear() { printf '\033[0;37;40m\033[2J\033[H\033[?25l\033[?7l'; }
 
 # ui_header: the logo, light to brand purple, its captions and a rule
 ui_header() {
@@ -62,9 +93,10 @@ ui_header() {
             3) side="$(ui_color F)Installer$(ui_color 8)  ·  puts Kura on this PC's internal drive" ;;
             *) side="" ;;
         esac
+        [ "${UI_COLS}" -ge "${UI_MIN_COLS}" ] || side=""    # the captions need the room
         printf '%s%s%s      %s\n' "${UI_PAD}" "$(ui_color "${shades[i]}")" "${logo[i]}" "${side}"
     done
-    printf '\n%s%s%s\n\n' "${UI_PAD}" "$(ui_color 9)" "$(ui_repeat ─ 104)"
+    printf '\n%s%s%s\n\n' "${UI_PAD}" "$(ui_color 9)" "$(ui_repeat ─ "$(ui_width 104 4)")"
 }
 
 # ui_steps <current> <detail>...: the six steps, before <current> done (√

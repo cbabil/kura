@@ -44,7 +44,7 @@ setup() {
     run motd_render
     [ "$status" -eq 0 ]
     output_has "                                  Containers:            3 running, 1 stopped"
-    ! output_has "Swap"
+    ! output_has "Swap" || false
 }
 
 @test "motd: fits an 80-column terminal, with every notice shown" {
@@ -67,7 +67,7 @@ setup() {
 
 @test "motd: failed services, with the command that lists them" {
     run motd_render
-    ! output_has "failed"
+    ! output_has "failed" || false
     MOTD_FAILED=1
     run motd_render
     output_has "1 service has failed: systemctl --failed"
@@ -78,7 +78,7 @@ setup() {
 
 @test "motd: a pending restart, and when it happens by itself" {
     run motd_render
-    ! output_has "restart"
+    ! output_has "restart" || false
     MOTD_REBOOT="04:30"
     run motd_render
     output_has "*** System restart required *** (it restarts by itself at 04:30)"

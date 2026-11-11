@@ -28,6 +28,7 @@ installer_files() {
 # reads this from EFI/debian on the key and boots the installer from the same
 # partition; the boot test adds kura.manifest=
 installer_grub_cfg() {
+    pc_grub_look
     cat <<EOF
 set timeout=3
 set default=0
@@ -36,6 +37,7 @@ insmod fat
 search --no-floppy --label --set=root $1
 
 menuentry "Install $2" {
+    best_mode
     linux /kura/vmlinuz quiet ${PC_CONSOLE_ARGS}${3:+ $3}
     initrd /kura/initrd.img
 }

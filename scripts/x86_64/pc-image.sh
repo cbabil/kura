@@ -34,12 +34,53 @@ EOF
 # pc_efi_files: "<file in the rootfs> <file on the EFI partition>" lines
 pc_efi_files() { grep -v '^#' "${PC_EFI_FILES}"; }
 
+# pc_grub_look: GRUB's menu in Kura's look (ADR-021): the screen's best
+# mode for Linux, a 720p menu (the built-in 16 px font is the only one
+# that loads under Secure Boot, so a lower mode is what makes it larger;
+# each entry calls best_mode to go back up), the theme from the EFI partition (${prefix}, where Debian's signed
+# GRUB reads grub.cfg) with the Unicode font built into that GRUB (under
+# Secure Boot it loads no font from disk), and that mode kept for Linux, so the
+# console and the splash start at the screen's resolution. Without graphics
+# GRUB keeps its text menu, in the closest colours it has. The signed GRUB's
+# native drivers for a VM's graphics card are unloaded first (all_video, which
+# holds them, before them): GRUB prefers
+# them to the firmware's (GOP), but Linux reads the screen's format from the
+# firmware, and drew garbage on QEMU's and Proxmox's standard VGA.
+pc_grub_look() {
+    cat <<'EOF'
+set menu_color_normal=light-gray/black
+set menu_color_highlight=black/light-magenta
+rmmod all_video
+rmmod video_bochs
+rmmod video_cirrus
+insmod efi_gop
+insmod gfxterm
+insmod gfxmenu
+insmod png
+if loadfont unicode; then
+    set gfxmode=1280x720,1024x768,auto
+    terminal_output gfxterm
+    set theme=${prefix}/themes/kura/theme.txt
+    set kura_menu=gfx
+fi
+set gfxpayload=keep
+function best_mode {
+    if [ "${kura_menu}" = gfx ]; then
+        terminal_output console
+        set gfxmode=auto
+        terminal_output gfxterm
+    fi
+}
+EOF
+}
+
 # pc_grub_cfg <root-fs-uuid> <root-partuuid> <os-name>
 # Boots /vmlinuz and /initrd.img, the symlinks Debian's kernel packages keep
 # pointing at the newest kernel (and .old at the previous one), so kernel
 # updates take effect.
 pc_grub_cfg() {
     local args="root=PARTUUID=$2 ro ${PC_SPLASH_ARGS} ${PC_CONSOLE_ARGS}"
+    pc_grub_look
     cat <<EOF
 set timeout=3
 set default=0
@@ -48,11 +89,13 @@ insmod ext2
 search --no-floppy --fs-uuid --set=root $1
 
 menuentry "$3" {
+    best_mode
     linux /vmlinuz ${args}
     initrd /initrd.img
 }
 
 menuentry "$3 (previous kernel)" {
+    best_mode
     linux /vmlinuz.old ${args}
     initrd /initrd.img.old
 }

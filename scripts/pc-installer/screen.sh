@@ -11,6 +11,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/ui.sh"
 SYS_BLOCK="${SYS_BLOCK:-/sys/block}"
 # The detail beside each step of ui_steps, filled as the install goes
 STEP_INFO=("" "" "" "" "" "")
+# Bar widths on a wide screen; narrower screens get what fits beside the text
 PROGRESS_WIDTH=76
 COUNTDOWN_WIDTH=40
 
@@ -68,7 +69,8 @@ countdown() {
     printf '%s' "${UI_SAVE}"    # each tick redraws from here
     for (( left = $1; left > 0; left-- )); do
         printf '%s%s%sInstalling in %s%d%s seconds   %s\033[K\n' "${UI_RESTORE}" "${UI_PAD}" "$(ui_color 7)" \
-            "$(ui_color F)" "${left}" "$(ui_color 7)" "$(ui_bar "${left}" "$1" "${COUNTDOWN_WIDTH}")"
+            "$(ui_color F)" "${left}" "$(ui_color 7)" \
+            "$(ui_bar "${left}" "$1" "$(ui_width "${COUNTDOWN_WIDTH}" 27)")"   # 27: "Installing in 10 seconds   "
         ui_note "Press any key to cancel. Nothing has been written yet."
         if read -r -s -n 1 -t 1 _; then
             return 1
@@ -90,7 +92,7 @@ progress_lines() {
     local written=$1 total=$2 secs=$3 percent=0 stats rate left
     [ "${written}" -gt "${total}" ] && written=${total}
     [ "${total}" -gt 0 ] && percent=$(( 100 * written / total ))
-    printf '%s%s  %s%d%%\033[K\n' "${UI_PAD}" "$(ui_bar "${written}" "${total}" "${PROGRESS_WIDTH}")" \
+    printf '%s%s  %s%d%%\033[K\n' "${UI_PAD}" "$(ui_bar "${written}" "${total}" "$(ui_width "${PROGRESS_WIDTH}" 6)")" \
         "$(ui_color F)" "${percent}"
     stats="$(tenths_gb "${written}") of $(tenths_gb "${total}") written"
     if [ "${written}" -gt 0 ] && [ "${secs}" -gt 0 ]; then

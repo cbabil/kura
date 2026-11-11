@@ -33,9 +33,9 @@ if [ -c /dev/ttyS0 ] && : 2>/dev/null > /dev/ttyS0; then
     exec > >(tee /dev/ttyS0) 2>&1
 fi
 
-setfont -C /dev/tty1 "${INSTALLER_COMMON}/font.psf" 2>/dev/null || true
 # shellcheck disable=SC1091
 source "${INSTALLER_COMMON}/ui.sh"
+ui_fit "${INSTALLER_COMMON}/font.psf" "${INSTALLER_COMMON}/font-small.psf"
 ui_palette
 ui_clear
 ui_header

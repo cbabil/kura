@@ -123,30 +123,105 @@ secure_boot_on() {
 }
 
 
-# screendump <png>: the guest's screen, through the QEMU monitor socket
+# screendump <file> [format]: the guest's screen (png, or ppm for checking
+# colours), through the QEMU monitor socket
 screendump() {
-    python3 - "${MONITOR}" "$1" <<'PY'
+    python3 - "${MONITOR}" "$1" "${2:-png}" <<'PY'
 import socket, sys, time
 s = socket.socket(socket.AF_UNIX)
 s.settimeout(10)
 s.connect(sys.argv[1])
 time.sleep(0.3)
 s.recv(65536)
-s.sendall(("screendump %s -f png\n" % sys.argv[2]).encode())
+s.sendall(("screendump %s -f %s\n" % (sys.argv[2], sys.argv[3])).encode())
 time.sleep(1)
 s.close()
 PY
 }
 
-# splash_screens <seconds>: a screenshot every 2 s while the system boots
-# (splash-NN.png), run in the background: the Plymouth splash shows in some
+# splash_screens <seconds>: first, for 20 s, a screen as fast as the
+# monitor gives them (about 1.3 s each: GRUB's menu is up for 3 s), as
+# grub-NN.png for grub_themed; then a screenshot every 2 s while the system
+# boots (splash-NN.png), where the Plymouth splash shows. Run in the
+# background.
 splash_screens() {
     local n
+    for n in $(seq -w 1 15); do
+        screendump "${OUT}/grub-${n}.png" 2>/dev/null || true
+    done
     for n in $(seq -w 1 $(( $1 / 2 ))); do
         sleep 2
         screendump "${OUT}/splash-${n}.png" 2>/dev/null || true
     done
 }
+
+# screens_show <file-glob> <background> <rrggbb>...: one of the screenshots
+# is mostly the background colour and has all the others (sampled every 7th
+# pixel: not a multiple of 4, where a 24/32-bit mix-up still looks right).
+# Reads QEMU's PNGs (8-bit RGB or RGBA) with zlib only.
+screens_show() {
+    python3 - "$@" <<'PY'
+import collections, glob, struct, sys, zlib
+
+def pixels(path):
+    data = open(path, "rb").read()
+    pos, idat, width, height, kind = 8, b"", 0, 0, 2
+    while pos < len(data):
+        size, tag = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + size]
+        if tag == b"IHDR":
+            width, height, _, kind = struct.unpack(">IIBB", body[:10])
+        elif tag == b"IDAT":
+            idat += body
+        pos += size + 12
+    bpp = 4 if kind == 6 else 3
+    raw, stride, prev, colours = zlib.decompress(idat), width * bpp, bytearray(width * bpp), collections.Counter()
+    for y in range(height):
+        f, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        for i in range(stride):
+            a = line[i - bpp] if i >= bpp else 0
+            b, c = prev[i], prev[i - bpp] if i >= bpp else 0
+            if f == 1: line[i] = (line[i] + a) & 255
+            elif f == 2: line[i] = (line[i] + b) & 255
+            elif f == 3: line[i] = (line[i] + (a + b) // 2) & 255
+            elif f == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        colours.update(bytes(line[i:i + 3]) for i in range(0, stride, bpp * 7))
+        prev = line
+    return colours
+
+wanted = [bytes.fromhex(c) for c in sys.argv[2:]]
+for name in sorted(glob.glob(sys.argv[1])):
+    seen = pixels(name)
+    if seen[wanted[0]] * 2 > sum(seen.values()) and all(c in seen for c in wanted):
+        print("  found in " + name.rsplit("/", 1)[-1])
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+
+# installer_full_size: the installer's last screens are at the display's
+# resolution (1920 wide here): the boot menu's smaller mode was left
+installer_full_size() {
+    python3 - "${OUT}" <<'PY'
+import glob, struct, sys
+last = sorted(glob.glob(sys.argv[1] + "/installer-*.png"))[-1]
+width = struct.unpack(">I", open(last, "rb").read()[16:20])[0]
+print("  %s is %d wide" % (last.rsplit("/", 1)[-1], width))
+sys.exit(0 if width == 1920 else 1)
+PY
+}
+
+# grub_themed: GRUB's menu in Kura's look (ADR-021) on one of the first
+# screens: the navy background and the light purple selected entry
+grub_themed() { screens_show "${OUT}/grub-*.png" 0f172a a970ff; }
+
+# installer_drawn: the installer's own screen, readable: its navy
+# background, the logo's two purples and the green of a finished step (a
+# wrong screen format from the boot loader shows none of them)
+installer_drawn() { screens_show "${OUT}/installer-*.png" 0f172a a970ff 9146ff 23ce6b; }
 
 # The PC image's boot splash (ADR-018): the theme is the default and is in
 # the initrd that boots

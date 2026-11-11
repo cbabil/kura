@@ -36,6 +36,68 @@ setup() {
     file_has <(echo "$output") "console=ttyS0,115200 console=tty0"
 }
 
+@test "pc_grub_cfg: the menu in Kura's colours, the screen's best mode kept for Linux" {
+    run pc_grub_cfg 1111-uuid 2222-partuuid Kura
+    # by name: the font built into the signed GRUB (none loads from disk
+    # under Secure Boot)
+    output_has 'loadfont unicode'
+    # a 720p menu, so the built-in 16 px font reads larger (no other font
+    # loads under Secure Boot) ...
+    output_has "set gfxmode=1280x720,1024x768,auto"
+    # the firmware's display only: GRUB's native VM drivers leave Linux
+    # with the wrong screen format
+    # all_video holds the drivers: unloaded first, or GRUB refuses the rest
+    [ "$(grep -n 'rmmod all_video' <<< "$output" | cut -d: -f1)" -lt "$(grep -n 'rmmod video_bochs' <<< "$output" | cut -d: -f1)" ]
+    output_has "rmmod video_bochs"
+    output_has "rmmod video_cirrus"
+    output_has "insmod efi_gop"
+    [ -z "$(grep 'insmod all_video' <<< "$output")" ]
+    output_has "terminal_output gfxterm"
+    output_has 'set theme=${prefix}/themes/kura/theme.txt'
+    output_has "set gfxpayload=keep"
+    # without graphics, the text menu: light purple instead of the white bar
+    output_has "set menu_color_highlight=black/light-magenta"
+    # the look comes before the entries
+    [ "$(grep -n 'theme=' <<< "$output" | cut -d: -f1)" -lt "$(grep -n 'menuentry' <<< "$output" | head -1 | cut -d: -f1)" ]
+}
+
+@test "pc_grub_cfg: each entry goes back to the screen's best mode before Linux starts" {
+    run pc_grub_cfg 1111-uuid 2222-partuuid Kura
+    output_has "function best_mode {"
+    output_has "    set gfxmode=auto"
+    [ "$(grep -c '^    best_mode$' <<< "$output")" -eq 2 ]
+    # before the kernel is loaded
+    [ "$(grep -n '^    best_mode$' <<< "$output" | head -1 | cut -d: -f1)" -lt "$(grep -n 'linux /vmlinuz ' <<< "$output" | cut -d: -f1)" ]
+}
+
+@test "the GRUB theme: navy, light text, the selected entry on Kura's light purple" {
+    local dir="${REPO_ROOT}/overlay/x86_64/usr/share/grub/themes/kura" piece
+    file_has "${dir}/theme.txt" 'desktop-color: "#0f172a"'
+    file_has "${dir}/theme.txt" 'item_color = "#e2e8f0"'
+    file_has "${dir}/theme.txt" 'selected_item_color = "#0f172a"'
+    file_has "${dir}/theme.txt" 'selected_item_pixmap_style = "select_*.png"'
+    file_has "${dir}/theme.txt" 'id = "__timeout__"'
+    # every box pattern names its pieces with a *: GRUB stops on an error
+    # (and a "Press any key") for one without, such as terminal-box: ""
+    [ -z "$(grep -E '(terminal-box|_pixmap_style)' "${dir}/theme.txt" | grep -v '\*')" ]
+    for piece in nw n ne w c e sw s se; do
+        [ "$(head -c 8 "${dir}/select_${piece}.png" | od -An -tx1 | tr -d ' ')" = "89504e470d0a1a0a" ]
+    done
+    # the 1x1 pixel is #a970ff
+    python3 - "${dir}/select_c.png" <<'EOF'
+import sys, zlib
+data = open(sys.argv[1], 'rb').read()
+idat = data[data.index(b'IDAT') + 4:]
+assert zlib.decompress(idat[:idat.index(b'IEND') - 8])[1:4] == bytes.fromhex('a970ff')
+EOF
+}
+
+@test "the GRUB theme and font go on the EFI partition, and are kept current" {
+    local list="${REPO_ROOT}/scripts/x86_64/efi-files.list"
+    file_has "${list}" "usr/share/grub/themes/kura/theme.txt EFI/debian/themes/kura/theme.txt"
+    file_has "${list}" "usr/share/grub/themes/kura/select_c.png EFI/debian/themes/kura/select_c.png"
+}
+
 @test "pc_fstab: root checked at boot and remounted read-only on errors; EFI partition private" {
     run pc_fstab 2222-partuuid 3333-partuuid
     [ "$status" -eq 0 ]

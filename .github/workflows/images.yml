@@ -68,8 +68,13 @@ jobs:
       # with the runner's Docker; the pc and rpi5 builds don't use host Docker.
       - name: Install build tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
+          # The runners' Ubuntu mirror (azure.archive.ubuntu.com) stopped
+          # resolving for hours on 2026-11-11; the main archive serves the same
+          # packages, and apt retries a dropped download
+          sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu/|' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update -qq -o Acquire::Retries=3
+          sudo apt-get install -y -qq --no-install-recommends -o Acquire::Retries=3 \
             mmdebstrap debian-archive-keyring arch-test \
             qemu-user-static binfmt-support debootstrap rsync \
             dosfstools e2fsprogs gdisk curl gnupg zstd

@@ -73,9 +73,12 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033\\]P[0-9A-F]\\{7\\}/
     output_has "No network."
 }
 
-@test "ui_clear: back to the background colour, screen cleared, cursor home" {
+@test "ui_clear: back to the background colour, screen cleared, cursor home, no wrapping" {
     run ui_clear
     output_has "${ESC}[2J${ESC}[H"
+    # a line too long is cut, never wrapped: a wrap scrolls the screen and
+    # breaks the parts redrawn in place
+    output_has "${ESC}[?7l"
 }
 
 @test "ui.sh: console-safe characters only (no CJK, no emoji)" {
@@ -85,6 +88,50 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033\\]P[0-9A-F]\\{7\\}/
 
 # ---- In the initrd ----
 
+# ---- fitting the screen ----
+
+# stub_screen <rows> <cols> [<small-rows> <small-cols>]: the screen's size
+# with the big font, then with the small one
+stub_screen() {
+    BIG="$1 $2" SMALL="${3:-$1} ${4:-$2}" FONT=""
+    setfont() { FONT="${*: -1}"; echo "setfont $*" >> "${BATS_TEST_TMPDIR}/fonts"; }
+    stty() { if [ "${FONT}" = small.psf ]; then echo "${SMALL}"; else echo "${BIG}"; fi; }
+}
+
+@test "ui_fit: keeps Terminus 16x32 when the layout fits (1080p: 120x33)" {
+    stub_screen 33 120
+    ui_fit big.psf small.psf
+    [ "${UI_COLS}" -eq 120 ]
+    [ "$(cat "${BATS_TEST_TMPDIR}/fonts")" = "setfont -C /dev/tty1 big.psf" ]
+}
+
+@test "ui_fit: a low-resolution screen (firmware 1024x768: 64x24) gets the small font" {
+    stub_screen 24 64 48 128
+    ui_fit big.psf small.psf
+    [ "${UI_COLS}" -eq 128 ]
+    [ "$(sed -n 2p "${BATS_TEST_TMPDIR}/fonts")" = "setfont -C /dev/tty1 small.psf" ]
+}
+
+@test "ui_fit: an unknown size keeps a safe 80 columns" {
+    setfont() { :; }
+    stty() { return 1; }
+    ui_fit big.psf small.psf
+    [ "${UI_COLS}" -eq 80 ]
+}
+
+@test "ui_header: on a narrow screen the caption goes and the rule fits" {
+    export LC_ALL=C.UTF-8
+    UI_COLS=80
+    run ui_header
+    ! output_has "Installer" || false
+    local line
+    while IFS= read -r line; do [ "${#line}" -le 80 ]; done <<< "$(plain)"
+    UI_COLS=120
+    run ui_header
+    output_has "Installer"
+    output_has "$(ui_repeat ─ 104)"
+}
+
 @test "build-initrd: copies the screen scripts and Terminus 16x32, uncompressed for setfont" {
     local build="${REPO_ROOT}/scripts/pc-installer/build-initrd.sh"
     for file in install.sh run.sh screen.sh ui.sh; do
@@ -92,6 +139,9 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033\\]P[0-9A-F]\\{7\\}/
     done
     file_has "${build}" "/usr/share/consolefonts/Uni3-Terminus32x16.psf.gz"
     file_has "${build}" '/font.psf"'
+    # the fallback for low-resolution screens
+    file_has "${build}" "/usr/share/consolefonts/Uni3-Terminus16.psf.gz"
+    file_has "${build}" '/font-small.psf"'
     grep -qx "console-setup-linux" "${REPO_ROOT}/config/packages-pc-installer.list"
 }
 
@@ -103,9 +153,9 @@ plain() { sed -e $'s/\033\\[[0-9;?]*[A-Za-z]//g' -e $'s/\033\\]P[0-9A-F]\\{7\\}/
 
 @test "init: loads the font, then draws through ui.sh before looking for the key" {
     local init="${REPO_ROOT}/scripts/pc-installer/init"
-    file_has "${init}" 'setfont -C /dev/tty1 "${INSTALLER_COMMON}/font.psf"'
+    file_has "${init}" 'ui_fit "${INSTALLER_COMMON}/font.psf" "${INSTALLER_COMMON}/font-small.psf"'
     file_has "${init}" 'source "${INSTALLER_COMMON}/ui.sh"'
-    [ "$(grep -n 'setfont' "${init}" | cut -d: -f1)" -lt "$(grep -n '^ui_palette' "${init}" | cut -d: -f1)" ]
+    [ "$(grep -n '^ui_fit' "${init}" | cut -d: -f1)" -lt "$(grep -n '^ui_palette' "${init}" | cut -d: -f1)" ]
     [ "$(grep -n '^ui_header' "${init}" | cut -d: -f1)" -lt "$(grep -n 'findfs' "${init}" | cut -d: -f1)" ]
     ! grep -q '^ *echo "[A-Z]' "${init}" || false
 }

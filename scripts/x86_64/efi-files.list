@@ -3,3 +3,14 @@
 # and sync-efi.sh (on the device, after every APT run).
 usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed EFI/BOOT/grubx64.efi
 usr/lib/shim/shimx64.efi.signed EFI/BOOT/BOOTX64.EFI
+# GRUB's menu in Kura's look (pc_grub_look in pc-image.sh)
+usr/share/grub/themes/kura/theme.txt EFI/debian/themes/kura/theme.txt
+usr/share/grub/themes/kura/select_nw.png EFI/debian/themes/kura/select_nw.png
+usr/share/grub/themes/kura/select_n.png EFI/debian/themes/kura/select_n.png
+usr/share/grub/themes/kura/select_ne.png EFI/debian/themes/kura/select_ne.png
+usr/share/grub/themes/kura/select_w.png EFI/debian/themes/kura/select_w.png
+usr/share/grub/themes/kura/select_c.png EFI/debian/themes/kura/select_c.png
+usr/share/grub/themes/kura/select_e.png EFI/debian/themes/kura/select_e.png
+usr/share/grub/themes/kura/select_sw.png EFI/debian/themes/kura/select_sw.png
+usr/share/grub/themes/kura/select_s.png EFI/debian/themes/kura/select_s.png
+usr/share/grub/themes/kura/select_se.png EFI/debian/themes/kura/select_se.png

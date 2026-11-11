@@ -1,0 +1,64 @@
+# Kura's GRUB menu (ADR-021): the login screen's navy, light text, and the
+# selected entry on Kura's light purple. select_*.png are one pixel of
+# #a970ff, stretched behind the selected entry. Installed on the EFI
+# partition (scripts/x86_64/efi-files.list); every label uses the Unicode
+# font built into Debian's signed GRUB, the only font loaded.
+
+title-text: ""
+desktop-color: "#0f172a"
+terminal-font: "Unifont Regular 16"
+
++ label {
+    top = 22%
+    left = 0
+    width = 100%
+    align = "center"
+    text = "K U R A"
+    color = "#a970ff"
+}
+
++ label {
+    top = 22%+28
+    left = 0
+    width = 100%
+    align = "center"
+    text = "THE STOREHOUSE"
+    color = "#94a3b8"
+}
+
++ boot_menu {
+    left = 30%
+    top = 34%
+    width = 40%
+    height = 30%
+    item_font = "Unifont Regular 16"
+    item_color = "#e2e8f0"
+    selected_item_color = "#0f172a"
+    selected_item_pixmap_style = "select_*.png"
+    item_height = 32
+    item_padding = 12
+    item_spacing = 8
+    icon_width = 0
+    icon_height = 0
+    item_icon_space = 0
+    scrollbar = false
+}
+
++ label {
+    top = 70%
+    left = 0
+    width = 100%
+    align = "center"
+    id = "__timeout__"
+    text = "Starting in %d s"
+    color = "#94a3b8"
+}
+
++ label {
+    top = 70%+28
+    left = 0
+    width = 100%
+    align = "center"
+    text = "Up and down to choose · Enter to start · e to edit"
+    color = "#94a3b8"
+}

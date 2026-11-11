@@ -124,7 +124,7 @@ tests/boot/boot-test.sh release/<version>/pc/kura-*.img boot-a 2222 --setup
 Pushing a `v*` tag builds the images and publishes a GitHub Release with the Pi image, the PC image and the PC installer (`.img.zst`), `SHA512SUMS`, `manifest.json` and `etchwise.json` (the OS list Etchwise reads). Every asset is signed keylessly with [Sigstore](https://www.sigstore.dev/) by the release workflow itself, so there is no signing key to manage; each asset ships with a `<asset>.sigstore.json` bundle. To verify a download (needs [cosign](https://github.com/sigstore/cosign)):
 
 ```bash
-scripts/release/verify-release.sh kura-0.4.1-rpi5-arm64-20261027-0001.img.zst v0.4.1
+scripts/release/verify-release.sh kura-0.5.0-rpi5-arm64-20261111-0001.img.zst v0.5.0
 ```
 
 Release images are built from `.env.example`: first boot gives `admin` a one-time password, shown on the device's screen and replaced at the first login, and root has no password (see [Default Credentials](#default-credentials)).
