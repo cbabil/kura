@@ -58,6 +58,9 @@ setup() {
     file_has "${dir}/theme.txt" 'selected_item_color = "#0f172a"'
     file_has "${dir}/theme.txt" 'selected_item_pixmap_style = "select_*.png"'
     file_has "${dir}/theme.txt" 'id = "__timeout__"'
+    # every box pattern names its pieces with a *: GRUB stops on an error
+    # (and a "Press any key") for one without, such as terminal-box: ""
+    [ -z "$(grep -E '(terminal-box|_pixmap_style)' "${dir}/theme.txt" | grep -v '\*')" ]
     for piece in nw n ne w c e sw s se; do
         [ "$(head -c 8 "${dir}/select_${piece}.png" | od -An -tx1 | tr -d ' ')" = "89504e470d0a1a0a" ]
     done

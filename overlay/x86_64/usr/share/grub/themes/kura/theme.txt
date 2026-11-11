@@ -7,7 +7,6 @@
 title-text: ""
 desktop-color: "#0f172a"
 terminal-font: "Unifont Regular 16"
-terminal-box: ""
 
 + label {
     top = 22%

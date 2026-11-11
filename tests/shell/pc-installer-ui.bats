@@ -123,7 +123,7 @@ stub_screen() {
     export LC_ALL=C.UTF-8
     UI_COLS=80
     run ui_header
-    ! output_has "Installer"
+    ! output_has "Installer" || false
     local line
     while IFS= read -r line; do [ "${#line}" -le 80 ]; done <<< "$(plain)"
     UI_COLS=120
