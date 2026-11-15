@@ -120,19 +120,22 @@ jobs:
         if: matrix.target == 'pc'
         run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 ovmf mtools sshpass expect
 
-      # Two devices from the same image, booted side by side: A with a setup
-      # file from the imager, B without
-      - name: Boot tests A (setup file) and B (no setup file)
+      # Three devices from the same image, booted side by side: A with a setup
+      # file from the imager, B without, C with the full custom disk layout
+      - name: Boot tests A (setup file), B (no setup file), C (full layout)
         if: matrix.target == 'pc'
         run: |
           img=$(ls release/*/pc/*.img)
           tests/boot/boot-test.sh "${img}" boot-a 2222 --setup > boot-a.log 2>&1 & a=$!
           tests/boot/boot-test.sh "${img}" boot-b 2223 > boot-b.log 2>&1 & b=$!
+          KURA_TEST_LAYOUT=full tests/boot/boot-test.sh "${img}" boot-c 2224 --setup > boot-c.log 2>&1 & c=$!
           status=0
           wait "${a}" || status=1
           wait "${b}" || status=1
+          wait "${c}" || status=1
           echo "== Boot A (setup file)"; cat boot-a.log
           echo "== Boot B (no setup file)"; cat boot-b.log
+          echo "== Boot C (full layout)"; cat boot-c.log
           exit "${status}"
 
       # The installer, from a USB key with a setup file, onto a blank drive
@@ -180,6 +183,7 @@ jobs:
           path: |
             boot-a/
             boot-b/
+            boot-c/
             install/
             !boot-*/disk.img
             !boot-*/id_ed25519*
