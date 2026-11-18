@@ -65,7 +65,8 @@ validate_setup() {
         want(.ssh; "object"; "ssh"), want(.ssh.enabled; "boolean"; "ssh.enabled"),
         want(.ssh.passwordAuth; "boolean"; "ssh.passwordAuth"),
         want(.ssh.authorizedKeys; "array"; "ssh.authorizedKeys"),
-        want(.timezone; "string"; "time zone"), want(.keyboard; "string"; "keyboard")')
+        want(.timezone; "string"; "time zone"), want(.keyboard; "string"; "keyboard"),
+        want(.desktop; "boolean"; "desktop")')
     [ -z "${bad}" ] || { setup_error "${bad} has the wrong type"; return 1; }
     jq -e '[.ssh.authorizedKeys[]? | select(type != "string" or . == "" or test("[[:cntrl:]]"))]
         | length == 0' "${f}" >/dev/null || { setup_error "invalid SSH key"; return 1; }

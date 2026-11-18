@@ -1,0 +1,48 @@
+#!/bin/bash
+# os-desktop-cert — the desktop's own HTTPS certificate (ADR-023), made once.
+#
+# Usage: os-desktop-cert <state-dir> [owner]
+#
+# Writes <state-dir>/tls.key (0600), tls.crt (ECDSA P-256, 10 years, for
+# <host>.local, <host> and localhost) and fingerprint (SHA-256, as openssl
+# prints it), which the login screen shows so the owner can check the
+# browser's warning against it. An existing certificate is kept. The host
+# name comes from `hostname`, or DESKTOP_HOSTNAME in tests.
+
+set -euo pipefail
+
+STATE="${1:?Usage: $0 <state-dir> [owner]}"
+OWNER="${2:-}"
+HOST_RE='^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'
+DAYS=3650
+
+host="${DESKTOP_HOSTNAME:-$(hostname)}"
+if ! [[ "${host}" =~ ${HOST_RE} ]]; then
+    echo "ERROR: desktop certificate: the hostname is not a plain name" >&2
+    exit 1
+fi
+
+if [ -s "${STATE}/tls.crt" ] && [ -s "${STATE}/tls.key" ]; then
+    echo "Desktop certificate already present; kept."
+    exit 0
+fi
+
+install -d -m 0750 "${STATE}"
+tmp=$(mktemp -d "${STATE}/.cert.XXXXXX")
+trap 'rm -rf "${tmp}"' EXIT
+
+(umask 077 && openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+    -keyout "${tmp}/tls.key" -out "${tmp}/tls.crt" -days "${DAYS}" \
+    -subj "/CN=${host}.local" \
+    -addext "subjectAltName=DNS:${host}.local,DNS:${host},DNS:localhost" \
+    -addext "extendedKeyUsage=serverAuth" 2>/dev/null)
+openssl x509 -in "${tmp}/tls.crt" -noout -fingerprint -sha256 | cut -d= -f2 > "${tmp}/fingerprint"
+chmod 0600 "${tmp}/tls.key"
+chmod 0644 "${tmp}/tls.crt" "${tmp}/fingerprint"
+if [ -n "${OWNER}" ]; then
+    chown "${OWNER}:${OWNER}" "${tmp}/tls.key" "${tmp}/tls.crt" "${tmp}/fingerprint"
+fi
+# The certificate last: its presence is the unit's "done" condition
+mv "${tmp}/tls.key" "${tmp}/fingerprint" "${STATE}/"
+mv "${tmp}/tls.crt" "${STATE}/"
+echo "Desktop certificate made for ${host}.local."

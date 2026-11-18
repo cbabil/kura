@@ -24,6 +24,7 @@ SETUP_STATUS="${KURA_SETUP_STATUS:-/var/lib/__BRAND__/setup-status}"
 SHADOW_FILE="${KURA_SHADOW:-/etc/shadow}"
 ONE_TIME_PASSWORD="${KURA_ONE_TIME_PASSWORD:-/var/lib/__BRAND__/one-time-password}"
 ISSUE="${KURA_ISSUE:-/etc/issue}"
+DESKTOP_FINGERPRINT="${KURA_DESKTOP_FINGERPRINT:-/var/lib/__BRAND__/desktop/fingerprint}"
 # The login user's uid, as LOGIN_UID in firstboot-setup.sh
 LOGIN_UID=1000
 # Shown with a dot each (motd/40-status also shows the config unit)
@@ -64,6 +65,9 @@ done < <(timeout 2 systemctl is-active "${SERVICES[@]}" 2>/dev/null)
 LOGIN_SETUP=""
 [ -f "${SETUP_STATUS}" ] && read -r LOGIN_SETUP < "${SETUP_STATUS}"
 LOGIN_COLS="${LOGIN_COLS:-$(console_cols)}"
+# Kura Desktop's certificate (os-desktop-cert), once made
+LOGIN_DESKTOP_FP=""
+[ -f "${DESKTOP_FINGERPRINT}" ] && read -r LOGIN_DESKTOP_FP < "${DESKTOP_FINGERPRINT}"
 # The one-time password (firstboot-password.sh), until the owner changed it
 LOGIN_PASSWORD=""
 if [ -f "${ONE_TIME_PASSWORD}" ]; then

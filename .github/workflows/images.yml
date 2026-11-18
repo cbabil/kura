@@ -88,6 +88,9 @@ jobs:
         run: |
           cp .env.example .env
           echo "OS_TMP=\"${RUNNER_TEMP}/kura\"" >> .env
+          # Until Kura Desktop's Rust server lands (ADR-024) and this workflow
+          # builds it, the images are built without the desktop
+          echo 'OS_DESKTOP="false"' >> .env
           if [ -n "${VERSION}" ]; then
             echo "OS_VERSION=\"${VERSION#v}\"" >> .env   # tag v0.1.0 -> 0.1.0
           fi
