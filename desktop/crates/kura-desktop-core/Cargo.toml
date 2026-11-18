@@ -1,0 +1,29 @@
+[package]
+name = "kura-desktop-core"
+description = "Shared pieces of Kura Desktop: sessions, rate limits, preferences, stats and units."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Fixture /proc trees for other crates' tests.
+fixtures = ["dep:tempfile"]
+
+[dependencies]
+tempfile = { workspace = true, optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+getrandom.workspace = true
+procfs-core.workspace = true
+rustix.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

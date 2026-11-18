@@ -1,0 +1,156 @@
+name: Desktop
+
+# Kura Desktop's Rust server (ADR-023, ADR-024). The Mac runs the unit tests
+# with fakes; this workflow proves the Linux parts: the real /proc and /sys,
+# systemd over D-Bus, PAM in kura-helper, an end-to-end sign-in, and the
+# x86_64 and aarch64 binaries for the images.
+
+on:
+  push:
+    branches: [dev, master]
+    paths:
+      - desktop/**
+      - .github/workflows/desktop.yml
+  pull_request:
+    branches: [master]
+    paths:
+      - desktop/**
+      - .github/workflows/desktop.yml
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: desktop
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install libpam headers
+        run: sudo apt-get update && sudo apt-get install -y libpam0g-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Install cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,cargo-deny
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+
+      - name: Lint
+        run: make lint
+
+      - name: Unit tests
+        run: make test
+
+      - name: Coverage (90% of lines)
+        run: make coverage
+
+      - name: Make throwaway users
+        run: |
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::${password}"
+          echo "KURA_PAM_PASSWORD=${password}" >> "$GITHUB_ENV"
+          for u in kura-ci kura-ci-old; do
+            sudo useradd -m "$u"
+            echo "$u:${password}" | sudo chpasswd
+          done
+          sudo chage -d 0 kura-ci-old
+
+      - name: Linux tests against the runner (/proc, /sys, systemd)
+        run: KURA_LIVE_TESTS=1 cargo test --workspace -- --nocapture live
+
+      - name: PAM tests as root
+        run: |
+          sudo -E env "PATH=$PATH" "HOME=$HOME" CARGO_TARGET_DIR=target/root \
+            KURA_PAM_USER=kura-ci KURA_PAM_EXPIRED_USER=kura-ci-old \
+            cargo test -p kura-helper pam::
+
+      - name: End to end
+        run: |
+          cargo build --release --workspace
+          ci/e2e.sh kura-ci "$KURA_PAM_PASSWORD"
+
+  dist:
+    name: dist ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            make: dist-amd64
+            deb: amd64
+          - arch: aarch64
+            make: dist-arm64
+            deb: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install libpam for ${{ matrix.deb }}
+        run: |
+          if [ "${{ matrix.deb }}" = arm64 ]; then
+            sudo dpkg --add-architecture arm64
+            # Ubuntu serves arm64 from ports; keep the default archive amd64-only.
+            sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+            printf 'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports\nSuites: noble noble-updates noble-security\nComponents: main\nArchitectures: arm64\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' \
+              | sudo tee /etc/apt/sources.list.d/ports.sources
+          fi
+          sudo apt-get update && sudo apt-get install -y "libpam0g-dev:${{ matrix.deb }}"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch }}-unknown-linux-musl,${{ matrix.arch }}-unknown-linux-gnu
+
+      - name: Install zig
+        uses: mlugg/setup-zig@v2
+
+      - name: Install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+          key: ${{ matrix.arch }}
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build
+        run: |
+          (cd web && bun install --frozen-lockfile && bun run build)
+          make ${{ matrix.make }}
+          file dist/${{ matrix.arch }}/*
+          ls -l dist/${{ matrix.arch }}
+
+      - name: Upload binaries
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kura-desktop-${{ matrix.arch }}
+          path: desktop/dist/${{ matrix.arch }}
+          retention-days: 1
