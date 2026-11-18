@@ -58,3 +58,4 @@ kura-release.gpg
 # Claude Code
 .claude/
 CLAUDE.md
+desktop-dist/

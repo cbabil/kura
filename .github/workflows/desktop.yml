@@ -11,11 +11,13 @@ on:
     paths:
       - desktop/**
       - .github/workflows/desktop.yml
+      - .github/workflows/desktop-dist.yml
   pull_request:
     branches: [master]
     paths:
       - desktop/**
       - .github/workflows/desktop.yml
+      - .github/workflows/desktop-dist.yml
   workflow_dispatch:
 
 concurrency:
@@ -87,65 +89,8 @@ jobs:
       - name: End to end
         run: make e2e E2E_USER=kura-ci
 
+  # Both architectures. On a push, images.yml builds them for the images
+  # already, so only pull requests and manual runs build them here.
   dist:
-    name: dist ${{ matrix.arch }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            deb: amd64
-          - arch: aarch64
-            deb: arm64
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install libpam for ${{ matrix.deb }}
-        run: |
-          if [ "${{ matrix.deb }}" = arm64 ]; then
-            sudo dpkg --add-architecture arm64
-            # Ubuntu serves arm64 from ports; keep the default archive amd64-only.
-            sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
-            printf 'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports\nSuites: noble noble-updates noble-security\nComponents: main\nArchitectures: arm64\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' \
-              | sudo tee /etc/apt/sources.list.d/ports.sources
-          fi
-          sudo apt-get update && sudo apt-get install -y "libpam0g-dev:${{ matrix.deb }}"
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.arch }}-unknown-linux-musl,${{ matrix.arch }}-unknown-linux-gnu
-
-      - name: Install zig
-        uses: mlugg/setup-zig@v2
-
-      - name: Install cargo-zigbuild
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-zigbuild
-
-      - name: Cache Rust builds
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: desktop
-          key: ${{ matrix.arch }}
-
-      - name: Install bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Build (interface, then both binaries)
-        run: |
-          make dist ARCH=${{ matrix.arch }}
-          file dist/${{ matrix.arch }}/*
-          ls -l dist/${{ matrix.arch }}
-
-      - name: Upload binaries
-        if: github.event_name != 'push'
-        uses: actions/upload-artifact@v4
-        with:
-          name: kura-desktop-${{ matrix.arch }}
-          path: desktop/dist/${{ matrix.arch }}
-          retention-days: 1
+    if: github.event_name != 'push'
+    uses: ./.github/workflows/desktop-dist.yml

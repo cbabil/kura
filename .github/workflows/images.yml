@@ -1,9 +1,11 @@
 name: Images
 
 # Builds the Kura images (Pi 5 SD card image, x86_64 PC disk image and the PC
-# installer) and boots the PC image headless under UEFI without internet: once
-# with a kura-setup.json (as Etchwise writes it), once without, checking first
-# boot, the setup, SSH, Docker and device identity. The PC installer then
+# installer), with Kura Desktop's server and helper built first
+# (desktop-dist.yml), and boots the PC image headless under UEFI without
+# internet: once with a kura-setup.json (as Etchwise writes it), once without,
+# checking first boot, the setup, SSH, Docker, device identity and the
+# desktop (HTTPS, certificate, sign-in, screenshots). The PC installer then
 # installs that image on a blank virtual drive, which is booted and checked.
 # Builds use .env.example's default credentials (OS_USER_PASSWD, OS_ROOT_PASSWD);
 # first boot replaces the default password with a one-time password.
@@ -28,7 +30,18 @@ on:
       - overlay/**
       - .env.example
       - tests/boot/**
+      # what Kura Desktop's binaries are built from, not its tests or docs
+      - desktop/Cargo.*
+      - desktop/Makefile
+      - desktop/crates/*/src/**
+      - desktop/crates/*/Cargo.toml
+      - desktop/web/src/**
+      - desktop/web/index.html
+      - desktop/web/public/**
+      - desktop/web/package.json
+      - desktop/web/bun.lock
       - .github/workflows/images.yml
+      - .github/workflows/desktop-dist.yml
   workflow_dispatch:
 
 concurrency:
@@ -39,8 +52,13 @@ permissions:
   contents: read
 
 jobs:
+  # Kura Desktop's binaries for both architectures (ADR-023, ADR-024)
+  desktop:
+    uses: ./.github/workflows/desktop-dist.yml
+
   build:
     name: build ${{ matrix.target }}
+    needs: desktop
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     strategy:
@@ -51,9 +69,11 @@ jobs:
           - target: pc
             builds: pc pc-installer
             release_glob: "{pc,pc-installer}"
+            desktop_arch: x86_64
           - target: rpi5
             builds: rpi5
             release_glob: arm64
+            desktop_arch: aarch64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -88,14 +108,19 @@ jobs:
         run: |
           cp .env.example .env
           echo "OS_TMP=\"${RUNNER_TEMP}/kura\"" >> .env
-          # Until Kura Desktop's Rust server lands (ADR-024) and this workflow
-          # builds it, the images are built without the desktop
-          echo 'OS_DESKTOP="false"' >> .env
+          # Kura Desktop's binaries from desktop-dist.yml; build.sh fails if they are missing
+          echo "OS_DESKTOP_DIST=\"${GITHUB_WORKSPACE}/desktop-dist\"" >> .env
           if [ -n "${VERSION}" ]; then
             echo "OS_VERSION=\"${VERSION#v}\"" >> .env   # tag v0.1.0 -> 0.1.0
           fi
         env:
           VERSION: ${{ inputs.version }}
+
+      - name: Get Kura Desktop for ${{ matrix.desktop_arch }}
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-dist-${{ matrix.desktop_arch }}
+          path: desktop-dist/${{ matrix.desktop_arch }}
 
       # The build runs as root; the steps below (zstd, staging) run as the runner
       - name: Build ${{ matrix.target }}
@@ -123,15 +148,38 @@ jobs:
         if: matrix.target == 'pc'
         run: sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 ovmf mtools sshpass expect
 
+      # A real browser for the desktop's screenshots (tests/boot/desktop-checks.sh)
+      - name: Install bun
+        if: matrix.target == 'pc'
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Playwright's Chromium
+        if: matrix.target == 'pc'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('desktop/web/bun.lock') }}
+
+      - name: Install Playwright's Chromium
+        if: matrix.target == 'pc'
+        working-directory: desktop/web
+        run: |
+          bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
+
       # Three devices from the same image, booted side by side: A with a setup
       # file from the imager, B without, C with the full custom disk layout
       - name: Boot tests A (setup file), B (no setup file), C (full layout)
         if: matrix.target == 'pc'
+        env:
+          KURA_TEST_SCREENSHOTS: "1"
         run: |
           img=$(ls release/*/pc/*.img)
           tests/boot/boot-test.sh "${img}" boot-a 2222 --setup > boot-a.log 2>&1 & a=$!
           tests/boot/boot-test.sh "${img}" boot-b 2223 > boot-b.log 2>&1 & b=$!
-          KURA_TEST_LAYOUT=full tests/boot/boot-test.sh "${img}" boot-c 2224 --setup > boot-c.log 2>&1 & c=$!
+          # C also turns the desktop off in its setup file
+          KURA_TEST_LAYOUT=full KURA_TEST_DESKTOP=false \
+            tests/boot/boot-test.sh "${img}" boot-c 2224 --setup > boot-c.log 2>&1 & c=$!
           status=0
           wait "${a}" || status=1
           wait "${b}" || status=1

@@ -415,8 +415,11 @@ install_os_pkgs() {
 
 # ============================================================================
 # build_desktop -- Kura Desktop's server and helper for one architecture
-# (ADR-023, ADR-024), unless already built (CI builds them in an earlier step)
-# or left out (OS_DESKTOP=false). Prints the folder holding the two binaries.
+# (ADR-023, ADR-024). Prints the folder holding the two binaries.
+# OS_DESKTOP_DIST names a folder of binaries built elsewhere (CI's
+# desktop-dist.yml): it must hold both, nothing is rebuilt. Otherwise they are
+# built under desktop/dist/<arch> unless already there or left out
+# (OS_DESKTOP=false).
 # ============================================================================
 
 build_desktop() {
@@ -426,6 +429,16 @@ build_desktop() {
         arm64) machine="aarch64" ;;
         *) print_error "Kura Desktop: no build for architecture $1"; exit 1 ;;
     esac
+    if [ -n "${OS_DESKTOP_DIST:-}" ]; then
+        local given="${OS_DESKTOP_DIST}/${machine}"
+        if [ "${OS_DESKTOP:-true}" != "false" ] && \
+           { [ ! -f "${given}/kura-desktopd" ] || [ ! -f "${given}/kura-helper" ]; }; then
+            print_error "Kura Desktop: ${given} lacks kura-desktopd or kura-helper (OS_DESKTOP_DIST)"
+            exit 1
+        fi
+        echo "${given}"
+        return
+    fi
     local dist="${PROJECT_DIR}/desktop/dist/${machine}"
     if [ "${OS_DESKTOP:-true}" != "false" ] && \
        { [ ! -f "${dist}/kura-desktopd" ] || [ ! -f "${dist}/kura-helper" ]; }; then

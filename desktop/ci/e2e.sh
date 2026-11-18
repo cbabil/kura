@@ -43,26 +43,23 @@ sudo -u kura-desktop env KURA_STATE_DIR="${state}" "${bin}/kura-desktopd" --list
 sleep 2
 desktopd="$(pgrep -u kura-desktop -f "${bin}/kura-desktopd")"
 
+# shellcheck source=desktop/ci/api.sh
+source "$(dirname "$0")/api.sh"
+
 # status <expected> <curl args...>: asserts the HTTP status of a request.
 status() {
     local want="$1" got
     shift
-    got="$(curl -sk -o /dev/null -w '%{http_code}' -H "Origin: ${base}" "$@")"
+    got="$(desktop_code "${base}" "$@")"
     [ "${got}" = "${want}" ] || fail "$* gave ${got}, wanted ${want}"
 }
 
-# The sign-in body on stdout, so the password never appears in a command line.
-login() {
-    jq -nc --arg u "$1" --arg p "$2" '{user: $u, password: $p}'
-}
-
-post=(-X POST -H 'content-type: application/json' --data @-)
 status 401 "${base}/api/session"
-login "${user}" "${password}" | status 403 "${post[@]}" "${base}/api/login"
-login "${user}" wrong | status 401 -H 'x-kura-request: 1' "${post[@]}" "${base}/api/login"
-login root "${password}" | status 401 -H 'x-kura-request: 1' "${post[@]}" "${base}/api/login"
+desktop_login_body "${user}" "${password}" | status 403 "${DESKTOP_POST[@]}" "${base}/api/login"
+desktop_login_body "${user}" wrong | status 401 "${DESKTOP_CHANGE[@]}" "${DESKTOP_POST[@]}" "${base}/api/login"
+desktop_login_body root "${password}" | status 401 "${DESKTOP_CHANGE[@]}" "${DESKTOP_POST[@]}" "${base}/api/login"
 jar="$(mktemp)"
-login "${user}" "${password}" | status 200 -c "${jar}" -H 'x-kura-request: 1' "${post[@]}" "${base}/api/login"
+desktop_login_body "${user}" "${password}" | status 200 -c "${jar}" "${DESKTOP_CHANGE[@]}" "${DESKTOP_POST[@]}" "${base}/api/login"
 status 200 -b "${jar}" "${base}/api/session"
 curl -sk -b "${jar}" "${base}/api/system" | grep -q '"cores":[1-9]' || fail "/api/system has no cores"
 
@@ -74,5 +71,5 @@ grep -q '"type":"snapshot"' <<<"${stream}" || fail "stats WebSocket sent no snap
 
 rss_kb="$(ps -o rss= -p "${desktopd}" | tr -d ' ')"
 echo "kura-desktopd RSS: ${rss_kb} kB"
-[ "${rss_kb}" -lt 40960 ] || fail "kura-desktopd uses ${rss_kb} kB, over the 40 MB budget"
+[ "${rss_kb}" -lt "${DESKTOP_RSS_MAX_KIB}" ] || fail "kura-desktopd uses ${rss_kb} kB, over the 40 MB budget"
 echo "end-to-end: ok"

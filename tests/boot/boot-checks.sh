@@ -29,20 +29,22 @@ LAYOUT_FULL='{rootGiB: 4, swapGiB: 1, volumes: [{mount: "/var/lib/docker"},
 
 # make_setup_file <dest>: a kura-setup.json as Etchwise writes it (new user
 # with LOGIN_PASS's hash and a new SSH key at KEY, password logins off,
-# hostname, Wi-Fi, time zone, and LAYOUT's disk layout)
-LAYOUT="${LAYOUT:-server}"   # installer-test.sh sources this file without it
+# hostname, Wi-Fi, time zone, LAYOUT's disk layout, and Kura Desktop on or
+# off as DESKTOP says)
+LAYOUT="${LAYOUT:-server}"   # installer-test.sh sources this file without them
+DESKTOP="${DESKTOP:-true}"
 
 make_setup_file() {
     local layout="${LAYOUT_SERVER}"
     [ "${LAYOUT}" != full ] || layout="${LAYOUT_FULL}"
     ssh-keygen -q -t ed25519 -N "" -C "kura-boot-test" -f "${KEY}"
     jq -n --arg user "${SETUP_USER}" --arg hash "$(openssl passwd -6 "${LOGIN_PASS}")" \
-          --arg key "$(cat "${KEY}.pub")" '{
+          --arg key "$(cat "${KEY}.pub")" --argjson desktop "${DESKTOP}" '{
         version: 1, hostname: "kura-ci",
         user: {name: $user, passwordHash: $hash},
         ssh: {enabled: true, passwordAuth: false, authorizedKeys: [$key]},
         wifi: {ssid: "CIWifi", psk: "password-ci", hidden: false, country: "FR"},
-        timezone: "Europe/Paris", keyboard: "fr",
+        timezone: "Europe/Paris", keyboard: "fr", desktop: $desktop,
         storage: '"${layout}"'}' > "$1"
 }
 

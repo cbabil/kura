@@ -26,7 +26,12 @@
 # Docker, the device identity, and less in an SSH terminal (issue #6). Writes
 # serial.log, report.txt and identity.txt to <out-dir>; exits non-zero if a
 # check fails. Needs qemu-system-x86_64, ovmf, mtools, zstd, sshpass, expect,
-# openssl, jq. Uses KVM when /dev/kvm is writable.
+# openssl, jq, curl. Uses KVM when /dev/kvm is writable.
+#
+# Kura Desktop is checked on 443 unless KURA_TEST_DESKTOP=false, which also
+# puts "desktop": false in the setup file and checks that it is off.
+# KURA_TEST_SCREENSHOTS=1 also signs in with a browser (Playwright's Chromium,
+# installed for desktop/web) and saves signin.png and desktop.png.
 
 set -euo pipefail
 
@@ -34,6 +39,9 @@ USAGE="Usage: $0 <pc-image> <out-dir> [ssh-port] [--setup|--installed]"
 IMAGE="${1:?${USAGE}}"
 OUT="${2:?${USAGE}}"
 SSH_PORT="${3:-2222}"
+# Kura Desktop's 443, forwarded beside SSH (by default 2222 -> 4222)
+HTTPS_PORT="${KURA_TEST_HTTPS_PORT:-$(( SSH_PORT + 2000 ))}"
+DESKTOP="${KURA_TEST_DESKTOP:-true}"
 SETUP="${4:-}"
 BRAND="${KURA_TEST_BRAND:-kura}"
 LAYOUT="${KURA_TEST_LAYOUT:-server}"
@@ -72,6 +80,8 @@ trap stop_vm EXIT
 
 # shellcheck source=tests/boot/boot-checks.sh
 source "$(dirname "$0")/boot-checks.sh"
+# shellcheck source=tests/boot/desktop-checks.sh
+source "$(dirname "$0")/desktop-checks.sh"
 # PC_EFI_START, where the setup file goes
 # shellcheck source=scripts/x86_64/pc-image.sh
 source "$(dirname "$0")/../../scripts/x86_64/pc-image.sh"
@@ -107,7 +117,7 @@ qemu-system-x86_64 -machine q35,smm=on -m "${MEM_MIB}" -smp 2 "${ACCEL[@]}" \
     -drive "file=${DISK},format=raw,if=virtio" \
     -vga none -device VGA,xres=1920,yres=1080 \
     -display none -monitor "unix:${MONITOR},server,nowait" -serial "file:${SERIAL}" \
-    -nic "user,restrict=on,hostfwd=tcp::${SSH_PORT}-:22" \
+    -nic "user,restrict=on,hostfwd=tcp::${SSH_PORT}-:22,hostfwd=tcp::${HTTPS_PORT}-:443" \
     -pidfile "${PIDFILE}" -daemonize
 
 # ---- checks ----
@@ -131,6 +141,20 @@ check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
 check "core services active" services_active
 check "Docker answers" docker_answers
+# Kura Desktop (ADR-023)
+if [ "${DESKTOP}" = false ]; then
+    check "desktop: off as the setup file asked, nothing on 443" desktop_off
+else
+    check "desktop: HTTPS on 443 serves the interface" wait_for "desktop" desktop_https
+    check "desktop: the certificate served is the device's own" desktop_cert_matches
+    check "desktop: the login screen shows its fingerprint" wait_for "fingerprint on the login screen" desktop_cert_shown
+    check "desktop: signs in with the login user's password" desktop_signin
+    check "desktop: a wrong password is refused" desktop_wrong_password_refused
+    check "desktop: a request without X-Kura-Request is refused" desktop_csrf_refused
+    check "desktop: server under 40 MB resident" desktop_rss
+    [ "${KURA_TEST_SCREENSHOTS:-}" != 1 ] ||
+        check "desktop: sign-in and desktop screenshots (signin.png, desktop.png)" desktop_screens
+fi
 if [ -n "${SETUP}" ]; then
     check "login screen says the setup was applied" wait_for "kura-issue" setup_shown
 fi

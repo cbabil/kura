@@ -4,17 +4,13 @@
  */
 import { expect, test, type Page } from '@playwright/test'
 import { MOCK_PASSWORD } from '../src/api/mock'
+import { signIn as signInAs, submit as submitAs } from './sign-in'
 
-async function submit(page: Page, password: string) {
-  await page.getByLabel('User name').fill('chris')
-  await page.getByLabel('Password').fill(password)
-  await page.getByRole('button', { name: 'Sign in' }).click()
-}
+const submit = (page: Page, password: string) => submitAs(page, 'chris', password)
 
 async function signIn(page: Page) {
   await page.goto('/')
-  await submit(page, MOCK_PASSWORD)
-  await expect(page.getByRole('dialog', { name: 'Activity Monitor' })).toBeVisible()
+  await signInAs(page, 'chris', MOCK_PASSWORD)
 }
 
 test('refuses a wrong password, then signs in to Activity Monitor', async ({ page }) => {
