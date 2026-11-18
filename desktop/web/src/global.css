@@ -1,0 +1,5 @@
+/* The desktop fills the viewport and never scrolls as a page. */
+html, body, #root { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+body { font-size: 14px; -webkit-font-smoothing: antialiased; }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

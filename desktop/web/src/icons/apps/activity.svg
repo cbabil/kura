@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="act-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e1065"/><stop offset="1" stop-color="#0b1023"/></linearGradient>
+  <linearGradient id="act-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <filter id="act-plate" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#020617" flood-opacity=".38"/></filter>
+  <filter id="act-obj" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity=".32"/></filter>
+  <clipPath id="act-clip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <linearGradient id="act-line" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7b31ff"/><stop offset=".6" stop-color="#c084fc"/><stop offset="1" stop-color="#f0abfc"/></linearGradient>
+  <filter id="act-glow"><feGaussianBlur stdDeviation="18"/></filter>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#act-bg)" filter="url(#act-plate)"/>
+<g clip-path="url(#act-clip)">
+
+  <rect x="190" y="250" width="644" height="524" rx="64" fill="#050a18" stroke="#a970ff" stroke-opacity=".35" stroke-width="4"/>
+  <g stroke="#a970ff" stroke-opacity=".14" stroke-width="3">
+    <path d="M190 381H834M190 512H834M190 643H834M351 250V774M512 250V774M673 250V774"/>
+  </g>
+  <path d="M220 560H360L410 420L478 690L548 330L606 600L650 520H804" fill="none" stroke="#c084fc" stroke-width="44" stroke-linecap="round" stroke-linejoin="round" opacity=".35" filter="url(#act-glow)"/>
+  <path d="M220 560H360L410 420L478 690L548 330L606 600L650 520H804" fill="none" stroke="url(#act-line)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="804" cy="520" r="22" fill="#f5f3ff"/>
+</g>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#act-gloss)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3"/>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="log-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fcd34d"/><stop offset="1" stop-color="#d97706"/></linearGradient>
+  <linearGradient id="log-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <filter id="log-plate" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#020617" flood-opacity=".38"/></filter>
+  <filter id="log-obj" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity=".32"/></filter>
+  <clipPath id="log-clip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <linearGradient id="log-paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e2e8f0"/></linearGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#log-bg)" filter="url(#log-plate)"/>
+<g clip-path="url(#log-clip)">
+
+  <g filter="url(#log-obj)">
+    <path d="M270 190h400l110 110v534H270z" fill="url(#log-paper)"/>
+    <path d="M670 190v110h110z" fill="#cbd5e1"/>
+  </g>
+  <g stroke-width="26" stroke-linecap="round">
+    <path d="M340 380H600" stroke="#94a3b8"/>
+    <path d="M340 450H700" stroke="#94a3b8"/>
+    <path d="M340 520H650" stroke="#ef4444"/>
+    <path d="M340 590H700" stroke="#94a3b8"/>
+    <path d="M340 660H560" stroke="#f59e0b"/>
+    <path d="M340 730H680" stroke="#94a3b8"/>
+  </g>
+  <rect x="300" y="500" width="14" height="40" rx="7" fill="#ef4444"/><rect x="300" y="640" width="14" height="40" rx="7" fill="#f59e0b"/>
+</g>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#log-gloss)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3"/>
+</svg>
