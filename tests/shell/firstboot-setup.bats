@@ -189,6 +189,14 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = "applied" ]
 }
 
+@test "apply_setup_dir: /tmp on its own volume gets no RAM-disk size" {
+    echo '{"version":1,"storage":{"rootGiB":16,"volumes":[{"mount":"/tmp","sizeGiB":4}]}}' > "${BOOT}/kura-setup.json"
+    findmnt() { echo ext4; }
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ ! -e "${SETUP_ROOT}/etc/systemd/system/tmp.mount.d/kura.conf" ]
+}
+
 @test "apply_setup_dir: an invalid storage key leaves /tmp alone (the disk layout reports it)" {
     echo '{"version":1,"storage":{"tmpGiB":0}}' > "${BOOT}/kura-setup.json"
     run apply_setup_dir "${BOOT}"
