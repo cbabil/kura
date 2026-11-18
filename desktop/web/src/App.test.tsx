@@ -77,3 +77,31 @@ describe('App', () => {
     expect(screen.queryByRole('dialog', { name: 'Activity Monitor' })).toBeNull()
   })
 })
+
+describe('languages', () => {
+  it('switches the desktop to French from the Kura menu, and saves the choice', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const api = createMockApi()
+    const save = vi.spyOn(api, 'savePrefs')
+    await signIn(api)
+    await userEvent.click(screen.getByRole('button', { name: 'Kura menu' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Language…' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Français' }))
+    await userEvent.click(screen.getByRole('button', { name: 'OK' }))
+    expect(await screen.findByRole('dialog', { name: "Moniteur d'activité" })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fichier' })).toBeInTheDocument()
+    expect(screen.getByText('Résumé')).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('fr')
+    await act(() => vi.advanceTimersByTimeAsync(500))
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ language: 'fr' }))
+    vi.useRealTimers()
+  })
+
+  it('signs in in the browser’s language', async () => {
+    const spy = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['fr-FR', 'en'])
+    render(<App api={createMockApi()} />)
+    expect(await screen.findByRole('button', { name: 'Se connecter' })).toBeInTheDocument()
+    expect(screen.getByLabelText("Nom d'utilisateur")).toBeInTheDocument()
+    spy.mockRestore()
+  })
+})

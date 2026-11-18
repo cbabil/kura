@@ -63,7 +63,7 @@ describe('httpApi', () => {
   it('throws on a failed request it cannot recover from', async () => {
     fetchMock.mockReturnValueOnce(reply(500)).mockReturnValueOnce(reply(500))
     await expect(httpApi.system()).rejects.toThrow('/api/system failed (500)')
-    await expect(httpApi.savePrefs({ theme: 'dark', dock: [], windows: {} })).rejects.toThrow()
+    await expect(httpApi.savePrefs({ theme: 'dark', language: 'auto', dock: [], windows: {} })).rejects.toThrow()
   })
 
   it('posts logout', async () => {

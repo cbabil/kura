@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Api, Prefs } from './api'
 import { DEFAULT_DOCK } from './shell/dockOrder'
 
-export const DEFAULT_PREFS: Prefs = { theme: 'system', dock: DEFAULT_DOCK, windows: {} }
+export const DEFAULT_PREFS: Prefs = { theme: 'system', language: 'auto', dock: DEFAULT_DOCK, windows: {} }
 const SAVE_DELAY_MS = 400
 
 export function usePrefs(api: Api, signedIn: boolean) {

@@ -9,10 +9,10 @@ import { MenuBar, Clock } from './MenuBar'
 const close = vi.fn()
 const about = vi.fn()
 const menus: AppMenu[] = [
-  { title: 'File', items: [{ label: 'Close Window', run: close }] },
-  { title: 'Window', items: [] },
+  { title: 'menu.file', items: [{ label: 'menu.closeWindow', run: close }] },
+  { title: 'menu.window', items: [] },
 ]
-const kuraMenu: AppMenu = { title: '蔵', items: [{ label: 'About Kura', run: about }] }
+const kuraMenu: AppMenu = { title: '蔵', items: [{ label: 'menu.about', run: about }] }
 
 function setup(over: Partial<Parameters<typeof MenuBar>[0]> = {}, api: Api = createMockApi()) {
   const h = { onRun: vi.fn((item) => item.run({})), onToggleTheme: vi.fn(), onLauncher: vi.fn() }

@@ -8,6 +8,7 @@ import { Box, List, ListItemButton, ListItemIcon, ListItemText, ToggleButton, To
 import { useTheme } from '@mui/material/styles'
 import type { Range } from '../../api'
 import { Glyph, type GlyphName } from '../../icons/Glyph'
+import { useI18n, type MessageKey } from '../../i18n'
 import { useStats, useSystem } from '../../shell/useStats'
 import { WindowToolbar } from '../../shell/WindowToolbar'
 import type { AppProps } from '../types'
@@ -16,6 +17,16 @@ import { CpuView, MemoryView, NetworkView, ServicesView, StorageView, SummaryVie
 
 export const ACTIVITY_VIEWS = ['Summary', 'CPU', 'Memory', 'Storage', 'Network', 'Services'] as const
 export type ActivityView = (typeof ACTIVITY_VIEWS)[number]
+
+/** Each section's label in the catalogue. */
+export const VIEW_LABELS: Record<ActivityView, MessageKey> = {
+  Summary: 'activity.view.Summary',
+  CPU: 'activity.view.CPU',
+  Memory: 'activity.view.Memory',
+  Storage: 'activity.view.Storage',
+  Network: 'activity.view.Network',
+  Services: 'activity.view.Services',
+}
 
 const VIEWS: Record<ActivityView, { glyph: GlyphName; Component: (p: ViewProps) => React.ReactNode; live: boolean }> = {
   Summary: { glyph: 'pulse', Component: SummaryView, live: true },
@@ -27,8 +38,9 @@ const VIEWS: Record<ActivityView, { glyph: GlyphName; Component: (p: ViewProps) 
 }
 
 export function RangeSwitch({ range, onRange }: { range: Range; onRange(r: Range): void }) {
+  const { t } = useI18n()
   return (
-    <ToggleButtonGroup size="small" exclusive value={range} aria-label="Time range"
+    <ToggleButtonGroup size="small" exclusive value={range} aria-label={t('activity.range')}
       onChange={(_, v: Range | null) => v && onRange(v)}
       sx={{ '& .MuiToggleButton-root': { py: '1px', px: '10px', fontSize: 12, textTransform: 'none' },
         '& .Mui-selected, & .Mui-selected:hover': { bgcolor: 'primary.main', color: 'primary.contrastText' } }}>
@@ -42,6 +54,7 @@ const isView = (v: string): v is ActivityView => v in VIEWS
 
 function ActivityMonitorBody({ view: requested, setView, compact }: AppProps) {
   const k = useTheme().kura
+  const { t } = useI18n()
   const stats = useStats()
   const system = useSystem()
   const [range, setRange] = useState<Range>('1h')
@@ -52,7 +65,7 @@ function ActivityMonitorBody({ view: requested, setView, compact }: AppProps) {
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: compact ? 'column' : 'row', minWidth: 0, minHeight: 0 }}>
       <WindowToolbar><RangeSwitch range={range} onRange={setRange} /></WindowToolbar>
-      <List component="nav" aria-label="Sections" dense disablePadding sx={{
+      <List component="nav" aria-label={t('activity.sections')} dense disablePadding sx={{
         width: compact ? 'auto' : 186, flexShrink: 0, p: compact ? 1 : '12px 8px', bgcolor: k.chrome,
         borderRight: compact ? 0 : 1, borderBottom: compact ? 1 : 0, borderColor: 'divider',
         display: 'flex', flexDirection: compact ? 'row' : 'column', overflowX: 'auto', gap: '2px',
@@ -61,12 +74,12 @@ function ActivityMonitorBody({ view: requested, setView, compact }: AppProps) {
           <ListItemButton key={v} selected={v === view} aria-current={v === view ? 'page' : undefined} onClick={() => setView(v)}
             sx={{ borderRadius: '7px', flexGrow: 0, py: '4px', px: 1, '&.Mui-selected': { color: k.selected } }}>
             <ListItemIcon sx={{ minWidth: 25, color: 'inherit' }}><Glyph name={VIEWS[v].glyph} /></ListItemIcon>
-            <ListItemText primary={v} slotProps={{ primary: { noWrap: true, sx: { fontSize: 13 } } }} />
+            <ListItemText primary={t(VIEW_LABELS[v])} slotProps={{ primary: { noWrap: true, sx: { fontSize: 13 } } }} />
           </ListItemButton>
         ))}
       </List>
       {waiting ? (
-        <ViewBody><Box sx={{ color: 'text.secondary' }}>Waiting for the first measurement…</Box></ViewBody>
+        <ViewBody><Box sx={{ color: 'text.secondary' }}>{t('activity.waiting')}</Box></ViewBody>
       ) : (
         <Component stats={stats} system={system} range={range} />
       )}

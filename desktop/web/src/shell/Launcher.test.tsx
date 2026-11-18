@@ -1,8 +1,11 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithTheme } from '../test/render'
-import { LAUNCHER_ENTRIES } from '../apps/registry'
+import { launcherEntries } from '../apps/registry'
+import { makeI18n } from '../i18n'
 import { Launcher } from './Launcher'
+
+const LAUNCHER_ENTRIES = launcherEntries(makeI18n('en').t)
 
 function setup() {
   const onChoose = vi.fn()

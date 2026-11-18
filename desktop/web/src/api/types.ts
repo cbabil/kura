@@ -99,6 +99,8 @@ export type ThemeChoice = 'dark' | 'light' | 'system'
 /** Per-user preferences, GET and PUT /api/prefs (at most 64 KB). */
 export interface Prefs {
   theme: ThemeChoice
+  /** 'auto' (the browser's languages) or a language code the desktop has, e.g. 'fr'. */
+  language: string
   /** App ids in dock order. */
   dock: string[]
   windows: Record<string, WindowGeometry>

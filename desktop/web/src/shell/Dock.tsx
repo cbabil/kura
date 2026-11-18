@@ -8,7 +8,8 @@ import { useState, type DragEvent, type MouseEvent } from 'react'
 import { Box, Menu, MenuItem, Tooltip } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { AppIcon } from '../icons/AppIcon'
-import { APP_BY_ID, DOCK_END } from '../apps/registry'
+import { appText, DOCK_END } from '../apps/registry'
+import { useI18n } from '../i18n'
 import { moveItem, unpin } from './dockOrder'
 import { COMPACT_DOCK_ICON, DOCK_ICON } from './layout'
 
@@ -44,11 +45,12 @@ function MinimizedTile({ app, name, size }: { app: string; name: string; size: n
 }
 
 function DockItem({ app, size, running, minimizedTile, onOpen, onMenu, onDragStart, onDropOn }: ItemProps) {
-  const name = APP_BY_ID[app]?.name ?? app
+  const { t } = useI18n()
+  const name = appText(t, app, 'name')
   const draggable = Boolean(onDropOn)
   return (
     <Tooltip title={name} placement="top" disableInteractive>
-      <Box component="button" aria-label={minimizedTile ? `${name} (minimised)` : name} data-running={running}
+      <Box component="button" aria-label={minimizedTile ? t('dock.minimised', { name }) : name} data-running={running}
         draggable={draggable}
         onClick={() => onOpen(app)}
         onContextMenu={(e: MouseEvent<HTMLElement>) => {
@@ -81,6 +83,7 @@ function DockItem({ app, size, running, minimizedTile, onOpen, onMenu, onDragSta
 
 export function Dock({ pinned, running, minimized, compact, onOpen, onPinnedChange }: Props) {
   const k = useTheme().kura
+  const { t } = useI18n()
   const size = compact ? COMPACT_DOCK_ICON : DOCK_ICON
   const [dragging, setDragging] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ el: HTMLElement; app: string } | null>(null)
@@ -99,7 +102,7 @@ export function Dock({ pinned, running, minimized, compact, onOpen, onPinnedChan
   const togglePin = (app: string) => onPinnedChange(isPinned ? unpin(pinned, app) : [...pinned, app])
 
   return (
-    <Box component="nav" aria-label="Dock" onDragOver={(e) => e.preventDefault()} onDrop={() => drop(null)}
+    <Box component="nav" aria-label={t('dock.label')} onDragOver={(e) => e.preventDefault()} onDrop={() => drop(null)}
       sx={{
         position: 'absolute', left: '50%', bottom: compact ? 6 : 10, transform: 'translateX(-50%)', zIndex: 1000,
         display: 'flex', alignItems: 'flex-end', gap: '2px', px: 1, pt: '4px', pb: '8px', borderRadius: '22px',
@@ -115,8 +118,8 @@ export function Dock({ pinned, running, minimized, compact, onOpen, onPinnedChan
       {DOCK_END.map((app) => <DockItem key={app} app={app} size={size} running={running.includes(app)} onOpen={onOpen} />)}
       <Menu open={Boolean(menu)} anchorEl={menu?.el} onClose={() => setMenu(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }} transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <MenuItem onClick={fromMenu(onOpen)}>Open</MenuItem>
-        <MenuItem onClick={fromMenu(togglePin)}>{isPinned ? 'Remove from Dock' : 'Keep in Dock'}</MenuItem>
+        <MenuItem onClick={fromMenu(onOpen)}>{t('dock.open')}</MenuItem>
+        <MenuItem onClick={fromMenu(togglePin)}>{t(isPinned ? 'dock.remove' : 'dock.keep')}</MenuItem>
       </Menu>
     </Box>
   )

@@ -1,15 +1,22 @@
 /**
  * The root: checks the session, then shows the sign-in page or the desktop,
- * in the user's chosen theme (or the system's, before sign-in).
+ * in the user's chosen theme and language (the system's and the browser's
+ * before sign-in).
  */
 import { useEffect, useMemo, useState } from 'react'
 import { CssBaseline, Snackbar, useMediaQuery } from '@mui/material'
 import { ThemeProvider } from '@mui/material/styles'
 import type { Api, User } from './api'
+import { I18nProvider, pickLanguage, useI18n } from './i18n'
 import { Desktop } from './shell/Desktop'
 import { SignIn } from './signin/SignIn'
 import { makeTheme, type Mode } from './theme'
 import { usePrefs } from './usePrefs'
+
+function SaveFailed({ open, onClose }: { open: boolean; onClose(): void }) {
+  const { t } = useI18n()
+  return <Snackbar open={open} onClose={onClose} autoHideDuration={5000} message={t('layout.notSaved')} />
+}
 
 export function App({ api }: { api: Api }) {
   /** undefined while the session check runs. */
@@ -18,6 +25,8 @@ export function App({ api }: { api: Api }) {
   const systemDark = useMediaQuery('(prefers-color-scheme: dark)', { noSsr: true })
   const mode: Mode = prefs.theme === 'system' ? (systemDark ? 'dark' : 'light') : prefs.theme
   const theme = useMemo(() => makeTheme(user ? mode : systemDark ? 'dark' : 'light'), [user, mode, systemDark])
+  // Before sign-in the browser's language; after, the user's choice
+  const lang = pickLanguage(user ? prefs.language : 'auto', navigator.languages)
 
   useEffect(() => {
     api.session().then(setUser, () => setUser(null))
@@ -29,12 +38,13 @@ export function App({ api }: { api: Api }) {
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {user === null && <SignIn api={api} onSignedIn={setUser} />}
-      {user && <Desktop api={api} user={user} prefs={prefs} mode={mode} onPrefs={update} onSignOut={signOut} />}
-      <Snackbar open={saveFailed} onClose={dismissSaveError} autoHideDuration={5000}
-        message="Your desktop layout could not be saved. It will be tried again on the next change." />
-    </ThemeProvider>
+    <I18nProvider lang={lang}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        {user === null && <SignIn api={api} onSignedIn={setUser} />}
+        {user && <Desktop api={api} user={user} prefs={prefs} mode={mode} onPrefs={update} onSignOut={signOut} />}
+        <SaveFailed open={saveFailed} onClose={dismissSaveError} />
+      </ThemeProvider>
+    </I18nProvider>
   )
 }

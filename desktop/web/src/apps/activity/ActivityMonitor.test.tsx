@@ -39,6 +39,13 @@ describe('ActivityMonitor', () => {
     expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
   })
 
+  it('speaks the desktop’s language, plurals included', async () => {
+    renderWithTheme(<ActivityMonitor view="Summary" setView={() => {}} compact={false} />, { api: createMockApi(), lang: 'fr' })
+    expect(await screen.findByText('Processeur · 4 cœurs')).toBeInTheDocument()
+    expect(screen.getByText('4 volumes')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Résumé' })).toHaveAttribute('aria-current', 'page')
+  })
+
   it('waits for the first measurement, except for services', () => {
     const quiet = { ...createMockApi(), stats: () => () => {} }
     show('CPU', quiet, true)

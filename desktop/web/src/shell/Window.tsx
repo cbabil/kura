@@ -8,7 +8,9 @@
 import { memo, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
+import { appText } from '../apps/registry'
 import type { AppDef, AppProps } from '../apps/types'
+import { useI18n } from '../i18n'
 import { colors } from '../theme'
 import { TITLE_BAR, type Bounds } from './layout'
 import { ComingSoon } from './Panels'
@@ -29,9 +31,9 @@ interface Props {
 type Drag = { kind: 'move' | 'right' | 'bottom' | 'corner'; px: number; py: number; win: Win }
 
 const LIGHTS = [
-  { label: 'Close', color: colors.error, act: 'close' },
-  { label: 'Minimize', color: colors.warning, act: 'minimize' },
-  { label: 'Zoom', color: colors.success, act: 'zoom' },
+  { label: 'window.close', color: colors.error, act: 'close' },
+  { label: 'window.minimize', color: colors.warning, act: 'minimize' },
+  { label: 'window.zoom', color: colors.success, act: 'zoom' },
 ] as const
 
 const HANDLES = [
@@ -42,7 +44,9 @@ const HANDLES = [
 
 function WindowFrame({ win, def, focused, bounds, z, view, actions }: Props) {
   const k = useTheme().kura
+  const { t } = useI18n()
   const { app } = win
+  const title = appText(t, app, 'name')
   const { compact } = bounds
   const drag = useRef<Drag | null>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
@@ -74,7 +78,7 @@ function WindowFrame({ win, def, focused, bounds, z, view, actions }: Props) {
   const Body = def.Body
 
   return (
-    <Box role="dialog" aria-label={def.name} data-focused={focused}
+    <Box role="dialog" aria-label={title} data-focused={focused}
       onPointerDownCapture={() => !focused && actions.focus(app)}
       sx={{
         position: 'absolute', ...frame, zIndex: z, display: win.minimized ? 'none' : 'flex', flexDirection: 'column',
@@ -88,14 +92,14 @@ function WindowFrame({ win, def, focused, bounds, z, view, actions }: Props) {
         }}>
         <Box sx={{ display: 'flex', gap: 1, zIndex: 1 }} onPointerDown={(e) => e.stopPropagation()}>
           {LIGHTS.map((l) => (
-            <Box component="button" key={l.act} aria-label={l.label} onClick={() => actions[l.act](app)}
+            <Box component="button" key={l.act} aria-label={t(l.label)} onClick={() => actions[l.act](app)}
               sx={{ width: 12, height: 12, p: 0, border: 0, borderRadius: '50%', cursor: 'pointer',
                 bgcolor: focused ? l.color : k.edge, '&:hover': { bgcolor: l.color } }} />
           ))}
         </Box>
         <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 13,
           pointerEvents: 'none', color: focused ? 'text.primary' : 'text.secondary' }}>
-          {def.name}
+          {title}
         </Box>
         <Box ref={setSlot} sx={{ ml: 'auto', zIndex: 1 }} onPointerDown={(e) => e.stopPropagation()} />
       </Box>

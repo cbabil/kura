@@ -20,8 +20,8 @@ describe('mock api', () => {
   it('keeps prefs it is given', async () => {
     const api = createMockApi()
     expect(await api.prefs()).toBeNull()
-    await api.savePrefs({ theme: 'light', dock: ['files'], windows: {} })
-    expect(await api.prefs()).toEqual({ theme: 'light', dock: ['files'], windows: {} })
+    await api.savePrefs({ theme: 'light', language: 'fr', dock: ['files'], windows: {} })
+    expect(await api.prefs()).toEqual({ theme: 'light', language: 'fr', dock: ['files'], windows: {} })
   })
 
   it('describes a system', async () => {

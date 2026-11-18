@@ -7,7 +7,7 @@ export interface Entry {
   id: string
   title: string
   subtitle: string
-  /** Heading the entry is listed under: 'Apps', or the app whose section it is. */
+  /** Heading the entry is listed under: "Apps", or the app whose section it is (translated). */
   section: string
   /** App to open. */
   app: string
@@ -27,7 +27,7 @@ function score(entry: Entry, words: string[], query: string): number {
 
 export function rankEntries(entries: Entry[], raw: string, limit = 8): Entry[] {
   const query = raw.trim().toLowerCase()
-  if (!query) return entries.filter((x) => x.section === 'Apps').slice(0, limit)
+  if (!query) return entries.filter((x) => x.view === undefined).slice(0, limit)
   const words = query.split(/\s+/)
   return entries
     .map((entry, i) => ({ entry, i, s: score(entry, words, query) }))

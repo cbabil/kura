@@ -1,7 +1,8 @@
 import { rankEntries, type Entry } from './search'
 
-const e = (id: string, title: string, subtitle = '', section: Entry['section'] = 'Apps'): Entry => ({
-  id, title, subtitle, section, app: 'activity',
+/** An app entry, or a section entry when `section` names its app. */
+const e = (id: string, title: string, subtitle = '', section?: string): Entry => ({
+  id, title, subtitle, app: 'activity', ...(section ? { section, view: title } : { section: 'Apps' }),
 })
 
 const entries = [

@@ -74,3 +74,18 @@ test('phone width: one full-screen window and a bottom dock', async ({ page }) =
   const scroll = await page.evaluate(() => document.documentElement.scrollWidth)
   expect(scroll).toBeLessThanOrEqual(390)
 })
+
+test.describe('in French', () => {
+  test.use({ locale: 'fr-FR' })
+
+  test('signs in and shows the desktop in the browser’s language', async ({ page }) => {
+    await page.goto('/')
+    await page.getByLabel("Nom d'utilisateur").fill('chris')
+    await page.getByLabel('Mot de passe').fill(MOCK_PASSWORD)
+    await page.getByRole('button', { name: 'Se connecter' }).click()
+    await expect(page.getByRole('dialog', { name: "Moniteur d'activité" })).toBeVisible()
+    await expect(page.getByRole('table', { name: 'Processus les plus actifs' })).toBeVisible()
+    await expect(page.getByText(/\d+,\d Go/).first()).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('fr')
+  })
+})

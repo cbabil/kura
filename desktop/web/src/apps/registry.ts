@@ -1,38 +1,51 @@
 /**
- * The built-in apps. Each declares its window, menus and sections here, and
- * the dock, the menu bar and the launcher derive from this list. Apps without
- * a Body show what is coming (ADR-023: D2 Containers, Terminal, Console;
- * D3 Files, Settings; D4 App Catalog).
+ * The built-in apps. Each declares its window, menus, sections and catalogue
+ * keys here, and the dock, the menu bar and the launcher derive from this
+ * list. Apps without a Body show what is coming (ADR-023: D2 Containers,
+ * Terminal, Console; D3 Files, Settings; D4 App Catalog).
  */
+import type { I18n, MessageKey } from '../i18n'
 import type { Entry } from '../shell/search'
-import { ACTIVITY_VIEWS, ActivityMonitor } from './activity/ActivityMonitor'
+import { ACTIVITY_VIEWS, ActivityMonitor, VIEW_LABELS } from './activity/ActivityMonitor'
 import type { AppDef, AppMenu } from './types'
 
-const FILE: AppMenu = { title: 'File', items: [{ label: 'Close Window', run: (c) => c.close() }] }
+const FILE: AppMenu = { title: 'menu.file', items: [{ label: 'menu.closeWindow', run: (c) => c.close() }] }
 const WINDOW: AppMenu = {
-  title: 'Window',
-  items: [{ label: 'Minimize', run: (c) => c.minimize() }, { label: 'Zoom', run: (c) => c.zoom() }],
+  title: 'menu.window',
+  items: [{ label: 'menu.minimize', run: (c) => c.minimize() }, { label: 'menu.zoom', run: (c) => c.zoom() }],
 }
-const HELP: AppMenu = { title: 'Help', items: [{ label: 'Kura Desktop Help', run: (c) => c.about() }] }
+const HELP: AppMenu = { title: 'menu.help', items: [{ label: 'menu.desktopHelp', run: (c) => c.about() }] }
 const STANDARD = [FILE, WINDOW, HELP]
 
-function app(id: string, name: string, blurb: string, w: number, h: number, extra: Partial<AppDef> = {}): AppDef {
-  return { id, name, blurb, size: { w, h }, placement: 'dock', menus: STANDARD, ...extra }
+const ACTIVITY = ACTIVITY_VIEWS.map((id) => ({ id, label: VIEW_LABELS[id] }))
+
+/** Ids that have a name in the catalogue: an app without one does not compile. */
+type AppId = { [K in MessageKey]: K extends `app.${infer I}.name` ? I : never }[MessageKey]
+
+function app(id: AppId, w: number, h: number, extra: Partial<AppDef> = {}): AppDef {
+  return {
+    id, name: `app.${id}.name`, blurb: `app.${id}.blurb`, size: { w, h }, placement: 'dock', menus: STANDARD, ...extra,
+  }
 }
 
 export const APPS: AppDef[] = [
-  app('activity', 'Activity Monitor', 'CPU, memory, storage, network and services', 980, 640, {
+  app('activity', 980, 640, {
     Body: ActivityMonitor,
-    views: ACTIVITY_VIEWS,
-    menus: [FILE, { title: 'View', items: ACTIVITY_VIEWS.map((v) => ({ label: v, run: (c) => c.setView(v) })) }, WINDOW, HELP],
+    views: ACTIVITY,
+    menus: [
+      FILE,
+      { title: 'menu.view', items: ACTIVITY.map((v) => ({ label: v.label, run: (c) => c.setView(v.id) })) },
+      WINDOW,
+      HELP,
+    ],
   }),
-  app('containers', 'Containers', 'Docker apps and compose stacks', 760, 600),
-  app('terminal', 'Terminal', 'A shell on this server, in a window', 760, 480),
-  app('files', 'Files', 'Browse, upload and download your data', 860, 560),
-  app('console', 'Console', 'The system logs', 860, 560),
-  app('settings', 'Settings', 'Network, users, time, storage and updates', 760, 560),
-  app('catalog', 'App Catalog', 'Install apps in one click', 860, 600),
-  app('trash', 'Trash', 'Deleted files, kept until you empty it', 640, 440, { placement: 'end' }),
+  app('containers', 760, 600),
+  app('terminal', 760, 480),
+  app('files', 860, 560),
+  app('console', 860, 560),
+  app('settings', 760, 560),
+  app('catalog', 860, 600),
+  app('trash', 640, 440, { placement: 'end' }),
 ]
 
 export const APP_BY_ID: Record<string, AppDef> = Object.fromEntries(APPS.map((a) => [a.id, a]))
@@ -42,8 +55,21 @@ export const DOCKABLE = APPS.filter((a) => a.placement === 'dock').map((a) => a.
 /** Apps fixed at the dock's end. */
 export const DOCK_END = APPS.filter((a) => a.placement === 'end').map((a) => a.id)
 
-/** Everything the launcher can find: dockable apps and their sections. */
-export const LAUNCHER_ENTRIES: Entry[] = APPS.filter((a) => a.placement === 'dock').flatMap((a) => [
-  { id: `app:${a.id}`, title: a.name, subtitle: a.blurb, section: 'Apps', app: a.id },
-  ...(a.views ?? []).map((v) => ({ id: `${a.id}:${v}`, title: v, subtitle: `${a.name} section`, section: a.name, app: a.id, view: v })),
-])
+/** An app's name or blurb in the current language; unknown apps show their id. */
+export function appText(t: I18n['t'], id: string, part: 'name' | 'blurb'): string {
+  const def = APP_BY_ID[id]
+  return def ? t(def[part]) : id
+}
+
+/** Everything the launcher can find, in the current language: dockable apps and their sections. */
+export function launcherEntries(t: I18n['t']): Entry[] {
+  return APPS.filter((a) => a.placement === 'dock').flatMap((a) => {
+    const name = t(a.name)
+    return [
+      { id: `app:${a.id}`, title: name, subtitle: t(a.blurb), section: t('launcher.apps'), app: a.id },
+      ...(a.views ?? []).map((v) => ({
+        id: `${a.id}:${v.id}`, title: t(v.label), subtitle: t('launcher.section', { app: name }), section: name, app: a.id, view: v.id,
+      })),
+    ]
+  })
+}
