@@ -91,6 +91,10 @@ issue_bar() { printf '%s│%s\n' "${ISSUE_MUTED}" "${1:+  $1}"; }
 # issue_row <label> <value-colour> <value>
 issue_row() { issue_bar "$(printf '%-10s%s%s' "$1" "$2" "$3")"; }
 
+# issue_short_fp <AA:BB:...>: the first and last four bytes, enough to
+# compare with the browser's certificate details
+issue_short_fp() { printf '%s … %s' "${1:0:11}" "${1: -11}"; }
+
 # issue_panel: the right panel, one line each
 issue_panel() {
     local rule="────────────────────────────────────────────────────────"
@@ -101,6 +105,10 @@ issue_panel() {
     issue_row Host "${ISSUE_BRIGHT}" '\n'
     issue_row Address "${ISSUE_BRIGHT}" '\4'
     issue_row Connect "${ISSUE_LIGHT}" "ssh ${LOGIN_USER:-<user>}@\\4"
+    if [ -n "${LOGIN_DESKTOP_FP:-}" ]; then   # Kura Desktop (ADR-023)
+        issue_row Desktop "${ISSUE_LIGHT}" 'https://\4'
+        issue_row Cert "${ISSUE_TEXT}" "SHA-256 $(issue_short_fp "${LOGIN_DESKTOP_FP}")"
+    fi
     [ -z "${LOGIN_PASSWORD:-}" ] ||
         issue_row Password "${ISSUE_AMBER}" "${LOGIN_PASSWORD} · one-time, choose yours at login"
     issue_row System "${ISSUE_TEXT}" "${system}"

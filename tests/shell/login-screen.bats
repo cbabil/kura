@@ -213,3 +213,39 @@ kura_issue_env() {
     [ "$(printf '%s\n' "${plain}" | perl -CS -ne 'print "$.\n" if length($_) - 1 > 120')" = "" ]
     output_has "▲ setup ignored"
 }
+
+# ---- Kura Desktop (ADR-023): where to open it, and how to trust it ----
+
+FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:7E:C2:18:05"
+
+@test "desktop: its address and a short certificate fingerprint, when installed" {
+    LOGIN_DESKTOP_FP="${FP}"
+    run kura_issue
+    output_has 'https://\4'
+    output_has "SHA-256 4F:9A:3B:10 … 7E:C2:18:05"
+    LOGIN_DESKTOP_FP=""
+    run kura_issue
+    ! output_has "https://"
+}
+
+@test "desktop: the panel still fits 120 columns with the desktop lines" {
+    LOGIN_DESKTOP_FP="${FP}"
+    LOGIN_PASSWORD="abcd-efgh-jkmn"
+    run kura_issue
+    local plain
+    plain=$(printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*m//g; s/\033\\][P][0-9A-F][0-9a-f]\\{6\\}//g')
+    [ "$(printf '%s\n' "${plain}" | perl -CS -ne 'print "$.\n" if length($_) - 1 > 120')" = "" ]
+    [ "$(printf '%s\n' "${plain}" | perl -CS -Mutf8 -ne 'print index($_, "│"), "\n" if /│/' | sort -u | wc -l | tr -d ' ')" = 1 ]
+}
+
+@test "kura-issue: reads the desktop's fingerprint once the certificate exists" {
+    kura_issue_env
+    echo "${FP}" > "${BATS_TEST_TMPDIR}/fingerprint"
+    export KURA_DESKTOP_FINGERPRINT="${BATS_TEST_TMPDIR}/fingerprint"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    [ "$status" -eq 0 ]
+    file_has "${KURA_ISSUE}" "SHA-256 4F:9A:3B:10 … 7E:C2:18:05"
+    rm "${BATS_TEST_TMPDIR}/fingerprint"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    ! file_has "${KURA_ISSUE}" "https://"
+}

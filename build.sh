@@ -407,8 +407,32 @@ umount_chroot() {
 
 install_os_pkgs() {
     local ROOTFS="$1"
+    local ARCH="$2"
 
     "${SCRIPTS_DIR}/common/install-os-pkgs.sh" "${ROOTFS}" "${PACKAGES_DIR}"
+    "${SCRIPTS_DIR}/common/install-desktop.sh" "${ROOTFS}" "${PACKAGES_DIR}" "$(build_desktop "${ARCH}")"
+}
+
+# ============================================================================
+# build_desktop -- Kura Desktop's server and helper for one architecture
+# (ADR-023, ADR-024), unless already built (CI builds them in an earlier step)
+# or left out (OS_DESKTOP=false). Prints the folder holding the two binaries.
+# ============================================================================
+
+build_desktop() {
+    local machine
+    case "$1" in
+        amd64) machine="x86_64" ;;
+        arm64) machine="aarch64" ;;
+        *) print_error "Kura Desktop: no build for architecture $1"; exit 1 ;;
+    esac
+    local dist="${PROJECT_DIR}/desktop/dist/${machine}"
+    if [ "${OS_DESKTOP:-true}" != "false" ] && \
+       { [ ! -f "${dist}/kura-desktopd" ] || [ ! -f "${dist}/kura-helper" ]; }; then
+        print_status "  Building Kura Desktop for ${machine}..." >&2
+        make -C "${PROJECT_DIR}/desktop" dist ARCH="${machine}" >&2
+    fi
+    echo "${dist}"
 }
 
 # ============================================================================
@@ -721,7 +745,7 @@ build_target() {
     # Phase 3: Install OS packages
     print_status "[3/6] Installing OS packages..."
     print_status "  Source: ${PACKAGES_DIR}/"
-    install_os_pkgs "${ROOTFS}"
+    install_os_pkgs "${ROOTFS}" "${ARCH}"
 
     # Phase 4: Customize
     print_status "[4/6] Customizing rootfs (common + ${TARGET_DIRNAME})..."

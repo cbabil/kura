@@ -478,3 +478,46 @@ stub_boot_fat() {  # a FAT boot partition holding BOOT's files
     [ "$(disk_partition mmcblk0 1)" = "mmcblk0p1" ]
     [ "$(disk_partition sda 1)" = "sda1" ]
 }
+
+# ---- the desktop (ADR-023): on unless the setup turns it off ----
+
+desktop_installed() {
+    mkdir -p "${SETUP_ROOT}/usr/lib/systemd/system"
+    touch "${SETUP_ROOT}/usr/lib/systemd/system/kura-desktopd.service"
+}
+
+@test "validate_setup: desktop must be true or false" {
+    echo '{"version":1,"desktop":"no"}' > "${BATS_TEST_TMPDIR}/s.json"
+    run validate_setup "${BATS_TEST_TMPDIR}/s.json"
+    [ "$status" -ne 0 ]
+    output_has "desktop has the wrong type"
+}
+
+@test "setup_desktop: off disables the desktop and its helper" {
+    desktop_installed
+    run setup_desktop false
+    [ "$status" -eq 0 ]
+    file_has "${CALLS}" "systemctl --no-block disable --now kura-desktopd.service kura-helper.service"
+}
+
+@test "setup_desktop: on keeps the image's default" {
+    desktop_installed
+    run setup_desktop true
+    [ "$status" -eq 0 ]
+    [ ! -e "${CALLS}" ]
+}
+
+@test "setup_desktop: an image built without the desktop has nothing to turn off" {
+    run setup_desktop false
+    [ "$status" -eq 0 ]
+    [ ! -e "${CALLS}" ]
+}
+
+@test "apply_setup_dir: \"desktop\": false turns the desktop off" {
+    desktop_installed
+    echo '{"version":1,"desktop":false}' > "${BOOT}/kura-setup.json"
+    run apply_setup_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    file_has "${CALLS}" "systemctl --no-block disable --now kura-desktopd.service kura-helper.service"
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = "applied" ]
+}

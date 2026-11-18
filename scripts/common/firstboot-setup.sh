@@ -11,7 +11,7 @@
 #    "user":{"name":"chris","passwordHash":"$y$..."},
 #    "ssh":{"enabled":true,"passwordAuth":false,"authorizedKeys":["ssh-ed25519 ..."]},
 #    "wifi":{"ssid":"Home","psk":"<8-63 chars or 64 hex>","hidden":false,"country":"FR"},
-#    "timezone":"Europe/Paris", "keyboard":"fr",
+#    "timezone":"Europe/Paris", "keyboard":"fr", "desktop":true,
 #    "storage":{"rootGiB":16,"tmpGiB":1,"volumes":[...]}}
 #
 # The disk layout (storage) is built earlier in the boot by
@@ -101,6 +101,14 @@ setup_ssh() {
     install -d -m 0700 "${dir}" &&
     printf '%s\n' "$@" | write_atomic "${dir}/authorized_keys" 600 &&
     chown -R "${user}:" "${dir}"
+}
+
+# setup_desktop <enabled>: "desktop": false turns Kura Desktop off (ADR-023).
+# An image built without it (KURA_DESKTOP=0) has nothing to turn off.
+setup_desktop() {
+    [ "$1" = "false" ] || return 0
+    [ -e "${SETUP_ROOT}/usr/lib/systemd/system/${SETUP_BRAND}-desktopd.service" ] || return 0
+    systemctl --no-block disable --now "${SETUP_BRAND}-desktopd.service" "${SETUP_BRAND}-helper.service"
 }
 
 # setup_wifi_config <ssid> <psk> <hidden> <country|"">: the key reaches jq
@@ -196,6 +204,9 @@ apply_setup_file() {
     [ -z "${v}" ] || setup_timezone "${v}" || return 1
     v=$(setup_get "${f}" .keyboard)
     [ -z "${v}" ] || setup_keyboard "${v}" || return 1
+    if setup_has "${f}" desktop; then
+        setup_desktop "$(jq -r '.desktop' "${f}")" || return 1
+    fi
     setup_tmp "${f}" || return 1
     storage_note
 }

@@ -1,10 +1,14 @@
 /**
  * The real API: fetch for requests, a WebSocket for the stats stream.
  * The session cookie is HttpOnly and same-origin, so no token is handled here.
+ * Requests that change something carry X-Kura-Request: a custom header needs
+ * a CORS preflight, so another site cannot forge them; kura-desktopd refuses
+ * POST and PUT without it (CSRF defence, alongside SameSite=Strict and Origin).
  */
 import type { Api, LoginError, LoginResult, Prefs, StatsMessage, SystemInfo, User } from './types'
 
-const JSON_HEADERS = { 'content-type': 'application/json' }
+const CHANGE = { 'x-kura-request': '1' }
+const JSON_HEADERS = { ...CHANGE, 'content-type': 'application/json' }
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(path, { credentials: 'same-origin', ...init })
@@ -51,7 +55,7 @@ export const httpApi: Api = {
   },
   login,
   async logout() {
-    await request('/api/logout', { method: 'POST' })
+    await request('/api/logout', { method: 'POST', headers: CHANGE })
   },
   system: () => json<SystemInfo>('/api/system'),
   async prefs() {

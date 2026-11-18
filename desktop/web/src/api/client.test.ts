@@ -36,6 +36,7 @@ describe('httpApi', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/login')
     expect(init.method).toBe('POST')
+    expect(init.headers['x-kura-request']).toBe('1')
     expect(JSON.parse(init.body)).toEqual({ user: 'chris', password: 'pw' })
     expect(await httpApi.login('chris', 'x')).toEqual({ ok: false, error: 'wrong' })
     expect(await httpApi.login('chris', 'x')).toEqual({ ok: false, error: 'expired' })
@@ -56,6 +57,7 @@ describe('httpApi', () => {
     expect(await httpApi.prefs()).toBeNull()
     await httpApi.savePrefs(prefs as never)
     expect(fetchMock.mock.calls[3][1].method).toBe('PUT')
+    expect(fetchMock.mock.calls[3][1].headers['x-kura-request']).toBe('1')
   })
 
   it('throws on a failed request it cannot recover from', async () => {
@@ -67,7 +69,7 @@ describe('httpApi', () => {
   it('posts logout', async () => {
     fetchMock.mockReturnValueOnce(reply(204))
     await httpApi.logout()
-    expect(fetchMock).toHaveBeenCalledWith('/api/logout', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/logout', expect.objectContaining({ method: 'POST', headers: { 'x-kura-request': '1' } }))
   })
 
   it('streams stats over a WebSocket and closes it', () => {
