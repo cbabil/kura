@@ -653,6 +653,7 @@ dependencies = [
 name = "kura-desktop-core"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "getrandom 0.3.4",
  "procfs-core",
  "rustix",

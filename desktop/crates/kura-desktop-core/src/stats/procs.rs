@@ -23,13 +23,16 @@ struct Seen {
     pid: i32,
     name: String,
     cpu: f64,
+    /// Resident pages from `stat`, only to rank before reading `status`.
+    rss_pages: u64,
 }
 
 impl ProcTracker {
-    /// Reads every process and returns the [`TOP_PROCS`] busiest by CPU,
-    /// then by memory; `secs` is the time since the last reading.
+    /// Reads every process's `stat` and returns the [`TOP_PROCS`] busiest by
+    /// CPU, then by memory; only those have their `status` read. `secs` is
+    /// the time since the last reading.
     pub fn read(&mut self, root: &SysRoot, accounts: &Accounts, secs: f64) -> Vec<Proc> {
-        let mut ticks = HashMap::new();
+        let mut ticks = HashMap::with_capacity(self.prev.len());
         let mut seen: Vec<Seen> = pids(root)
             .filter_map(|pid| {
                 let stat = Stat::from_read(root.open(format!("/proc/{pid}/stat")).ok()?).ok()?;
@@ -37,14 +40,13 @@ impl ProcTracker {
                 ticks.insert(pid, now);
                 let delta = self.prev.get(&pid).map_or(0, |p| now.saturating_sub(*p));
                 let cpu = if secs > 0.0 { delta as f64 * 100.0 / (secs * USER_HZ as f64) } else { 0.0 };
-                Some(Seen { pid, name: stat.comm, cpu })
+                Some(Seen { pid, name: stat.comm, cpu, rss_pages: stat.rss })
             })
             .collect();
         self.prev = ticks;
-        let mut procs: Vec<Proc> = seen.drain(..).filter_map(|s| with_status(root, accounts, s)).collect();
-        procs.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.mem.cmp(&a.mem)).then(a.pid.cmp(&b.pid)));
-        procs.truncate(TOP_PROCS);
-        procs
+        seen.sort_by(|a, b| b.cpu.total_cmp(&a.cpu).then(b.rss_pages.cmp(&a.rss_pages)).then(a.pid.cmp(&b.pid)));
+        seen.truncate(TOP_PROCS);
+        seen.into_iter().filter_map(|s| with_status(root, accounts, s)).collect()
     }
 }
 

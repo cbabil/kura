@@ -12,12 +12,52 @@ pub const DAY_POINTS: usize = 1440;
 /// The day ring's step (`DAY_STEP_MS` in types.ts).
 pub const DAY_STEP_MS: i64 = 60_000;
 
+/// Running sums of the minute being filled.
+#[derive(Debug, Default)]
+struct Minute {
+    bucket: i64,
+    n: u32,
+    cpu: f64,
+    mem_used: f64,
+    mem_cache: f64,
+    net_rx: f64,
+    net_tx: f64,
+    temp_c: Option<f64>,
+}
+
+impl Minute {
+    fn add(&mut self, s: &Sample) {
+        self.n += 1;
+        self.cpu += s.cpu;
+        self.mem_used += s.mem_used as f64;
+        self.mem_cache += s.mem_cache as f64;
+        self.net_rx += s.net_rx;
+        self.net_tx += s.net_tx;
+        self.temp_c = self.temp_c.into_iter().chain(s.temp_c).reduce(f64::max);
+    }
+
+    /// The minute's means and hottest temperature, on top of its last sample
+    /// (which gives the time, memory total and disks).
+    fn average(&self, last: &Sample) -> Sample {
+        let n = f64::from(self.n);
+        Sample {
+            cpu: round1(self.cpu / n),
+            mem_used: (self.mem_used / n) as u64,
+            mem_cache: (self.mem_cache / n) as u64,
+            net_rx: (self.net_rx / n).round(),
+            net_tx: (self.net_tx / n).round(),
+            temp_c: self.temp_c,
+            ..last.clone()
+        }
+    }
+}
+
 /// Both rings and the minute being filled.
 #[derive(Debug, Default)]
 pub struct History {
     hour: VecDeque<Sample>,
     day: VecDeque<Sample>,
-    minute: Vec<Sample>,
+    minute: Minute,
 }
 
 impl History {
@@ -29,12 +69,15 @@ impl History {
     /// Adds a sample; closing a minute adds its average to the day ring.
     pub fn push(&mut self, sample: Sample) {
         let bucket = sample.t.div_euclid(DAY_STEP_MS);
-        if self.minute.first().is_some_and(|s| s.t.div_euclid(DAY_STEP_MS) != bucket) {
-            let avg = average(&self.minute);
-            self.minute.clear();
-            push_bounded(&mut self.day, avg, DAY_POINTS);
+        if self.minute.n > 0 && self.minute.bucket != bucket {
+            if let Some(last) = self.hour.back() {
+                let avg = self.minute.average(last);
+                push_bounded(&mut self.day, avg, DAY_POINTS);
+            }
+            self.minute = Minute::default();
         }
-        self.minute.push(sample.clone());
+        self.minute.bucket = bucket;
+        self.minute.add(&sample);
         push_bounded(&mut self.hour, sample, HOUR_POINTS);
     }
 
@@ -56,38 +99,12 @@ fn push_bounded(ring: &mut VecDeque<Sample>, s: Sample, cap: usize) {
     ring.push_back(s);
 }
 
-/// The mean of rates and sizes, the hottest temperature and the latest disks.
-fn average(samples: &[Sample]) -> Sample {
-    let last = samples.last().cloned().expect("a minute holds at least one sample");
-    let n = samples.len() as f64;
-    let mean = |f: fn(&Sample) -> f64| samples.iter().map(f).sum::<f64>() / n;
-    Sample {
-        cpu: round1(mean(|s| s.cpu)),
-        mem_used: mean(|s| s.mem_used as f64) as u64,
-        mem_cache: mean(|s| s.mem_cache as f64) as u64,
-        net_rx: mean(|s| s.net_rx).round(),
-        net_tx: mean(|s| s.net_tx).round(),
-        temp_c: samples.iter().filter_map(|s| s.temp_c).reduce(f64::max),
-        ..last
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    pub(crate) fn sample(t: i64, cpu: f64) -> Sample {
-        Sample {
-            t,
-            cpu,
-            mem_used: 100,
-            mem_cache: 10,
-            mem_total: 1000,
-            net_rx: cpu,
-            net_tx: 0.0,
-            temp_c: None,
-            disks: vec![],
-        }
+    fn sample(t: i64, cpu: f64) -> Sample {
+        Sample { t, cpu, mem_used: 100, mem_cache: 10, mem_total: 1000, net_rx: cpu, ..Sample::default() }
     }
 
     #[test]

@@ -16,8 +16,8 @@ use crate::units::{Unit, UnitSource};
 pub const PERIOD: Duration = Duration::from_secs(2);
 /// Units are listed every this many ticks (10 s), since that is costlier.
 const UNITS_EVERY: u64 = 5;
-/// Ticks between reloads of user names (5 min).
-const ACCOUNTS_EVERY: u64 = 150;
+/// Ticks between re-reads of user names, sensors and mounts (1 min).
+const REFRESH_EVERY: u64 = 30;
 
 #[derive(Serialize)]
 struct Ranges<'a> {
@@ -101,7 +101,7 @@ fn to_json(msg: &Message<'_>) -> String {
 /// Drives a [`Collector`] and a [`UnitSource`] into a [`StatsHub`].
 pub struct Sampler {
     hub: Arc<StatsHub>,
-    collector: Option<Collector>,
+    collector: Arc<Mutex<Collector>>,
     units: Arc<dyn UnitSource>,
     tick: u64,
 }
@@ -109,32 +109,29 @@ pub struct Sampler {
 impl Sampler {
     /// A sampler feeding `hub`.
     pub fn new(hub: Arc<StatsHub>, collector: Collector, units: Arc<dyn UnitSource>) -> Self {
-        Self { hub, collector: Some(collector), units, tick: 0 }
+        Self { hub, collector: Arc::new(Mutex::new(collector)), units, tick: 0 }
     }
 
-    /// Takes one sample; file reads run on the blocking pool.
+    /// Takes one sample; file reads run on the blocking pool while units
+    /// are listed.
     pub async fn step(&mut self) {
-        let Some(mut collector) = self.collector.take() else { return };
-        let reload = self.tick > 0 && self.tick.is_multiple_of(ACCOUNTS_EVERY);
+        let refresh = self.tick > 0 && self.tick.is_multiple_of(REFRESH_EVERY);
         let t = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64);
-        let joined = tokio::task::spawn_blocking(move || {
-            if reload {
-                collector.reload_accounts();
+        let collector = self.collector.clone();
+        let read = tokio::task::spawn_blocking(move || {
+            let mut c = collector.lock().unwrap_or_else(PoisonError::into_inner);
+            if refresh {
+                c.refresh();
             }
-            let result = collector.collect(t, Instant::now());
-            (collector, result)
-        })
-        .await;
-        let Ok((collector, result)) = joined else {
-            tracing::error!("the stats collector panicked; sampling stops");
-            return;
-        };
-        self.collector = Some(collector);
-        let units = if self.tick.is_multiple_of(UNITS_EVERY) { self.list_units().await } else { None };
+            c.collect(t, Instant::now())
+        });
+        let list = async { if self.tick.is_multiple_of(UNITS_EVERY) { self.list_units().await } else { None } };
+        let (read, units) = tokio::join!(read, list);
         self.tick += 1;
-        match result {
-            Ok((sample, procs)) => self.hub.record(sample, procs, units),
-            Err(e) => tracing::warn!("stats sample skipped: {e}"),
+        match read {
+            Ok(Ok((sample, procs))) => self.hub.record(sample, procs, units),
+            Ok(Err(e)) => tracing::warn!("stats sample skipped: {e}"),
+            Err(e) => tracing::error!("stats collector failed: {e}"),
         }
     }
 

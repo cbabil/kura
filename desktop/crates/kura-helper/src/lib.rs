@@ -1,5 +1,5 @@
 //! kura-helper: the root half of Kura Desktop (ADR-023). In D1 it answers one
-//! D-Bus method, `io.kura.Helper.Authenticate(user, password)`, through PAM's
+//! D-Bus method, `io.kura.Helper1.Authenticate(user, password)`, through PAM's
 //! `login` service so expiry, locks and faillock behave as at the console.
 
 pub mod authenticate;

@@ -1,4 +1,4 @@
-//! The answer of `io.kura.Helper.Authenticate`, shared by the helper (which
+//! The answer of `io.kura.Helper1.Authenticate`, shared by the helper (which
 //! sends it over D-Bus as `(ok, reason, admin)`) and desktopd (which reads it).
 
 /// The `reason` for a refused password.
@@ -48,6 +48,13 @@ pub fn valid_user_name(name: &str) -> bool {
 /// The longest password passed on, in bytes; longer ones are refused.
 pub const MAX_PASSWORD_BYTES: usize = 512;
 
+/// True when a sign-in is worth asking PAM about: a valid user name and a
+/// non-empty password of at most [`MAX_PASSWORD_BYTES`] without NUL bytes.
+/// desktopd and the helper both apply it, so neither trusts the other.
+pub fn well_formed(user: &str, password: &str) -> bool {
+    valid_user_name(user) && !password.is_empty() && password.len() <= MAX_PASSWORD_BYTES && !password.contains('\0')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,6 +71,22 @@ mod tests {
             assert_eq!(AuthOutcome::from_wire(ok, &reason, admin), o);
         }
         assert_eq!(AuthOutcome::from_wire(false, "locked", true), AuthOutcome::Wrong);
+    }
+
+    #[test]
+    fn well_formed_sign_ins() {
+        let long = "k".repeat(MAX_PASSWORD_BYTES + 1);
+        let cases = [
+            ("kura", "pw", true),
+            ("Bad Name", "pw", false),
+            ("kura", "", false),
+            ("kura", "p\0w", false),
+            ("kura", long.as_str(), false),
+            ("kura", &long[1..], true),
+        ];
+        for (user, password, want) in cases {
+            assert_eq!(well_formed(user, password), want, "{user} {}", password.len());
+        }
     }
 
     #[test]

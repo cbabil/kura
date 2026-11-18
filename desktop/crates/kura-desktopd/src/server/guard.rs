@@ -70,16 +70,19 @@ pub async fn csrf(State(state): State<Arc<AppState>>, req: Request, next: Next) 
     next.run(req).await
 }
 
-/// The signed-in user; extracting it fails with 401 without a live session.
-pub struct Authed(pub SessionUser);
+/// The signed-in user and their session id; extracting it fails with 401
+/// without a live session.
+pub struct Authed {
+    pub id: String,
+    pub user: SessionUser,
+}
 
 impl FromRequestParts<Arc<AppState>> for Authed {
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Response> {
         session_id(&parts.headers)
-            .and_then(|id| state.sessions.touch(id, Instant::now()))
-            .map(Authed)
+            .and_then(|id| Some(Authed { id: id.to_owned(), user: state.sessions.touch(id, Instant::now())? }))
             .ok_or_else(|| error(StatusCode::UNAUTHORIZED, "signed_out"))
     }
 }

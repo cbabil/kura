@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use kura_desktop_core::root::SysRoot;
+use kura_desktop_core::stats::fixture::Fixture;
 use kura_helper::{Authenticator, HelperIface, OBJECT_PATH, Pam, PamVerdict};
 
 use super::*;
@@ -17,20 +17,20 @@ impl Pam for FakePam {
 }
 
 /// desktopd's client against kura-helper's real interface, over a socket pair.
-async fn peer() -> (DbusHelper, zbus::Connection, tempfile::TempDir) {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::create_dir(dir.path().join("etc")).unwrap();
-    std::fs::write(dir.path().join("etc/group"), "sudo:x:27:anna\n").unwrap();
-    let auth = Arc::new(Authenticator::new(Box::new(FakePam), SysRoot::new(dir.path())));
+async fn peer() -> (DbusHelper, zbus::Connection, Fixture) {
+    let dir = Fixture::full();
+    dir.write("etc/group", "sudo:x:27:anna\n");
+    dir.write("etc/passwd", "anna:x:1000:1000::/:/bin/sh\nbob:x:1001:1001::/:/bin/sh\nold:x:1002:1002::/:/bin/sh\n");
+    let auth = Arc::new(Authenticator::new(Box::new(FakePam), dir.root()));
     let (a, b) = std::os::unix::net::UnixStream::pair().unwrap();
     let server = zbus::connection::Builder::unix_stream(a)
         .server(zbus::Guid::generate())
         .p2p()
-        .serve_at(OBJECT_PATH, HelperIface::new(auth))
+        .serve_at(OBJECT_PATH, HelperIface::new(auth, None))
         .build();
     let client = zbus::connection::Builder::unix_stream(b).p2p().build();
     let (server, client) = tokio::try_join!(server, client).unwrap();
-    (DbusHelper::new(client), server, dir)
+    (DbusHelper::new(&client).await.unwrap(), server, dir)
 }
 
 #[tokio::test]

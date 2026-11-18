@@ -1,6 +1,7 @@
 //! Turns readings of `/proc` and `/sys` into a [`Sample`] and the busiest
 //! processes. Rates come from the change since the previous call.
 
+use std::path::PathBuf;
 use std::time::Instant;
 
 use super::cpu::{self, CpuTicks};
@@ -11,11 +12,14 @@ use super::{Proc, Sample, StatsError, mem, round1, temp};
 use crate::accounts::Accounts;
 use crate::root::SysRoot;
 
-/// Reads the system on demand, keeping what rates need between calls.
+/// Reads the system on demand, keeping what rates need between calls and
+/// what rarely changes (accounts, sensors, mounts) until [`Collector::refresh`].
 pub struct Collector {
     root: SysRoot,
     fs: Box<dyn FsUsage>,
     accounts: Accounts,
+    sensors: Vec<PathBuf>,
+    mounts: Vec<PathBuf>,
     prev: Option<(Instant, CpuTicks, NetBytes)>,
     procs: ProcTracker,
 }
@@ -23,13 +27,27 @@ pub struct Collector {
 impl Collector {
     /// A collector reading under `root` and measuring volumes with `fs`.
     pub fn new(root: SysRoot, fs: Box<dyn FsUsage>) -> Self {
-        let accounts = Accounts::load(&root);
-        Self { root, fs, accounts, prev: None, procs: ProcTracker::default() }
+        let mut c = Self {
+            root,
+            fs,
+            accounts: Accounts::default(),
+            sensors: Vec::new(),
+            mounts: Vec::new(),
+            prev: None,
+            procs: ProcTracker::default(),
+        };
+        c.refresh();
+        c
     }
 
-    /// Reloads user names, which change rarely.
-    pub fn reload_accounts(&mut self) {
+    /// Re-reads user names, temperature sensors and mounted volumes.
+    pub fn refresh(&mut self) {
         self.accounts = Accounts::load(&self.root);
+        self.sensors = temp::sensors(&self.root);
+        self.mounts = disks::mounts(&self.root).unwrap_or_else(|e| {
+            tracing::warn!("volumes will not be listed: {e}");
+            Vec::new()
+        });
     }
 
     /// Takes one sample at Unix time `t` (ms) and monotonic time `now`.
@@ -57,8 +75,8 @@ impl Collector {
             mem_total: memory.total,
             net_rx: rx.round(),
             net_tx: tx.round(),
-            temp_c: temp::read(&self.root),
-            disks: disks::read(&self.root, self.fs.as_ref()).unwrap_or_default(),
+            temp_c: temp::read(&self.sensors),
+            disks: disks::usage(&self.root, self.fs.as_ref(), &self.mounts),
         };
         let procs = self.procs.read(&self.root, &self.accounts, secs);
         Ok((sample, procs))
@@ -68,30 +86,22 @@ impl Collector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stats::fixture::Fixture;
-    use std::path::Path;
+    use crate::stats::fixture::{FakeFs, Fixture};
     use std::time::Duration;
-
-    struct Fake;
-    impl FsUsage for Fake {
-        fn usage(&self, _: &Path) -> std::io::Result<(u64, u64)> {
-            Ok((5, 10))
-        }
-    }
 
     #[test]
     fn two_readings_give_rates() {
         let f = Fixture::full();
-        let mut c = Collector::new(f.root(), Box::new(Fake));
+        let mut c = Collector::new(f.root(), Box::new(FakeFs));
         let t0 = Instant::now();
         let (first, procs) = c.collect(1_000, t0).unwrap();
         assert_eq!((first.cpu, first.net_rx), (0.0, 0.0));
         assert_eq!(first.temp_c, Some(51.3));
-        assert_eq!(first.disks.len(), 3);
+        assert_eq!(first.disks.len(), 2, "/srv cannot be measured");
         assert!(!procs.is_empty());
         f.write("proc/stat", &crate::stats::fixture::STAT.replacen("cpu  1000 0 500 8000", "cpu  1100 0 500 8300", 1));
         f.write("proc/net/dev", &crate::stats::fixture::NET_DEV.replace("eth0: 1000", "eth0: 5000"));
-        c.reload_accounts();
+        c.refresh();
         let (second, _) = c.collect(3_000, t0 + Duration::from_secs(2)).unwrap();
         assert_eq!((second.cpu, second.net_rx, second.net_tx), (25.0, 2000.0, 0.0));
         assert_eq!(second.mem_total, 16_000_000 * 1024);
@@ -102,9 +112,10 @@ mod tests {
         let f = Fixture::full();
         std::fs::remove_file(f.dir.path().join("proc/net/dev")).unwrap();
         std::fs::remove_file(f.dir.path().join("proc/self/mountinfo")).unwrap();
-        let mut c = Collector::new(f.root(), Box::new(Fake));
+        let mut c = Collector::new(f.root(), Box::new(FakeFs));
         let (s, _) = c.collect(0, Instant::now()).unwrap();
         assert!(s.disks.is_empty());
+        assert_eq!(s.temp_c, Some(51.3));
         std::fs::remove_file(f.dir.path().join("proc/meminfo")).unwrap();
         assert!(c.collect(0, Instant::now()).is_err());
     }

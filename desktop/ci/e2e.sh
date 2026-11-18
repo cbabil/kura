@@ -3,12 +3,13 @@
 # the system bus behind the real D-Bus policy, kura-desktopd (no dev-auth) on
 # HTTPS with a throwaway certificate, sign-in through PAM, the API and the
 # stats WebSocket, and desktopd's memory. Run from desktop/ after
-# `cargo build --release`; needs sudo, openssl and curl.
-# Usage: ci/e2e.sh <user> <password>
+# `cargo build --release` (`make e2e` does both); needs sudo, openssl, curl
+# and jq.
+# Usage: KURA_PAM_PASSWORD=<password> ci/e2e.sh <user>
 set -euo pipefail
 
-user="$1"
-password="$2"
+user="${1:?Usage: KURA_PAM_PASSWORD=<password> $0 <user>}"
+password="${KURA_PAM_PASSWORD:?set KURA_PAM_PASSWORD to the password of the user}"
 bin="target/release"
 state="$(mktemp -d)"
 base="https://localhost:8443"
@@ -16,7 +17,7 @@ policy=/etc/dbus-1/system.d/io.kura.Helper.conf
 
 cleanup() {
     sudo pkill -f "${bin}/kura-helper" || true
-    pkill -f "${bin}/kura-desktopd" || true
+    sudo pkill -f "${bin}/kura-desktopd" || true
     sudo rm -f "${policy}"
 }
 trap cleanup EXIT
@@ -26,17 +27,21 @@ fail() {
     exit 1
 }
 
-# The policy names the kura-desktop user; here desktopd runs as the CI user.
-sed "s/user=\"kura-desktop\"/user=\"$(id -un)\"/" packaging/dbus/io.kura.Helper.conf | sudo tee "${policy}" >/dev/null
+# As in the image: desktopd runs as kura-desktop, the only user the D-Bus
+# policy and the helper itself accept as a caller.
+id kura-desktop >/dev/null 2>&1 || sudo useradd --system --no-create-home --shell /usr/sbin/nologin kura-desktop
+sed -e 's/__BRAND_NAME__/Kura/g' -e 's/__BRAND__/kura/g' ../packages/os-desktop/src/io.kura.Helper.conf \
+    | sudo tee "${policy}" >/dev/null
 sudo systemctl reload dbus
 sudo "${bin}/kura-helper" &
 sleep 1
 
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 1 -subj /CN=localhost \
     -addext subjectAltName=DNS:localhost -keyout "${state}/tls.key" -out "${state}/tls.crt" 2>/dev/null
-"${bin}/kura-desktopd" --listen 127.0.0.1:8443 --state-dir "${state}" &
-desktopd=$!
+sudo chown -R kura-desktop "${state}"
+sudo -u kura-desktop env KURA_STATE_DIR="${state}" "${bin}/kura-desktopd" --listen 127.0.0.1:8443 &
 sleep 2
+desktopd="$(pgrep -u kura-desktop -f "${bin}/kura-desktopd")"
 
 # status <expected> <curl args...>: asserts the HTTP status of a request.
 status() {
@@ -46,17 +51,18 @@ status() {
     [ "${got}" = "${want}" ] || fail "$* gave ${got}, wanted ${want}"
 }
 
+# The sign-in body on stdout, so the password never appears in a command line.
 login() {
-    printf '{"user":"%s","password":"%s"}' "$1" "$2"
+    jq -nc --arg u "$1" --arg p "$2" '{user: $u, password: $p}'
 }
 
+post=(-X POST -H 'content-type: application/json' --data @-)
 status 401 "${base}/api/session"
-status 403 -X POST -H 'content-type: application/json' --data "$(login "${user}" "${password}")" "${base}/api/login"
-status 401 -X POST -H 'x-kura-request: 1' -H 'content-type: application/json' \
-    --data "$(login "${user}" wrong)" "${base}/api/login"
-jar="${state}/cookies"
-status 200 -c "${jar}" -X POST -H 'x-kura-request: 1' -H 'content-type: application/json' \
-    --data "$(login "${user}" "${password}")" "${base}/api/login"
+login "${user}" "${password}" | status 403 "${post[@]}" "${base}/api/login"
+login "${user}" wrong | status 401 -H 'x-kura-request: 1' "${post[@]}" "${base}/api/login"
+login root "${password}" | status 401 -H 'x-kura-request: 1' "${post[@]}" "${base}/api/login"
+jar="$(mktemp)"
+login "${user}" "${password}" | status 200 -c "${jar}" -H 'x-kura-request: 1' "${post[@]}" "${base}/api/login"
 status 200 -b "${jar}" "${base}/api/session"
 curl -sk -b "${jar}" "${base}/api/system" | grep -q '"cores":[1-9]' || fail "/api/system has no cores"
 

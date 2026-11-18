@@ -4,7 +4,7 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 use crate::authenticate::{Pam, PamVerdict};
 
@@ -17,6 +17,10 @@ const PAM_PROMPT_ECHO_ON: c_int = 2;
 const PAM_SILENT: c_int = 0x8000;
 const PAM_DISALLOW_NULL_AUTHTOK: c_int = 0x1;
 const PAM_MAX_NUM_MSG: c_int = 32;
+const PAM_TTY: c_int = 3;
+const PAM_FAIL_DELAY: c_int = 10;
+/// What `PAM_TTY` says, so modules and logs can tell these sign-ins apart.
+const TTY: &CStr = c"kura-desktop";
 
 #[repr(C)]
 struct PamMessage {
@@ -44,12 +48,18 @@ unsafe extern "C" {
     fn pam_authenticate(pamh: *mut c_void, flags: c_int) -> c_int;
     fn pam_acct_mgmt(pamh: *mut c_void, flags: c_int) -> c_int;
     fn pam_end(pamh: *mut c_void, status: c_int) -> c_int;
+    fn pam_set_item(pamh: *mut c_void, item_type: c_int, item: *const c_void) -> c_int;
 }
+
+/// Replaces `pam_faildelay`'s sleep: a sleeping check would hold the helper's
+/// one-at-a-time lock, so desktopd delays failures instead.
+unsafe extern "C" fn no_fail_delay(_status: c_int, _usec: std::ffi::c_uint, _data: *mut c_void) {}
 
 /// What the conversation answers with.
 struct Answers {
     user: CString,
-    password: CString,
+    /// Wiped when the check is over.
+    password: Zeroizing<CString>,
 }
 
 /// Answers PAM's prompts: the password for hidden prompts, the user name for
@@ -75,7 +85,7 @@ unsafe extern "C" fn converse(
         for i in 0..n as usize {
             let msg = *msgs.add(i);
             let text = match (*msg).msg_style {
-                PAM_PROMPT_ECHO_OFF => Some(&answers.password),
+                PAM_PROMPT_ECHO_OFF => Some(&*answers.password),
                 PAM_PROMPT_ECHO_ON => Some(&answers.user),
                 _ => None,
             };
@@ -88,26 +98,26 @@ unsafe extern "C" fn converse(
     PAM_SUCCESS
 }
 
-/// Linux-PAM with a fixed service name.
-pub struct LinuxPam {
-    service: CString,
-}
+/// The PAM service: `login`, so sign-in behaves as at the console.
+const SERVICE: &CStr = c"login";
+
+/// Linux-PAM with the [`SERVICE`] service.
+#[derive(Debug, Default)]
+pub struct LinuxPam;
 
 impl LinuxPam {
-    /// PAM with the `login` service, as at the console.
-    pub fn login() -> Self {
-        Self { service: CString::from(c"login") }
-    }
-
     fn transaction(&self, answers: &Answers) -> PamVerdict {
         let conv = PamConv { conv: converse, appdata_ptr: answers as *const Answers as *mut c_void };
         let mut handle: *mut c_void = ptr::null_mut();
         // SAFETY: every pointer outlives the transaction, and `pam_end` is
         // called on every path once `pam_start` succeeded.
         unsafe {
-            if pam_start(self.service.as_ptr(), answers.user.as_ptr(), &conv, &mut handle) != PAM_SUCCESS {
+            if pam_start(SERVICE.as_ptr(), answers.user.as_ptr(), &conv, &mut handle) != PAM_SUCCESS {
                 return PamVerdict::Wrong;
             }
+            let delay: unsafe extern "C" fn(c_int, std::ffi::c_uint, *mut c_void) = no_fail_delay;
+            pam_set_item(handle, PAM_FAIL_DELAY, delay as *const c_void);
+            pam_set_item(handle, PAM_TTY, TTY.as_ptr().cast());
             let mut status = pam_authenticate(handle, PAM_SILENT | PAM_DISALLOW_NULL_AUTHTOK);
             let verdict = if status != PAM_SUCCESS {
                 PamVerdict::Wrong
@@ -135,19 +145,7 @@ impl Pam for LinuxPam {
         let (Ok(user), Ok(password)) = (CString::new(user), CString::new(password)) else {
             return PamVerdict::Wrong;
         };
-        let answers = Answers { user, password };
-        let verdict = self.transaction(&answers);
-        let mut secret = answers.password.into_bytes_with_nul();
-        secret.zeroize();
-        verdict
-    }
-}
-
-/// Shows the service in logs.
-impl std::fmt::Debug for LinuxPam {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let service: &CStr = &self.service;
-        write!(f, "LinuxPam({service:?})")
+        self.transaction(&Answers { user, password: Zeroizing::new(password) })
     }
 }
 
@@ -163,20 +161,17 @@ mod tests {
     }
 
     /// Needs root and users made by the CI job: `KURA_PAM_USER` with password
-    /// `KURA_PAM_PASSWORD`, and optionally `KURA_PAM_EXPIRED_USER` with the
-    /// same password, which must be changed.
+    /// `KURA_PAM_PASSWORD`, and `KURA_PAM_EXPIRED_USER` with the same
+    /// password, which must be changed.
     #[test]
+    #[ignore = "needs root and throwaway users: make test-pam"]
     fn checks_a_real_user() {
-        let (Ok(user), Ok(password)) = (std::env::var("KURA_PAM_USER"), std::env::var("KURA_PAM_PASSWORD")) else {
-            return;
-        };
-        let pam = LinuxPam::login();
+        let var = |name: &str| std::env::var(name).unwrap_or_else(|_| panic!("{name} is not set"));
+        let (user, password, expired) = (var("KURA_PAM_USER"), var("KURA_PAM_PASSWORD"), var("KURA_PAM_EXPIRED_USER"));
+        let pam = LinuxPam;
         assert_eq!(pam.check(&user, &password), PamVerdict::Ok);
         assert_eq!(pam.check(&user, "definitely-wrong"), PamVerdict::Wrong);
         assert_eq!(pam.check("no-such-user-kura", &password), PamVerdict::Wrong);
-        assert!(format!("{pam:?}").contains("login"));
-        if let Ok(expired) = std::env::var("KURA_PAM_EXPIRED_USER") {
-            assert_eq!(pam.check(&expired, &password), PamVerdict::Expired);
-        }
+        assert_eq!(pam.check(&expired, &password), PamVerdict::Expired);
     }
 }

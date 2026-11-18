@@ -37,17 +37,7 @@ async fn next_json(socket: &mut Socket) -> serde_json::Value {
 }
 
 fn sample(t: i64) -> Sample {
-    Sample {
-        t,
-        cpu: 12.5,
-        mem_used: 1,
-        mem_cache: 2,
-        mem_total: 3,
-        net_rx: 0.0,
-        net_tx: 0.0,
-        temp_c: Some(40.0),
-        disks: vec![],
-    }
+    Sample { t, cpu: 12.5, temp_c: Some(40.0), ..Sample::default() }
 }
 
 #[tokio::test]
@@ -82,9 +72,18 @@ async fn snapshot_then_samples_until_sign_out() {
     );
     socket.send(Message::Ping(vec![1].into())).await.unwrap();
 
+    // No sample comes after sign-out; the periodic check still ends it.
     app.send(request("POST", "/api/logout", Some(&cookie), None)).await;
-    app.state.hub.record(sample(3), vec![], None);
-    let end = tokio::time::timeout(Duration::from_secs(5), socket.next()).await.unwrap();
+    let end = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match socket.next().await {
+                Some(Ok(Message::Pong(_))) => {}
+                other => return other,
+            }
+        }
+    })
+    .await
+    .unwrap();
     assert!(matches!(end, Some(Ok(Message::Close(_))) | None | Some(Err(_))), "{end:?}");
 }
 

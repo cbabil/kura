@@ -79,7 +79,10 @@ fn languages() {
         ("auto", true),
         ("fr", true),
         ("pt-BR", true),
-        ("zh-Hant-TW", true),
+        ("zh-Hant-TW", false),
+        ("pt-br", false),
+        ("fr-FR-x", false),
+        ("ast", true),
         ("", false),
         ("FR", false),
         ("f", false),
@@ -97,4 +100,19 @@ fn languages() {
 fn a_missing_language_means_auto() {
     let p = Prefs::parse(br#"{"theme":"system","dock":[],"windows":{}}"#).unwrap();
     assert_eq!(p.language, "auto");
+}
+
+#[test]
+fn concurrent_saves_never_mix() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = PrefsStore::new(dir.path());
+    let p = Prefs::parse(GOOD.as_bytes()).unwrap();
+    std::thread::scope(|s| {
+        for _ in 0..8 {
+            s.spawn(|| (0..20).for_each(|_| store.save(1000, &p).unwrap()));
+        }
+    });
+    assert_eq!(store.load(1000).unwrap(), Some(p));
+    let left: Vec<_> = std::fs::read_dir(dir.path()).unwrap().flatten().map(|e| e.file_name()).collect();
+    assert_eq!(left, ["1000.json"], "no temporary file is left");
 }

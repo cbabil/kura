@@ -122,3 +122,26 @@ async fn signed_out_requests_get_401() {
     }
     assert_eq!(app.send(request("PUT", "/api/prefs", None, Some("{}"))).await.0.status(), 401);
 }
+
+#[tokio::test]
+async fn a_full_helper_answers_429_without_counting() {
+    let app = TestApp::with(|s| s.helper_slots = tokio::sync::Semaphore::new(0));
+    for _ in 0..MAX_FAILURES + 1 {
+        let (res, body) = app.send(login("kura", DEV_PASSWORD)).await;
+        assert_eq!((res.status().as_u16(), json(&body)["error"].as_str()), (429, Some("rate")));
+        assert_eq!(res.headers()[header::RETRY_AFTER], "1");
+    }
+    let app = TestApp::new();
+    app.sign_in("kura").await;
+}
+
+#[tokio::test]
+async fn a_wrong_password_waits_before_its_answer() {
+    let app = TestApp::with(|s| s.fail_delay = std::time::Duration::from_millis(200));
+    let start = std::time::Instant::now();
+    assert_eq!(app.send(login("kura", "nope")).await.0.status(), 401);
+    assert!(start.elapsed() >= std::time::Duration::from_millis(200));
+    let start = std::time::Instant::now();
+    app.sign_in("kura").await;
+    assert!(start.elapsed() < std::time::Duration::from_millis(200), "a success does not wait");
+}

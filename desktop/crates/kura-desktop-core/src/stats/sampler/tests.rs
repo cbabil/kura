@@ -1,16 +1,6 @@
-use std::path::Path;
-
 use super::*;
-use crate::stats::disks::FsUsage;
-use crate::stats::fixture::Fixture;
+use crate::stats::fixture::{FakeFs, Fixture};
 use crate::units::{StaticUnits, UnitsError, UnitsFuture};
-
-struct Fake;
-impl FsUsage for Fake {
-    fn usage(&self, _: &Path) -> std::io::Result<(u64, u64)> {
-        Ok((1, 2))
-    }
-}
 
 struct Broken;
 impl UnitSource for Broken {
@@ -37,7 +27,7 @@ async fn snapshot_then_samples_with_units_every_fifth_tick() {
     assert_eq!(snap["history"]["1h"].as_array().unwrap().len(), 0);
     assert!(snap["history"]["24h"].is_array());
 
-    let mut sampler = Sampler::new(hub.clone(), Collector::new(f.root(), Box::new(Fake)), units());
+    let mut sampler = Sampler::new(hub.clone(), Collector::new(f.root(), Box::new(FakeFs)), units());
     for _ in 0..6 {
         sampler.step().await;
     }
@@ -60,14 +50,13 @@ async fn failures_skip_samples_without_stopping() {
     let f = Fixture::full();
     let hub = StatsHub::new();
     let (_, mut rx) = hub.subscribe();
-    let mut sampler = Sampler::new(hub.clone(), Collector::new(f.root(), Box::new(Fake)), Arc::new(Broken));
-    sampler.tick = ACCOUNTS_EVERY;
+    let mut sampler = Sampler::new(hub.clone(), Collector::new(f.root(), Box::new(FakeFs)), Arc::new(Broken));
+    sampler.tick = REFRESH_EVERY;
     sampler.step().await;
     assert!(json(&rx.try_recv().unwrap()).get("units").is_none());
     std::fs::remove_file(f.dir.path().join("proc/stat")).unwrap();
     sampler.step().await;
     assert!(rx.try_recv().is_err(), "a failed sample is not sent");
-    assert!(sampler.collector.is_some());
 }
 
 #[tokio::test]
@@ -76,7 +65,7 @@ async fn run_samples_on_a_timer() {
     let hub = StatsHub::new();
     let (_, mut rx) = hub.subscribe();
     let task = tokio::spawn(
-        Sampler::new(hub, Collector::new(f.root(), Box::new(Fake)), units()).run(Duration::from_millis(10)),
+        Sampler::new(hub, Collector::new(f.root(), Box::new(FakeFs)), units()).run(Duration::from_millis(10)),
     );
     for _ in 0..2 {
         let msg = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
@@ -88,17 +77,6 @@ async fn run_samples_on_a_timer() {
 #[test]
 fn record_without_subscribers_is_fine() {
     let hub = StatsHub::new();
-    let s = Sample {
-        t: 0,
-        cpu: 0.0,
-        mem_used: 0,
-        mem_cache: 0,
-        mem_total: 0,
-        net_rx: 0.0,
-        net_tx: 0.0,
-        temp_c: None,
-        disks: vec![],
-    };
-    hub.record(s, vec![], None);
+    hub.record(Sample::default(), vec![], None);
     assert_eq!(json(&hub.subscribe().0)["history"]["1h"].as_array().unwrap().len(), 1);
 }

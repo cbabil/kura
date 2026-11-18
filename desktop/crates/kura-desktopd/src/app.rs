@@ -16,6 +16,11 @@ use crate::config::Config;
 use crate::helper::AuthHelper;
 use crate::server::{AppState, router};
 
+/// The time a client has to send its request headers.
+const HEADER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// HTTP/2 streams per connection.
+const MAX_STREAMS: u32 = 32;
+
 /// Why desktopd could not start or stopped.
 #[derive(Debug, thiserror::Error)]
 pub enum StartError {
@@ -23,8 +28,8 @@ pub enum StartError {
     Helper(String),
     #[error("cannot listen on {0}: {1}")]
     Listen(SocketAddr, std::io::Error),
-    #[error("cannot load the TLS certificate: {0}")]
-    Tls(std::io::Error),
+    #[error("cannot load the TLS certificate {0} or key {1} (made by kura-desktop-cert.service): {2}")]
+    Tls(String, String, std::io::Error),
     #[error("server failed: {0}")]
     Serve(std::io::Error),
 }
@@ -43,14 +48,29 @@ pub async fn run(config: Config) -> Result<(), StartError> {
     if cfg!(feature = "dev-auth") {
         state.fallback_uid = Some(1000);
     }
-    let listener = TcpListener::bind(config.listen).map_err(|e| StartError::Listen(config.listen, e))?;
+    let listener = bind(config.listen)?;
     if config.http {
         state.scheme = "http";
         return serve_http(listener, router(Arc::new(state))).await;
     }
     let (crt, key) = config.tls_files();
-    let tls = RustlsConfig::from_pem_file(crt, key).await.map_err(StartError::Tls)?;
+    let tls = RustlsConfig::from_pem_file(&crt, &key)
+        .await
+        .map_err(|e| StartError::Tls(crt.display().to_string(), key.display().to_string(), e))?;
     serve_tls(listener, tls, router(Arc::new(state))).await
+}
+
+/// Binds `addr`; on a host without IPv6, `[::]` falls back to `0.0.0.0`.
+fn bind(addr: SocketAddr) -> Result<TcpListener, StartError> {
+    TcpListener::bind(addr).or_else(|e| {
+        let any_v6 = addr.ip() == std::net::Ipv6Addr::UNSPECIFIED;
+        if !any_v6 {
+            return Err(StartError::Listen(addr, e));
+        }
+        tracing::warn!("no IPv6 ({e}); listening on IPv4 only");
+        let v4 = SocketAddr::from(([0, 0, 0, 0], addr.port()));
+        TcpListener::bind(v4).map_err(|e| StartError::Listen(v4, e))
+    })
 }
 
 /// The fake helper in a dev-auth build.
@@ -89,7 +109,10 @@ async fn units() -> Arc<dyn UnitSource> {
 pub async fn serve_tls(listener: TcpListener, tls: RustlsConfig, app: Router) -> Result<(), StartError> {
     listener.set_nonblocking(true).map_err(StartError::Serve)?;
     tracing::info!("listening on https://{}", listener.local_addr().map_err(StartError::Serve)?);
-    let server = axum_server::from_tcp_rustls(listener, tls).map_err(StartError::Serve)?;
+    let mut server = axum_server::from_tcp_rustls(listener, tls).map_err(StartError::Serve)?;
+    // Slow or idle clients may not hold connections open for long.
+    server.http_builder().http1().header_read_timeout(HEADER_TIMEOUT);
+    server.http_builder().http2().max_concurrent_streams(MAX_STREAMS).keep_alive_interval(HEADER_TIMEOUT);
     server.serve(app.into_make_service_with_connect_info::<SocketAddr>()).await.map_err(StartError::Serve)
 }
 

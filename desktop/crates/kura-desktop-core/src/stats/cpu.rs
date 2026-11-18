@@ -2,7 +2,7 @@
 
 use procfs_core::{FromBufReadSI, KernelStats};
 
-use super::{ProcSystemInfo, StatsError};
+use super::{PROC_SYSTEM_INFO, StatsError};
 use crate::root::SysRoot;
 
 /// Cumulative CPU ticks across all cores.
@@ -18,7 +18,7 @@ pub struct CpuTicks {
 /// Fails when `/proc/stat` cannot be read or parsed.
 pub fn read(root: &SysRoot) -> Result<(CpuTicks, usize), StatsError> {
     let file = std::io::BufReader::new(root.open("/proc/stat")?);
-    let stats = KernelStats::from_buf_read(file, &ProcSystemInfo)?;
+    let stats = KernelStats::from_buf_read(file, &PROC_SYSTEM_INFO)?;
     let t = &stats.total;
     let idle = t.idle + t.iowait.unwrap_or(0);
     let total = t.user + t.nice + t.system + idle + t.irq.unwrap_or(0) + t.softirq.unwrap_or(0) + t.steal.unwrap_or(0);

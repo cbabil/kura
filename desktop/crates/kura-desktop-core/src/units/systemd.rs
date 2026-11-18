@@ -1,6 +1,7 @@
 //! The live [`UnitSource`]: systemd's manager on the system D-Bus, which an
 //! unprivileged user may read. Proven by the Linux CI job.
 
+use futures_util::StreamExt;
 use zbus::OwnedObjectPath;
 use zbus::proxy::CacheProperties;
 
@@ -31,9 +32,13 @@ trait SdService {
     fn memory_current(&self) -> zbus::Result<u64>;
 }
 
+/// systemd answers this many unit lookups at once.
+const CONCURRENT: usize = 16;
+
 /// Reads services from systemd over a system-bus connection.
 pub struct SystemdUnits {
     conn: zbus::Connection,
+    manager: ManagerProxy<'static>,
 }
 
 impl SystemdUnits {
@@ -43,19 +48,21 @@ impl SystemdUnits {
     /// Fails when the system bus is unreachable.
     pub async fn connect() -> Result<Self, UnitsError> {
         let conn = zbus::Connection::system().await.map_err(|e| UnitsError(format!("system bus: {e}")))?;
-        Ok(Self { conn })
+        let manager = ManagerProxy::new(&conn).await.map_err(err)?;
+        Ok(Self { conn, manager })
     }
 
     async fn read(&self) -> Result<Vec<Unit>, UnitsError> {
-        let manager = ManagerProxy::new(&self.conn).await.map_err(err)?;
-        let raw = manager.list_units().await.map_err(err)?;
-        let mut units = Vec::new();
-        for (name, _, load, active, _, _, path, ..) in raw {
-            if name.ends_with(".service") && load == "loaded" {
+        let raw = self.manager.list_units().await.map_err(err)?;
+        let services = raw.into_iter().filter(|u| u.0.ends_with(".service") && u.2 == "loaded");
+        let mut units: Vec<Unit> = futures_util::stream::iter(services)
+            .map(|(name, _, _, active, _, _, path, ..)| async move {
                 let (mem, since) = self.details(&path).await;
-                units.push(Unit::from_systemd(name, &active, mem, since));
-            }
-        }
+                Unit::from_systemd(name, &active, mem, since)
+            })
+            .buffer_unordered(CONCURRENT)
+            .collect()
+            .await;
         units.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(units)
     }
@@ -71,7 +78,8 @@ impl SystemdUnits {
             let p = SdUnitProxy::builder(&self.conn).path(path.clone());
             p.cache_properties(CacheProperties::No).build().await?.state_change_timestamp().await
         };
-        (mem.await.ok(), since.await.ok())
+        let (mem, since) = tokio::join!(mem, since);
+        (mem.ok(), since.ok())
     }
 }
 
@@ -89,13 +97,10 @@ impl UnitSource for SystemdUnits {
 mod tests {
     use super::*;
 
-    /// Runs against the host's systemd; the Linux CI job sets
-    /// `KURA_LIVE_TESTS=1`.
+    /// Runs against the host's systemd.
     #[tokio::test]
+    #[ignore = "needs the host's systemd: make test-live"]
     async fn lists_the_live_services() {
-        if std::env::var_os("KURA_LIVE_TESTS").is_none() {
-            return;
-        }
         let units = SystemdUnits::connect().await.unwrap().list().await.unwrap();
         assert!(units.iter().any(|u| u.name == "dbus.service" || u.name == "ssh.service"), "{units:?}");
         assert!(units.windows(2).all(|w| w[0].name <= w[1].name));

@@ -28,7 +28,7 @@ pub struct DiskUsage {
 }
 
 /// One measurement, as `Sample` in `desktop/web/src/api/types.ts`.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sample {
     /// Unix time in milliseconds.
@@ -77,22 +77,12 @@ impl From<procfs_core::ProcError> for StatsError {
 pub const USER_HZ: u64 = 100;
 
 /// The fixed facts procfs-core needs to parse `/proc/stat`.
-struct ProcSystemInfo;
-
-impl procfs_core::SystemInfoInterface for ProcSystemInfo {
-    fn boot_time_secs(&self) -> procfs_core::ProcResult<u64> {
-        Ok(0)
-    }
-    fn ticks_per_second(&self) -> u64 {
-        USER_HZ
-    }
-    fn page_size(&self) -> u64 {
-        4096
-    }
-    fn is_little_endian(&self) -> bool {
-        cfg!(target_endian = "little")
-    }
-}
+const PROC_SYSTEM_INFO: procfs_core::ExplicitSystemInfo = procfs_core::ExplicitSystemInfo {
+    boot_time_secs: 0,
+    ticks_per_second: USER_HZ,
+    page_size: 4096,
+    is_little_endian: cfg!(target_endian = "little"),
+};
 
 /// Rounds to one decimal, which is all the interface shows.
 pub(crate) fn round1(v: f64) -> f64 {

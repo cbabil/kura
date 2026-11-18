@@ -1,5 +1,6 @@
 //! Static facts about the device for `GET /api/system`.
 
+use procfs_core::{FromRead, Uptime};
 use serde::Serialize;
 
 use super::{StatsError, cpu, mem};
@@ -25,8 +26,7 @@ pub struct SystemInfo {
 /// Fails when `/proc/stat`, `/proc/meminfo` or `/proc/uptime` is unreadable.
 pub fn read(root: &SysRoot) -> Result<SystemInfo, StatsError> {
     let line = |p: &str| root.read(p).map(|s| s.trim().to_owned()).unwrap_or_default();
-    let uptime = root.read("/proc/uptime")?;
-    let uptime = uptime.split_whitespace().next().and_then(|s| s.parse::<f64>().ok());
+    let uptime = Uptime::from_read(root.open("/proc/uptime")?)?;
     let arch = Some(line("/proc/sys/kernel/arch")).filter(|a| !a.is_empty());
     Ok(SystemInfo {
         hostname: line("/proc/sys/kernel/hostname"),
@@ -35,7 +35,7 @@ pub fn read(root: &SysRoot) -> Result<SystemInfo, StatsError> {
         arch: arch.unwrap_or_else(|| std::env::consts::ARCH.to_owned()),
         cores: cpu::read(root)?.1,
         mem_total: mem::read(root)?.total,
-        uptime: uptime.ok_or_else(|| StatsError::Parse("/proc/uptime".into()))? as u64,
+        uptime: uptime.uptime as u64,
     })
 }
 

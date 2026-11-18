@@ -13,48 +13,54 @@ use kura_desktop_core::stats::system;
 use super::AppState;
 use super::guard::{Authed, error};
 
-/// Runs a blocking file operation off the async threads.
-async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    tokio::task::spawn_blocking(f).await.inspect_err(|e| tracing::error!("blocking task failed: {e}")).ok()
+/// Runs a blocking file operation off the async threads. A failure, of the
+/// task or of `f`, is logged with `what` and gives `None`.
+async fn blocking<T, E>(what: &str, f: impl FnOnce() -> Result<T, E> + Send + 'static) -> Option<T>
+where
+    T: Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(Ok(v)) => return Some(v),
+        Ok(Err(e)) => tracing::error!("{what}: {e}"),
+        Err(e) => tracing::error!("{what}: {e}"),
+    }
+    None
 }
 
-fn internal(what: &str, e: impl std::fmt::Display) -> Response {
-    tracing::error!("{what}: {e}");
+fn internal() -> Response {
     error(StatusCode::INTERNAL_SERVER_ERROR, "internal")
 }
 
 /// Static facts about the device.
 pub(super) async fn system(State(state): State<Arc<AppState>>, _: Authed) -> Response {
     let root = state.root.clone();
-    match blocking(move || system::read(&root)).await {
-        Some(Ok(info)) => Json(info).into_response(),
-        Some(Err(e)) => internal("system info", e),
-        None => internal("system info", "task failed"),
+    match blocking("system info", move || system::read(&root)).await {
+        Some(info) => Json(info).into_response(),
+        None => internal(),
     }
 }
 
 /// The user's preferences, or 404 when none are saved.
-pub(super) async fn get_prefs(State(state): State<Arc<AppState>>, Authed(user): Authed) -> Response {
+pub(super) async fn get_prefs(State(state): State<Arc<AppState>>, authed: Authed) -> Response {
     let store = state.prefs.clone();
-    match blocking(move || store.load(user.uid)).await {
-        Some(Ok(Some(prefs))) => Json(prefs).into_response(),
-        Some(Ok(None)) => error(StatusCode::NOT_FOUND, "no_prefs"),
-        Some(Err(e)) => internal("loading preferences", e),
-        None => internal("loading preferences", "task failed"),
+    match blocking("loading preferences", move || store.load(authed.user.uid)).await {
+        Some(Some(prefs)) => Json(prefs).into_response(),
+        Some(None) => error(StatusCode::NOT_FOUND, "no_prefs"),
+        None => internal(),
     }
 }
 
 /// Validates and saves the user's preferences: 204, 400 or 413.
-pub(super) async fn put_prefs(State(state): State<Arc<AppState>>, Authed(user): Authed, body: Bytes) -> Response {
+pub(super) async fn put_prefs(State(state): State<Arc<AppState>>, authed: Authed, body: Bytes) -> Response {
     let prefs = match Prefs::parse(&body) {
         Ok(p) => p,
         Err(PrefsError::TooLarge) => return error(StatusCode::PAYLOAD_TOO_LARGE, "too_large"),
         Err(e) => return error(StatusCode::BAD_REQUEST, &e.to_string()),
     };
     let store = state.prefs.clone();
-    match blocking(move || store.save(user.uid, &prefs)).await {
-        Some(Ok(())) => StatusCode::NO_CONTENT.into_response(),
-        Some(Err(e)) => internal("saving preferences", e),
-        None => internal("saving preferences", "task failed"),
+    match blocking("saving preferences", move || store.save(authed.user.uid, &prefs)).await {
+        Some(()) => StatusCode::NO_CONTENT.into_response(),
+        None => internal(),
     }
 }

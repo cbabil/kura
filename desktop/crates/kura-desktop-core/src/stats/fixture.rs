@@ -1,7 +1,23 @@
 //! A fake root with `/proc`, `/sys` and `/etc` files for reader tests
 //! (the `fixtures` feature shares it with other crates' tests).
 
+use std::path::Path;
+
+use super::disks::FsUsage;
 use crate::root::SysRoot;
+
+/// Measures every volume as 100 bytes with as many used as its path is long,
+/// and fails for any path ending in `srv`.
+pub struct FakeFs;
+
+impl FsUsage for FakeFs {
+    fn usage(&self, path: &Path) -> std::io::Result<(u64, u64)> {
+        if path.ends_with("srv") {
+            return Err(std::io::Error::other("gone"));
+        }
+        Ok((path.as_os_str().len() as u64 % 100, 100))
+    }
+}
 
 /// A temporary tree; removed when dropped.
 pub struct Fixture {

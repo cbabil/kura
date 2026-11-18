@@ -46,7 +46,8 @@ impl TestApp {
     pub fn new() -> Self {
         let fixture = Fixture::full();
         let state_dir = tempfile::tempdir().unwrap();
-        let state = AppState::new(Arc::new(Scripted), StatsHub::new(), fixture.root(), state_dir.path());
+        let mut state = AppState::new(Arc::new(Scripted), StatsHub::new(), fixture.root(), state_dir.path());
+        state.fail_delay = std::time::Duration::ZERO;
         Self { state: Arc::new(state), fixture, state_dir }
     }
 

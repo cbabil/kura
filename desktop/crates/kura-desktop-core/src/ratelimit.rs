@@ -38,10 +38,10 @@ impl RateLimiter {
     ///
     /// # Errors
     /// `Err(retry_after_secs)` when the attempt is over the limit.
-    pub fn begin(&self, keys: &[String], now: Instant) -> Result<Attempt, u64> {
+    pub fn begin(&self, keys: Vec<String>, now: Instant) -> Result<Attempt, u64> {
         let mut map = self.lock();
         let mut wait = Duration::ZERO;
-        for key in keys {
+        for key in &keys {
             if let Some(times) = map.get_mut(key) {
                 prune(times, now);
                 if times.len() >= MAX_FAILURES {
@@ -57,11 +57,15 @@ impl RateLimiter {
                 prune(times, now);
                 !times.is_empty()
             });
+            if map.len() + keys.len() > MAX_KEYS {
+                // Full of live keys: a flood, so nobody new gets in.
+                return Err(WINDOW.as_secs());
+            }
         }
-        for key in keys {
+        for key in &keys {
             map.entry(key.clone()).or_default().push_back(now);
         }
-        Ok(Attempt { keys: keys.to_vec(), at: now })
+        Ok(Attempt { keys, at: now })
     }
 
     /// Takes back an attempt that turned out right.
@@ -90,78 +94,22 @@ fn prune(times: &mut VecDeque<Instant>, now: Instant) {
     }
 }
 
-/// The limiter keys for a sign-in from `ip` as `user`.
+/// The limiter key for a client address: IPv4 as is, IPv6 by its /64, since
+/// one host may use any address of its network.
+pub fn ip_key(ip: std::net::IpAddr) -> String {
+    match ip.to_canonical() {
+        std::net::IpAddr::V4(a) => a.to_string(),
+        std::net::IpAddr::V6(a) => {
+            let s = a.segments();
+            format!("{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
+        }
+    }
+}
+
+/// The limiter keys for a sign-in from `ip` (an [`ip_key`]) as `user`.
 pub fn login_keys(ip: &str, user: &str) -> Vec<String> {
     vec![format!("ip:{ip}"), format!("user:{user}")]
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn five_failures_then_refused_until_the_window_passes() {
-        let rl = RateLimiter::new();
-        let t0 = Instant::now();
-        let keys = login_keys("10.0.0.2", "kura");
-        for i in 0..MAX_FAILURES {
-            assert!(rl.begin(&keys, t0 + Duration::from_secs(i as u64)).is_ok());
-        }
-        assert_eq!(rl.begin(&keys, t0 + Duration::from_secs(10)).unwrap_err(), 50);
-        assert!(rl.begin(&keys, t0 + WINDOW).is_ok(), "oldest failure aged out");
-    }
-
-    #[test]
-    fn per_ip_and_per_user_limits_are_independent() {
-        let rl = RateLimiter::new();
-        let now = Instant::now();
-        for i in 0..MAX_FAILURES {
-            rl.begin(&login_keys("10.0.0.2", &format!("u{i}")), now).unwrap();
-        }
-        assert!(rl.begin(&login_keys("10.0.0.2", "other"), now).is_err(), "same IP");
-        assert!(rl.begin(&login_keys("10.0.0.3", "other"), now).is_ok(), "other IP");
-        for i in 0..MAX_FAILURES {
-            rl.begin(&login_keys(&format!("10.1.0.{i}"), "anna"), now).unwrap();
-        }
-        assert!(rl.begin(&login_keys("10.9.9.9", "anna"), now).is_err(), "same user");
-    }
-
-    #[test]
-    fn a_success_does_not_count() {
-        let rl = RateLimiter::new();
-        let now = Instant::now();
-        let keys = login_keys("10.0.0.2", "kura");
-        for _ in 0..MAX_FAILURES * 2 {
-            let attempt = rl.begin(&keys, now).unwrap();
-            rl.succeeded(attempt);
-        }
-        assert!(rl.lock().is_empty());
-        let a = rl.begin(&keys, now).unwrap();
-        rl.begin(&keys, now).unwrap();
-        rl.succeeded(a);
-        assert_eq!(rl.lock()[&keys[0]].len(), 1);
-    }
-
-    #[test]
-    fn retry_after_is_at_least_one_second() {
-        let rl = RateLimiter::new();
-        let t0 = Instant::now();
-        let keys = login_keys("ip", "u");
-        for _ in 0..MAX_FAILURES {
-            rl.begin(&keys, t0).unwrap();
-        }
-        let wait = rl.begin(&keys, t0 + WINDOW - Duration::from_millis(1)).unwrap_err();
-        assert_eq!(wait, 1);
-    }
-
-    #[test]
-    fn stale_keys_are_dropped_past_the_cap() {
-        let rl = RateLimiter::new();
-        let t0 = Instant::now();
-        for i in 0..MAX_KEYS / 2 {
-            rl.begin(&login_keys(&i.to_string(), &i.to_string()), t0).unwrap();
-        }
-        rl.begin(&login_keys("new", "new"), t0 + WINDOW).unwrap();
-        assert_eq!(rl.lock().len(), 2);
-    }
-}
+mod tests;

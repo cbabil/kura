@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use kura_desktopd::config::Config;
+use kura_desktopd::config::{Config, Env};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -11,7 +11,7 @@ async fn main() -> ExitCode {
         .without_time()
         .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stdout()))
         .init();
-    let config = match Config::parse(std::env::args().skip(1)) {
+    let config = match Config::parse(std::env::args().skip(1), &Env::from_process()) {
         Ok(c) => c,
         Err(msg) => {
             eprintln!("{msg}");

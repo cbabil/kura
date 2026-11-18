@@ -15,7 +15,7 @@ use axum::http::{HeaderValue, StatusCode, Uri, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
-use kura_desktop_core::prefs::{MAX_PREFS_BYTES, PrefsStore};
+use kura_desktop_core::prefs::PrefsStore;
 use kura_desktop_core::ratelimit::RateLimiter;
 use kura_desktop_core::root::SysRoot;
 use kura_desktop_core::session::SessionStore;
@@ -46,7 +46,16 @@ pub struct AppState {
     /// The uid for a user missing from `/etc/passwd` (development only);
     /// `None` refuses such a sign-in.
     pub fallback_uid: Option<u32>,
+    /// Password checks in flight at most; more are refused with 429.
+    pub helper_slots: tokio::sync::Semaphore,
+    /// How long a wrong password waits before its answer.
+    pub fail_delay: std::time::Duration,
 }
+
+/// Password checks that may wait on the helper at once.
+pub const HELPER_SLOTS: usize = 4;
+/// The wait after a wrong password (PAM's own delay is turned off).
+pub const FAIL_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
 impl AppState {
     /// State with empty sessions and limits, preferences under `state_dir`.
@@ -61,6 +70,8 @@ impl AppState {
             scheme: "https",
             assets: crate::assets::ASSETS,
             fallback_uid: None,
+            helper_slots: tokio::sync::Semaphore::new(HELPER_SLOTS),
+            fail_delay: FAIL_DELAY,
         }
     }
 }
@@ -72,7 +83,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/login", post(auth::login).layer(DefaultBodyLimit::max(MAX_LOGIN_BYTES)))
         .route("/api/logout", post(auth::logout))
         .route("/api/system", get(api::system))
-        .route("/api/prefs", get(api::get_prefs).put(api::put_prefs).layer(DefaultBodyLimit::max(MAX_PREFS_BYTES)))
+        // Prefs::parse owns the size limit, so an oversized body gets the JSON 413.
+        .route("/api/prefs", get(api::get_prefs).put(api::put_prefs))
         .route("/api/stats", get(stats::stats))
         .route("/api/{*rest}", any(|| async { guard::error(StatusCode::NOT_FOUND, "not_found") }))
         .fallback(assets)

@@ -20,20 +20,23 @@ pub trait AuthHelper: Send + Sync {
 #[error("kura-helper unavailable: {0}")]
 pub struct HelperError(#[from] pub zbus::Error);
 
-#[zbus::proxy(interface = "io.kura.Helper", default_service = "io.kura.Helper", default_path = "/io/kura/Helper")]
+#[zbus::proxy(interface = "io.kura.Helper1", default_service = "io.kura.Helper", default_path = "/io/kura/Helper")]
 trait Helper {
     fn authenticate(&self, user: &str, password: &str) -> zbus::Result<(bool, String, bool)>;
 }
 
 /// `kura-helper` over a D-Bus connection.
 pub struct DbusHelper {
-    conn: zbus::Connection,
+    proxy: HelperProxy<'static>,
 }
 
 impl DbusHelper {
     /// Uses an open connection (the system bus, or a peer in tests).
-    pub fn new(conn: zbus::Connection) -> Self {
-        Self { conn }
+    ///
+    /// # Errors
+    /// Fails when the proxy cannot be set up on the connection.
+    pub async fn new(conn: &zbus::Connection) -> Result<Self, HelperError> {
+        Ok(Self { proxy: HelperProxy::new(conn).await? })
     }
 
     /// Connects to the system bus.
@@ -41,19 +44,16 @@ impl DbusHelper {
     /// # Errors
     /// Fails when the system bus is unreachable.
     pub async fn system() -> Result<Self, HelperError> {
-        Ok(Self::new(zbus::Connection::system().await?))
-    }
-
-    async fn call(&self, user: &str, password: &str) -> Result<AuthOutcome, HelperError> {
-        let proxy = HelperProxy::builder(&self.conn).cache_properties(zbus::proxy::CacheProperties::No).build().await?;
-        let (ok, reason, admin) = proxy.authenticate(user, password).await?;
-        Ok(AuthOutcome::from_wire(ok, &reason, admin))
+        Self::new(&zbus::Connection::system().await?).await
     }
 }
 
 impl AuthHelper for DbusHelper {
     fn authenticate<'a>(&'a self, user: &'a str, password: &'a str) -> AuthFuture<'a> {
-        Box::pin(self.call(user, password))
+        Box::pin(async move {
+            let (ok, reason, admin) = self.proxy.authenticate(user, password).await?;
+            Ok(AuthOutcome::from_wire(ok, &reason, admin))
+        })
     }
 }
 

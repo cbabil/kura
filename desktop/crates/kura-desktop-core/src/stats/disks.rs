@@ -2,7 +2,7 @@
 //! measured with `statvfs` behind [`FsUsage`] so tests need no real mounts.
 
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use procfs_core::FromBufRead;
 use procfs_core::process::MountInfos;
@@ -37,51 +37,49 @@ impl FsUsage for Statvfs {
     }
 }
 
-/// Lists real volumes once each (a bind mount of the same tree is skipped),
-/// sorted by mount point. Volumes that cannot be measured are left out.
+/// The mount points of real volumes, once each (a bind mount of the same
+/// tree is skipped), sorted. Mounts change rarely, so callers keep the list.
 ///
 /// # Errors
 /// Fails when mountinfo cannot be read or parsed.
-pub fn read(root: &SysRoot, fs: &dyn FsUsage) -> Result<Vec<DiskUsage>, StatsError> {
+pub fn mounts(root: &SysRoot) -> Result<Vec<PathBuf>, StatsError> {
     let file = std::io::BufReader::new(root.open("/proc/self/mountinfo")?);
-    let mounts = MountInfos::from_buf_read(file)?;
     let mut seen = HashSet::new();
-    let mut disks: Vec<DiskUsage> = mounts
+    let mut points: Vec<PathBuf> = MountInfos::from_buf_read(file)?
         .into_iter()
         .filter(|m| REAL_FS.contains(&m.fs_type.as_str()))
         .filter(|m| seen.insert((m.majmin.clone(), m.root.clone())))
-        .filter_map(|m| {
-            let (used, size) = fs.usage(&root.path(&m.mount_point)).ok()?;
-            Some(DiskUsage { mount: m.mount_point.to_string_lossy().into_owned(), used, size })
-        })
+        .map(|m| m.mount_point)
         .take(MAX_DISKS)
         .collect();
-    disks.sort_by(|a, b| a.mount.cmp(&b.mount));
-    Ok(disks)
+    points.sort();
+    Ok(points)
+}
+
+/// Measures each mount point; one that cannot be measured is left out.
+pub fn usage(root: &SysRoot, fs: &dyn FsUsage, mounts: &[PathBuf]) -> Vec<DiskUsage> {
+    mounts
+        .iter()
+        .filter_map(|m| {
+            let (used, size) = fs.usage(&root.path(m)).ok()?;
+            Some(DiskUsage { mount: m.to_string_lossy().into_owned(), used, size })
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stats::fixture::Fixture;
-
-    struct Fake;
-    impl FsUsage for Fake {
-        fn usage(&self, path: &Path) -> std::io::Result<(u64, u64)> {
-            if path.ends_with("srv") {
-                return Err(std::io::Error::other("gone"));
-            }
-            Ok((path.as_os_str().len() as u64, 100))
-        }
-    }
+    use crate::stats::fixture::{FakeFs, Fixture};
 
     #[test]
     fn lists_real_volumes_once() {
         let f = Fixture::full();
-        let disks = read(&f.root(), &Fake).unwrap();
+        let disks = usage(&f.root(), &FakeFs, &mounts(&f.root()).unwrap());
         let mounts: Vec<&str> = disks.iter().map(|d| d.mount.as_str()).collect();
         assert_eq!(mounts, ["/", "/home"]);
         assert!(disks.iter().all(|d| d.size == 100));
+        assert!(usage(&f.root(), &FakeFs, &["/srv".into()]).is_empty(), "unmeasurable");
     }
 
     #[test]
@@ -96,6 +94,6 @@ mod tests {
     fn errors_on_bad_mountinfo() {
         let f = Fixture::full();
         f.write("proc/self/mountinfo", "nonsense\n");
-        assert!(read(&f.root(), &Fake).is_err());
+        assert!(mounts(&f.root()).is_err());
     }
 }

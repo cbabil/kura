@@ -1,5 +1,5 @@
-//! Readers against the live system. Linux only, and only when the CI job sets
-//! `KURA_LIVE_TESTS=1`, since a developer's machine may differ.
+//! Readers against the live system. Linux only, and ignored by default since a
+//! developer's machine may differ; `make test-live` (run in CI) runs them.
 
 use std::time::{Duration, Instant};
 
@@ -9,10 +9,8 @@ use super::system;
 use crate::root::SysRoot;
 
 #[test]
+#[ignore = "reads the live system: make test-live"]
 fn reads_the_real_proc_and_sys() {
-    if std::env::var_os("KURA_LIVE_TESTS").is_none() {
-        return;
-    }
     let info = system::read(&SysRoot::default()).unwrap();
     assert!(info.cores > 0 && info.mem_total > 0 && info.uptime > 0, "{info:?}");
     assert!(!info.hostname.is_empty() && !info.kernel.is_empty());

@@ -76,18 +76,16 @@ jobs:
           sudo chage -d 0 kura-ci-old
 
       - name: Linux tests against the runner (/proc, /sys, systemd)
-        run: KURA_LIVE_TESTS=1 cargo test --workspace -- --nocapture live
+        run: make test-live
 
       - name: PAM tests as root
-        run: |
-          sudo -E env "PATH=$PATH" "HOME=$HOME" CARGO_TARGET_DIR=target/root \
-            KURA_PAM_USER=kura-ci KURA_PAM_EXPIRED_USER=kura-ci-old \
-            cargo test -p kura-helper pam::
+        run: make test-pam
+        env:
+          KURA_PAM_USER: kura-ci
+          KURA_PAM_EXPIRED_USER: kura-ci-old
 
       - name: End to end
-        run: |
-          cargo build --release --workspace
-          ci/e2e.sh kura-ci "$KURA_PAM_PASSWORD"
+        run: make e2e E2E_USER=kura-ci
 
   dist:
     name: dist ${{ matrix.arch }}
@@ -98,10 +96,8 @@ jobs:
       matrix:
         include:
           - arch: x86_64
-            make: dist-amd64
             deb: amd64
           - arch: aarch64
-            make: dist-arm64
             deb: arm64
     steps:
       - name: Checkout code
@@ -140,10 +136,9 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Build
+      - name: Build (interface, then both binaries)
         run: |
-          (cd web && bun install --frozen-lockfile && bun run build)
-          make ${{ matrix.make }}
+          make dist ARCH=${{ matrix.arch }}
           file dist/${{ matrix.arch }}/*
           ls -l dist/${{ matrix.arch }}
 

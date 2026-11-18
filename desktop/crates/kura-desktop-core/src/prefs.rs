@@ -67,13 +67,13 @@ fn auto() -> String {
     "auto".to_owned()
 }
 
-/// "auto", or a BCP 47 style code: 2-3 letters, optionally a region.
+/// `^(auto|[a-z]{2,3}(-[A-Z]{2})?)$`: "auto", or a language code with an
+/// optional region, such as "fr" or "pt-BR".
 fn valid_language(lang: &str) -> bool {
-    let mut parts = lang.split('-');
-    let base = parts.next().unwrap_or("");
-    let base_ok = (2..=3).contains(&base.len()) && base.chars().all(|c| c.is_ascii_lowercase());
-    let rest_ok = parts.all(|p| (2..=8).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()));
-    lang == "auto" || (base_ok && rest_ok && lang.len() <= 16)
+    let (base, region) = lang.split_once('-').map_or((lang, None), |(b, r)| (b, Some(r)));
+    let base_ok = (2..=3).contains(&base.len()) && base.bytes().all(|c| c.is_ascii_lowercase());
+    let region_ok = region.is_none_or(|r| r.len() == 2 && r.bytes().all(|c| c.is_ascii_uppercase()));
+    lang == "auto" || (base_ok && region_ok)
 }
 
 fn valid_geometry(g: &WindowGeometry) -> bool {
@@ -112,6 +112,9 @@ impl Prefs {
     }
 }
 
+/// Numbers each save's temporary file.
+static SAVES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// Preferences on disk: `<dir>/<uid>.json`, written atomically, mode 0600.
 #[derive(Debug, Clone)]
 pub struct PrefsStore {
@@ -147,11 +150,15 @@ impl PrefsStore {
     /// Fails when the directory or file cannot be written.
     pub fn save(&self, uid: u32, prefs: &Prefs) -> Result<(), PrefsError> {
         std::fs::create_dir_all(&self.dir)?;
-        let tmp = self.dir.join(format!(".{uid}.json.tmp"));
+        // Each save has its own temporary file, so two at once cannot mix.
+        let n = SAVES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tmp = self.dir.join(format!(".{uid}.json.{n}.tmp"));
         let body = serde_json::to_vec(prefs)?;
-        write_private(&tmp, &body)?;
-        std::fs::rename(&tmp, self.file(uid))?;
-        Ok(())
+        let written = write_private(&tmp, &body).and_then(|()| std::fs::rename(&tmp, self.file(uid)));
+        if written.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        Ok(written?)
     }
 }
 

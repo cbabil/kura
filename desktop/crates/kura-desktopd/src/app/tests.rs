@@ -71,3 +71,11 @@ async fn run_reports_startup_failures() {
         assert!(err.contains("needs Linux"), "{err}");
     }
 }
+
+#[test]
+fn bind_reports_a_busy_port_and_keeps_explicit_addresses() {
+    let busy = TcpListener::bind("127.0.0.1:0").unwrap();
+    let err = bind(busy.local_addr().unwrap()).unwrap_err();
+    assert!(err.to_string().contains("cannot listen"));
+    assert!(bind("[::]:0".parse().unwrap()).is_ok(), "IPv6, or IPv4 without it");
+}

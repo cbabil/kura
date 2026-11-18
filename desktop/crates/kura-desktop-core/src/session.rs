@@ -64,6 +64,16 @@ impl SessionStore {
     /// Returns the session's user and marks it used, or `None` when the id is
     /// unknown or has been idle too long (it is then removed).
     pub fn touch(&self, id: &str, now: Instant) -> Option<SessionUser> {
+        self.with_live(id, now, SessionUser::clone)
+    }
+
+    /// Marks a session used without copying its user; false when it has
+    /// ended (and it is then removed).
+    pub fn keep_alive(&self, id: &str, now: Instant) -> bool {
+        self.with_live(id, now, |_| ()).is_some()
+    }
+
+    fn with_live<T>(&self, id: &str, now: Instant, f: impl FnOnce(&SessionUser) -> T) -> Option<T> {
         let mut map = self.lock();
         let entry = map.get_mut(id)?;
         if now.duration_since(entry.last_seen) >= IDLE_TIMEOUT {
@@ -71,7 +81,7 @@ impl SessionStore {
             return None;
         }
         entry.last_seen = now;
-        Some(entry.user.clone())
+        Some(f(&entry.user))
     }
 
     /// Ends a session; unknown ids are ignored.
@@ -122,7 +132,8 @@ mod tests {
             now += step;
             assert_eq!(store.touch(&id, now).is_some(), alive);
         }
-        assert!(store.touch(&id, now + IDLE_TIMEOUT).is_none());
+        assert!(store.keep_alive(&id, now));
+        assert!(!store.keep_alive(&id, now + IDLE_TIMEOUT));
         assert!(store.is_empty(), "expired session is removed");
         assert!(store.touch("unknown", now).is_none());
     }
