@@ -373,7 +373,9 @@ collect_diagnostics() {
         -u ${BRAND}-storage -u ${BRAND}-storage-finish \
         -u ${BRAND}-desktopd -u ${BRAND}-desktop-cert -u ${BRAND}-helper" \
         > "${OUT}/journal.txt" 2>&1 || true
-    sudo_run "systemctl --no-pager --failed; systemctl --no-pager status ${BRAND}-desktopd ${BRAND}-helper" \
+    sudo_run "systemctl --no-pager --failed; systemctl --no-pager status ${BRAND}-desktopd ${BRAND}-helper
+        namei -l /var/lib/${BRAND}/desktop/tls.crt; id ${BRAND}-desktop
+        journalctl --no-pager -u systemd-sysusers -u systemd-tmpfiles-setup | tail -20" \
         > "${OUT}/units.txt" 2>&1 || true
     { sudo_run "docker ps -a"; sudo_run "lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT"; } \
         > "${OUT}/system.txt" 2>&1 || true

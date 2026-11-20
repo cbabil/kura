@@ -101,6 +101,17 @@ units() { echo "${ROOTFS}/usr/lib/systemd/system"; }
     [ "$(cat "${state}/fingerprint")" = "${want}" ]
 }
 
+@test "cert: the state folder is the server's too (0750: root's would shut it out of its certificate)" {
+    local state="${BATS_TEST_TMPDIR}/state" bin="${BATS_TEST_TMPDIR}/bin"
+    mkdir -p "${bin}"
+    printf '#!/bin/sh\necho "$@" >> "%s/chown-calls"\n' "${BATS_TEST_TMPDIR}" > "${bin}/chown"
+    chmod +x "${bin}/chown"
+    PATH="${bin}:${PATH}" DESKTOP_HOSTNAME=kura-nuc run "${CERT}" "${state}" kura-desktop
+    [ "$status" -eq 0 ]
+    grep -qx "kura-desktop:kura-desktop ${state}" "${BATS_TEST_TMPDIR}/chown-calls"
+    [ "$(file_mode "${state}")" = "750" ]
+}
+
 @test "cert: an existing certificate is kept" {
     local state="${BATS_TEST_TMPDIR}/state"
     DESKTOP_HOSTNAME=kura-nuc run "${CERT}" "${state}"

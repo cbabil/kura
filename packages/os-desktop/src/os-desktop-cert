@@ -27,7 +27,10 @@ if [ -s "${STATE}/tls.crt" ] && [ -s "${STATE}/tls.key" ]; then
     exit 0
 fi
 
+# The server's own folder, whoever made it (tmpfiles.conf does at boot; made
+# here by root, 0750 would shut the server out of its certificate)
 install -d -m 0750 "${STATE}"
+[ -z "${OWNER}" ] || chown "${OWNER}:${OWNER}" "${STATE}"
 tmp=$(mktemp -d "${STATE}/.cert.XXXXXX")
 trap 'rm -rf "${tmp}"' EXIT
 
