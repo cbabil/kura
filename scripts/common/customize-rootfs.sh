@@ -19,6 +19,8 @@ source "$(dirname "$0")/systemd-units.sh"
 source "$(dirname "$0")/install-firstboot.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/auto-updates.sh"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/kura-repo.sh"
 
 BRAND="${OS_BRAND:-${DEFAULT_BRAND}}"
 # Validate BRAND (must be lowercase alphanumeric with hyphens, no shell metacharacters)
@@ -117,6 +119,8 @@ enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-securit
 
 # ---- Security updates install themselves; the clock stays in sync ----
 install_auto_updates "${ROOTFS}" "${BRAND}"
+# ...and Kura's own versions come from its repository, when the owner asks
+install_kura_repo "${ROOTFS}" "${BRAND}" "${OS_RELEASE_REPO:-cbabil/kura}"
 
 
 # Ensure /etc/resolv.conf is a regular writable file (not a stale symlink).

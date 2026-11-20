@@ -25,6 +25,7 @@ kura_owned() {
         etc/apt/apt.conf.d/20auto-upgrades "etc/apt/apt.conf.d/52${b}-upgrades" \
         etc/apt/apt.conf.d/53"${b}"-*-upgrades "etc/apt/apt.conf.d/90${b}-efi" \
         "etc/kernel/postinst.d/zz-${b}-boot" \
+        "usr/share/keyrings/${b}-archive.asc" "etc/apt/sources.list.d/${b}.sources" \
         "usr/share/plymouth/themes/${b}" usr/share/grub/themes/kura \
         \( -type f -o -type l \) -print 2>/dev/null ) | sort
 }

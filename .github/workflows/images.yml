@@ -209,7 +209,7 @@ jobs:
         run: |
           mkdir artifact
           find release/*/${{ matrix.release_glob }} -maxdepth 1 -type f \
-            -name '*.img.zst' -exec ln -t artifact {} +
+            \( -name '*.img.zst' -o -name '*.deb' \) -exec ln -t artifact {} +
 
       # The images are only needed by release.yml
       - name: Upload image
