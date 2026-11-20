@@ -34,8 +34,8 @@ SERVICE_NAMES=(docker ssh network)
 # shellcheck disable=SC1090
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
 # the version installed (the kura package's), over the image's
-# shellcheck disable=SC1090
 RELEASE_FILE="${KURA_RELEASE:-/usr/lib/${BRAND_PREFIX:-kura}/release}"
+# shellcheck disable=SC1090
 [ ! -f "${RELEASE_FILE}" ] || . "${RELEASE_FILE}"
 
 # human_uptime <seconds>: "3 min" in the first hour, then "5 h", then "4 days",
