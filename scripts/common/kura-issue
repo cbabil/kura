@@ -33,6 +33,9 @@ SERVICE_NAMES=(docker ssh network)
 
 # shellcheck disable=SC1090
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+# the version installed (the kura package's), over the image's
+# shellcheck disable=SC1090
+[ ! -f "${KURA_RELEASE:-/usr/lib/${BRAND_PREFIX:-kura}/release}" ] || . "${KURA_RELEASE:-/usr/lib/${BRAND_PREFIX:-kura}/release}"
 
 # human_uptime <seconds>: "3 min" in the first hour, then "5 h", then "4 days",
 # so the screen (and /etc/issue) changes at most hourly once the device is up

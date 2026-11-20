@@ -151,6 +151,15 @@ BRANDEOF
 printf 'BRAND_TAGLINE=%q\n' "${TAGLINE}" >> "${ROOTFS}/etc/kura/brand.env"
 chmod 644 "${ROOTFS}/etc/kura/brand.env"
 
+# ---- The version, and the package's hooks (ADR-025) ----
+# Both belong to the kura package (scripts/packaging/kura-package.sh), which
+# build.sh makes from this rootfs: an upgrade with apt replaces them, so the
+# version shown is the one installed, not the image's (brand.env keeps that).
+install -d "${ROOTFS}/usr/lib/${BRAND}"
+printf 'BRAND_VERSION="%s"\n' "${VERSION}" > "${ROOTFS}/usr/lib/${BRAND}/release"
+sed "s|__BRAND__|${BRAND}|g" "$(dirname "$0")/pkg-hooks.sh" > "${ROOTFS}/usr/lib/${BRAND}/pkg-hooks.sh"
+chmod 0644 "${ROOTFS}/usr/lib/${BRAND}/release" "${ROOTFS}/usr/lib/${BRAND}/pkg-hooks.sh"
+
 # ---- Patch config.json with env values ----
 if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then
     sed -i "s/\"name\": \"[^\"]*\"/\"name\": \"${OS_NAME}\"/" \
@@ -229,10 +238,10 @@ JRNLEOF
 # ---- Aggressive cleanup to reduce image size ----
 echo "Stripping rootfs to reduce image size..."
 
-# Apt/dpkg metadata (immutable OS — not needed at runtime)
+# Apt's downloads and lists (fetched again on the device). dpkg's own state
+# and debconf's answers stay: the device upgrades with apt (ADR-025).
 rm -rf "${ROOTFS}/var/cache/apt/archives"/*.deb
 rm -rf "${ROOTFS}/var/lib/apt/lists"/*
-rm -rf "${ROOTFS}/var/cache/debconf"/*
 rm -rf "${ROOTFS}/var/lib/dpkg/info"/*.md5sums
 rm -rf "${ROOTFS}/usr/share/bug"
 rm -rf "${ROOTFS}/usr/share/lintian"

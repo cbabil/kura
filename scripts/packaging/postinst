@@ -1,0 +1,8 @@
+#!/bin/sh
+# postinst of the __BRAND__ package: what a new Kura version needs done on
+# the device (and, harmlessly, inside the image build).
+set -e
+if [ "$1" = configure ]; then
+    . /usr/lib/__BRAND__/pkg-hooks.sh
+    kura_configure "$2"
+fi

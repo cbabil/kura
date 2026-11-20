@@ -10,6 +10,9 @@ export LC_ALL=C.UTF-8
 BRAND_ENV="/etc/kura/brand.env"
 # shellcheck disable=SC1090
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+# the version installed (the kura package's), over the image's
+# shellcheck disable=SC1090
+[ ! -f "/usr/lib/${BRAND_PREFIX:-kura}/release" ] || . "/usr/lib/${BRAND_PREFIX:-kura}/release"
 # shellcheck source=SCRIPTDIR/../motd.sh
 . "/usr/lib/${BRAND_PREFIX:-kura}/motd.sh" || exit 0
 # shellcheck disable=SC1091

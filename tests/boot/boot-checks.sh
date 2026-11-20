@@ -221,6 +221,15 @@ sys.exit(1)
 PY
 }
 
+# kura_package: dpkg knows the image's Kura version (ADR-025), so apt can
+# install the next one
+kura_package() {
+    local facts
+    facts=$(ssh_run "dpkg-query -W -f='\${Status} \${Version}' ${BRAND}; echo; cat /usr/lib/${BRAND}/release")
+    report_facts "${facts}"
+    [[ "${facts}" == "install ok installed "* ]] && [[ "${facts}" == *BRAND_VERSION=* ]]
+}
+
 # installer_full_size: the installer's last screens are at the display's
 # resolution (1920 wide here): the boot menu's smaller mode was left
 installer_full_size() {
