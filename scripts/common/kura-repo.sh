@@ -13,24 +13,30 @@
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/apt-components.sh"
 
-# Overridable: the upgrade test serves its own repository, with its own key
-: "${KURA_KEY_FILE:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/config/keys/kura-archive.asc}"
-: "${KURA_GPG_FINGERPRINT:=BEDAAE58BB6B8D7A6221435194D0EA5CB90A6B6E}"
+# Assigned here, never read from the environment: what an image trusts is
+# decided by this file alone
+KURA_KEY_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/config/keys/kura-archive.asc"
+KURA_GPG_FINGERPRINT="BEDAAE58BB6B8D7A6221435194D0EA5CB90A6B6E"
 
-# install_kura_repo <rootfs> <brand> <owner/repo>: the pinned key and the
-# source (both in the kura package, which can change them later)
+# install_kura_repo <rootfs> <brand> <owner/repo> [<url> <key-file>
+# <fingerprint>]: the pinned key and the source (both in the kura package,
+# which can change them later). The three optional arguments name another
+# repository and its key: only the upgrade test passes them, for the one it
+# serves itself.
 install_kura_repo() {
     local rootfs="$1" b="$2" tmp
+    local url="${4:-https://github.com/$3/releases/latest/download/}"
+    local key="${5:-${KURA_KEY_FILE}}" fingerprint="${6:-${KURA_GPG_FINGERPRINT}}"
     local keyring="usr/share/keyrings/${b}-archive.asc"
     tmp=$(mktemp)
-    pinned_key "${KURA_KEY_FILE}" "${KURA_GPG_FINGERPRINT}" "${tmp}" || { rm -f "${tmp}"; return 1; }
+    pinned_key "${key}" "${fingerprint}" "${tmp}" || { rm -f "${tmp}"; return 1; }
     install -d -m 0755 "${rootfs}/usr/share/keyrings" "${rootfs}/etc/apt/sources.list.d" \
         "${rootfs}/etc/apt/preferences.d"
     install -m 0644 "${tmp}" "${rootfs}/${keyring}"
     rm -f "${tmp}"
     cat > "${rootfs}/etc/apt/sources.list.d/${b}.sources" <<SOURCE
 Types: deb
-URIs: ${KURA_REPO_URL:-https://github.com/$3/releases/latest/download/}
+URIs: ${url}
 Suites: ./
 Signed-By: /${keyring}
 SOURCE

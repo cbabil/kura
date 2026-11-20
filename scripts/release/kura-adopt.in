@@ -26,7 +26,8 @@ adopt_files() {
     local path data
     while read -r path data; do
         [ -n "${data}" ] || continue
-        mkdir -p "${ROOT}/$(dirname "${path}")"
+        # a new folder is world-readable whatever root's umask; an existing one is left
+        [ -d "${ROOT}/$(dirname "${path}")" ] || (umask 022 && mkdir -p "${ROOT}/$(dirname "${path}")")
         (umask 022 && base64 -d <<< "${data}" > "${ROOT}/${path}.new") &&
             chmod 0644 "${ROOT}/${path}.new" && mv "${ROOT}/${path}.new" "${ROOT}/${path}" || return 1
     done <<< "${FILES}"

@@ -94,8 +94,8 @@ gpg --batch --quiet --pinentry-mode loopback --passphrase '' --allow-freeform-ui
 TEST_FPR=$(gpg --batch --list-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')
 gpg --batch --armor --export "${TEST_FPR}" > "${OUT}/test-key.asc"
 "${REPO_DIR}/scripts/release/make-apt-repo.sh" "${SERVE}" "${TEST_FPR}"
-KURA_REPO_URL="http://10.0.2.2:${HTTP_PORT}/" KURA_KEY_FILE="${OUT}/test-key.asc" KURA_GPG_FINGERPRINT="${TEST_FPR}" \
-    "${REPO_DIR}/scripts/release/make-adopt.sh" "${BRAND}" test/test > "${SERVE}/kura-adopt.sh"
+"${REPO_DIR}/scripts/release/make-adopt.sh" "${BRAND}" test/test "http://10.0.2.2:${HTTP_PORT}/" \
+    "${OUT}/test-key.asc" "${TEST_FPR}" > "${SERVE}/kura-adopt.sh"
 python3 -m http.server "${HTTP_PORT}" --bind 127.0.0.1 --directory "${SERVE}" > "${OUT}/http.log" 2>&1 &
 HTTP_PID=$!
 
@@ -140,16 +140,19 @@ upgrade() {
 }
 
 # upgraded: the package at the test version, the new version shown, the
-# automatic restart off, and nothing left for apt to do
+# automatic restart off, the daily security updates still on, and nothing
+# left for apt to do
 upgraded() {
     local facts
     facts=$(ssh_run "dpkg-query -W -f='\${Status} \${Version}' ${BRAND}; echo
         cat /usr/lib/${BRAND}/release
         grep -c 'Automatic-Reboot \"false\"' /etc/apt/apt.conf.d/52${BRAND}-upgrades
+        grep -c 'Unattended-Upgrade \"1\"' /etc/apt/apt.conf.d/20auto-upgrades
         apt-cache policy ${BRAND} | grep -c 'Installed: ${TEST_VERSION}'")
     report_facts "${facts}"
     [ "${facts}" = "install ok installed ${TEST_VERSION}
 ${NEW_RELEASE}
+1
 1
 1" ]
 }

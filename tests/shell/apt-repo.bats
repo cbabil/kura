@@ -49,10 +49,23 @@ Pin-Priority: 500" ]
 }
 
 @test "install_kura_repo: a key file without the pinned key is refused" {
-    KURA_GPG_FINGERPRINT="0000000000000000000000000000000000000000"
-    run install_kura_repo "${ROOTFS}" kura cbabil/kura
+    run install_kura_repo "${ROOTFS}" kura cbabil/kura http://test/ "${KURA_KEY_FILE}" \
+        0000000000000000000000000000000000000000
     [ "$status" -ne 0 ]
     [ ! -e "${ROOTFS}/etc/apt/sources.list.d/kura.sources" ]
+}
+
+@test "the pinned key cannot be swapped through the environment: only a caller's explicit arguments" {
+    local other="${BATS_TEST_TMPDIR}/other.asc"
+    : > "${other}"
+    KURA_KEY_FILE="${other}" KURA_GPG_FINGERPRINT=0000000000000000000000000000000000000000 \
+        KURA_REPO_URL=http://evil/ bash -c "source '${REPO_ROOT}/scripts/common/kura-repo.sh' &&
+            install_kura_repo '${ROOTFS}' kura cbabil/kura"
+    grep -q "BEGIN PGP PUBLIC KEY BLOCK" "${ROOTFS}/usr/share/keyrings/kura-archive.asc"
+    file_has "${ROOTFS}/etc/apt/sources.list.d/kura.sources" "URIs: https://github.com/cbabil/kura/releases/latest/download/"
+    # the image build passes none
+    grep -q 'install_kura_repo "${ROOTFS}" "${BRAND}" "${OS_RELEASE_REPO:-cbabil/kura}"$' \
+        "${REPO_ROOT}/scripts/common/customize-rootfs.sh"
 }
 
 @test "Kura versions are not installed by the automatic updates (the owner asks for them)" {

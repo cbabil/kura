@@ -55,6 +55,11 @@ stub_tools() {
     adopt_files
     [ "$(file_mode "${ADOPT_ROOT}/etc")" = "750" ]          # existing folders keep their mode
     [ "$(file_mode "${ADOPT_ROOT}/etc/apt/sources.list.d/kura.sources")" = "644" ]
+    # readable by apt's unprivileged user even under root's strict umask
+    rm -rf "${ADOPT_ROOT}/usr/share/keyrings"
+    (umask 077 && adopt_files)
+    [ "$(file_mode "${ADOPT_ROOT}/usr/share/keyrings")" = "755" ]
+    [ "$(file_mode "${ADOPT_ROOT}/usr/share/keyrings/kura-archive.asc")" = "644" ]
 }
 
 @test "seed_units: units the device already has keep their on/off state; new ones get enabled" {

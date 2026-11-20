@@ -5,15 +5,15 @@
 # repository's key, source and pin inside, exactly as install_kura_repo
 # (scripts/common/kura-repo.sh) puts them in every new image.
 #
-# Usage: make-adopt.sh <brand> <owner/repo> > kura-adopt.sh
-# KURA_REPO_URL, KURA_KEY_FILE and KURA_GPG_FINGERPRINT (read by
-# kura-repo.sh) override the repository: the upgrade test serves its own,
-# signed with a throwaway key.
+# Usage: make-adopt.sh <brand> <owner/repo> [<url> <key-file> <fingerprint>]
+#        > kura-adopt.sh
+# The optional arguments name another repository and its key: the upgrade
+# test's own, signed with a throwaway key.
 
 set -euo pipefail
 
-BRAND="${1:?Usage: $0 <brand> <owner/repo>}"
-REPO="${2:?Usage: $0 <brand> <owner/repo>}"
+BRAND="${1:?Usage: $0 <brand> <owner/repo> [<url> <key-file> <fingerprint>]}"
+REPO="${2:?Usage: $0 <brand> <owner/repo> [<url> <key-file> <fingerprint>]}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=scripts/common/kura-repo.sh
@@ -23,7 +23,7 @@ source "${HERE}/../common/brand-defaults.sh"
 
 stage=$(mktemp -d)
 trap 'rm -rf "${stage}"' EXIT
-install_kura_repo "${stage}" "${BRAND}" "${REPO}"
+install_kura_repo "${stage}" "${BRAND}" "${REPO}" "${@:3}"
 url=$(sed -n 's/^URIs: //p' "${stage}/etc/apt/sources.list.d/${BRAND}.sources")
 # one "<path> <base64>" per file, joined for sed with a marker for the newlines
 files=$(cd "${stage}" && find usr etc -type f | sort | while read -r f; do
