@@ -453,6 +453,39 @@ stub_root_view() {  # the bind mount of / shows SETUP_ROOT as it is underneath
     [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "applied" ]
 }
 
+@test "finish_storage: not in the boot that built the layout (its volumes mount after the restart)" {
+    stub_root_view
+    MOUNTED=""
+    mkdir -p "${SETUP_ROOT}/var/lib/kura" "${SETUP_ROOT}/run" "${SETUP_ROOT}/var/log/apt"
+    touch "${SETUP_ROOT}/var/lib/kura/.storage-pending" "${SETUP_ROOT}/run/kura-storage-built"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$status" -eq 0 ]
+    # left for the next boot
+    [ -e "${SETUP_ROOT}/var/lib/kura/.storage-pending" ]
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/storage-status" ]
+    [ ! -e "${CALLS}" ]
+}
+
+@test "apply_storage_dir: marks this boot as the one that built the layout" {
+    stub_storage_device 500107862016
+    storage "${SERVER}"
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ -e "${SETUP_ROOT}/run/kura-storage-built" ]
+}
+
+@test "finish_storage: names the first volume that did not mount" {
+    stub_root_view
+    MOUNTED=""
+    mkdir -p "${SETUP_ROOT}/var/lib/kura"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        "/dev/kura/home /home ext4 nosuid,nodev 0 2" > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "failed: mounting /var/log" ]
+}
+
 @test "finish_storage: a volume that did not mount keeps its folder, and says so" {
     stub_root_view
     MOUNTED="/var/log"
@@ -523,6 +556,8 @@ stub_root_view() {  # the bind mount of / shows SETUP_ROOT as it is underneath
     file_has "${finish}" "After=local-fs.target"
     file_has "${finish}" "Before=sysinit.target docker.service kura-firstboot.service"
     file_has "${finish}" "ConditionPathExists=/var/lib/kura/.storage-pending"
+    # never in the boot that built the layout: the volumes are not mounted yet
+    file_has "${finish}" "ConditionPathExists=!/run/kura-storage-built"
     file_has "${finish}" "ExecStart=/usr/lib/kura/firstboot-storage.sh finish"
     [ "$(readlink "${ROOTFS}/etc/systemd/system/sysinit.target.wants/kura-storage-finish.service")" = \
       "/usr/lib/systemd/system/kura-storage-finish.service" ]

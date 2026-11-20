@@ -24,6 +24,9 @@ SETUP_ROOT="${SETUP_ROOT:-}"                    # tests write under a scratch ro
 STORAGE_SYS="${STORAGE_SYS:-/sys/class/block}"
 STORAGE_DONE="/var/lib/${SETUP_BRAND}/.storage-done"
 STORAGE_PENDING="/var/lib/${SETUP_BRAND}/.storage-pending"   # built, restart to use
+# This boot built the layout (gone at the restart: /run is a RAM disk): the
+# finishing step, which the pending flag would start, waits for the next boot
+STORAGE_BUILT="/run/${SETUP_BRAND}-storage-built"
 GIB=1073741824
 MIB=1048576
 STORAGE_SLACK=$(( 16 * MIB ))   # LVM metadata and extent rounding
@@ -196,6 +199,7 @@ apply_storage_dir() {
         "") return 0 ;;
         skipped:*) skip_storage "${plan#skipped: }"; return 0 ;;
     esac
+    install -d "${SETUP_ROOT}/run" && touch "${SETUP_ROOT}${STORAGE_BUILT}" || return 1
     # before the copies, so the volume holding /var/lib carries it too
     install -d "$(dirname "${SETUP_ROOT}${STORAGE_PENDING}")" && touch "${SETUP_ROOT}${STORAGE_PENDING}" || return 1
     if ! build_storage "/dev/${disk}" "${part}" "${root_dev}" "${plan}"; then
@@ -234,11 +238,11 @@ clear_covered() {
     local mount
     while read -r mount; do
         if ! mountpoint -q "${SETUP_ROOT}${mount}"; then
-            STORAGE_FAILED="mounting ${mount}"
+            STORAGE_FAILED="${STORAGE_FAILED:-mounting ${mount}}"
             continue
         fi
         [ ! -d "$1${mount}" ] || find "$1${mount}" -xdev -mindepth 1 -delete ||
-            STORAGE_FAILED="clearing the root's old ${mount}"
+            : "${STORAGE_FAILED:=clearing the old ${mount} on the root}"
     done < <(covered_folders)
 }
 
@@ -248,6 +252,7 @@ clear_covered() {
 # a failure is recorded for the login screen and does not stop it.
 finish_storage() {
     local view
+    [ ! -e "${SETUP_ROOT}${STORAGE_BUILT}" ] || return 0   # the restart comes first
     STORAGE_FAILED=""
     if view=$(mktemp -d) && mount --bind "${SETUP_ROOT:-/}" "${view}"; then
         if covered_folders | grep -qxE '/var|/var/log'; then

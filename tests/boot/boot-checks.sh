@@ -283,7 +283,7 @@ full_layout_built() {
     facts=$(ssh_run "cat /var/lib/${BRAND}/storage-status
         for d in /var /var/lib /var/lib/docker /var/log /tmp /echange; do findmnt -no SOURCE \"\$d\"; done
         stat -c %a /tmp
-        [ \"\$(swapon --noheadings --show=NAME | xargs -r readlink -f)\" = \"\$(readlink -f /dev/${BRAND}/swap)\" ] && echo swap-on
+        [ \"\$(awk 'NR > 1 { print \$1 }' /proc/swaps | xargs -r readlink -f)\" = \"\$(readlink -f /dev/${BRAND}/swap)\" ] && echo swap-on
         dpkg-query -W -f='\${Status}\n' bash")
     facts+=$'\n'$(sudo_run "sh -c 'v=\$(mktemp -d) && mount --bind / \$v && find \$v/var -mindepth 1 | wc -l; umount \$v; rmdir \$v'")
     report_facts "${facts}"
@@ -367,8 +367,14 @@ less_works() {
 }
 
 collect_diagnostics() {
-    sudo_run "journalctl -b --no-pager -u docker -u ${BRAND}-firstboot -u ${BRAND}-config" \
+    # every boot (the disk layout is built in one and finished in the next),
+    # with the units a failed check most often comes down to
+    sudo_run "journalctl --no-pager -u docker -u ${BRAND}-firstboot -u ${BRAND}-config \
+        -u ${BRAND}-storage -u ${BRAND}-storage-finish \
+        -u ${BRAND}-desktopd -u ${BRAND}-desktop-cert -u ${BRAND}-helper" \
         > "${OUT}/journal.txt" 2>&1 || true
+    sudo_run "systemctl --no-pager --failed; systemctl --no-pager status ${BRAND}-desktopd ${BRAND}-helper" \
+        > "${OUT}/units.txt" 2>&1 || true
     { sudo_run "docker ps -a"; sudo_run "lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT"; } \
         > "${OUT}/system.txt" 2>&1 || true
 }

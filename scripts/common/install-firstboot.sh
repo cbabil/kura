@@ -106,6 +106,9 @@ DefaultDependencies=no
 After=local-fs.target
 Before=sysinit.target docker.service ${brand}-firstboot.service
 ConditionPathExists=/var/lib/${brand}/.storage-pending
+# not in the boot that built the layout, before its restart: the volumes
+# are not mounted yet
+ConditionPathExists=!/run/${brand}-storage-built
 
 [Service]
 Type=oneshot
