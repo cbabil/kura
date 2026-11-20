@@ -37,7 +37,11 @@ seed_defaults() {
     [ -f "${default}" ] || return 0
     mkdir -p "$(dirname "${file}")"
     if [ -f "${file}" ]; then
-        merged=$(jq -s '.[0] * .[1]' "${default}" "${file}") || return 1
+        # a file jq cannot read is the owner's to fix; the upgrade goes on
+        merged=$(jq -s '.[0] * .[1]' "${default}" "${file}" 2>/dev/null) || {
+            echo "WARNING: ${PKG_BRAND}: ${file} is not valid JSON; left as it is" >&2
+            return 0
+        }
     else
         merged=$(cat "${default}")
     fi
@@ -66,5 +70,13 @@ kura_configure() {
     # Nothing to restart inside the image build
     [ -d "${PKG_ROOT}/run/systemd/system" ] || return 0
     systemctl daemon-reload || true
-    [ -z "${1:-}" ] || systemctl try-restart "${PKG_BRAND}-desktopd.service" "${PKG_BRAND}-issue.service" || true
+    [ -n "${1:-}" ] || return 0
+    # An upgrade: Kura's running programs take the new version now; what
+    # runs at boot (hardening, new units) does at the next start, which the
+    # login screen and the message after login then ask for
+    systemd-sysusers 2>/dev/null || true
+    systemd-tmpfiles --create 2>/dev/null || true
+    systemctl try-restart "${PKG_BRAND}-helper.service" "${PKG_BRAND}-desktopd.service" \
+        "${PKG_BRAND}-issue.service" || true
+    touch "${PKG_ROOT}/run/reboot-required"
 }

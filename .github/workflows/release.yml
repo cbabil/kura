@@ -65,6 +65,8 @@ jobs:
           # against the public key in the repo
           command -v dpkg-scanpackages >/dev/null || sudo apt-get install -y -qq dpkg-dev
           export GNUPGHOME; GNUPGHOME=$(mktemp -d /tmp/g.XXXXXX)
+          # the signing key never outlives this step, whatever fails
+          trap 'gpgconf --kill all 2>/dev/null; rm -rf /tmp/g.*' EXIT
           printf '%s\n' "${KURA_APT_KEY}" | gpg --batch --quiet --import
           # shellcheck disable=SC1091
           source ../scripts/common/kura-repo.sh

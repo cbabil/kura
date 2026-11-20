@@ -135,7 +135,7 @@ setup() {
     ! output_has "is available" || false
     MOTD_UPGRADE="Kura 0.6.1"
     run motd_render
-    output_has "Kura 0.6.1 is available: sudo apt full-upgrade"
+    output_has "Kura 0.6.1 is available: sudo apt update && sudo apt full-upgrade"
 }
 
 @test "10-status: a pending restart and a new version come from the device" {

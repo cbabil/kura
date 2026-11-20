@@ -77,7 +77,7 @@ motd_render() {
         *) printf '\n%s services have failed: systemctl --failed\n' "${MOTD_FAILED}" ;;
     esac
     [ -z "${MOTD_UPGRADE:-}" ] ||
-        printf '\n%s is available: sudo apt full-upgrade\n' "${MOTD_UPGRADE}"
+        printf '\n%s is available: sudo apt update && sudo apt full-upgrade\n' "${MOTD_UPGRADE}"
     [ -z "${MOTD_REBOOT:-}" ] || printf '\n*** System restart required *** (sudo reboot)\n'
     echo
 }

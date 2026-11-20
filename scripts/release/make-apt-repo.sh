@@ -13,13 +13,15 @@ set -euo pipefail
 DIR="${1:?Usage: $0 <dir> [signing-key-fingerprint]}"
 KEY="${2:-}"
 
+# shellcheck source=scripts/common/hash.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../common/hash.sh"
+
 cd "${DIR}"
 compgen -G "./*.deb" >/dev/null || { echo "ERROR: no .deb files in ${DIR}" >&2; exit 1; }
 
 dpkg-scanpackages --multiversion . > Packages 2>/dev/null
 [ -s Packages ] || { echo "ERROR: dpkg-scanpackages listed nothing" >&2; exit 1; }
 
-sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 archs=$(for f in ./*.deb; do f="${f%.deb}"; echo "${f##*_}"; done | sort -u | tr '\n' ' ')
 
 cat > Release <<RELEASE
@@ -31,7 +33,7 @@ Date: $(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S UTC')
 Architectures: ${archs% }
 Description: Kura's own packages
 SHA256:
- $(sha256 Packages) $(wc -c < Packages | tr -d ' ') Packages
+ $(file_sha256 Packages) $(wc -c < Packages | tr -d ' ') Packages
 RELEASE
 
 if [ -n "${KEY}" ]; then

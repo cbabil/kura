@@ -6,27 +6,29 @@
 # (scripts/common/kura-repo.sh) puts them in every new image.
 #
 # Usage: make-adopt.sh <brand> <owner/repo> > kura-adopt.sh
-# KURA_REPO_URL, KURA_KEY_FILE and KURA_GPG_FINGERPRINT override the
-# repository (the upgrade test serves its own, signed with a throwaway key).
+# KURA_REPO_URL, KURA_KEY_FILE and KURA_GPG_FINGERPRINT (read by
+# kura-repo.sh) override the repository: the upgrade test serves its own,
+# signed with a throwaway key.
 
 set -euo pipefail
 
 BRAND="${1:?Usage: $0 <brand> <owner/repo>}"
 REPO="${2:?Usage: $0 <brand> <owner/repo>}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-key_file="${KURA_KEY_FILE:-}" fingerprint="${KURA_GPG_FINGERPRINT:-}"
 
 # shellcheck source=scripts/common/kura-repo.sh
 source "${HERE}/../common/kura-repo.sh"
-KURA_KEY_FILE="${key_file:-${KURA_KEY_FILE}}"
-KURA_GPG_FINGERPRINT="${fingerprint:-${KURA_GPG_FINGERPRINT}}"
+# shellcheck source=scripts/common/brand-defaults.sh
+source "${HERE}/../common/brand-defaults.sh"
 
 stage=$(mktemp -d)
 trap 'rm -rf "${stage}"' EXIT
 install_kura_repo "${stage}" "${BRAND}" "${REPO}"
 url=$(sed -n 's/^URIs: //p' "${stage}/etc/apt/sources.list.d/${BRAND}.sources")
-files=$(tar -czf - -C "${stage}" usr etc | base64 | tr -d '\n')
+# one "<path> <base64>" per file, joined for sed with a marker for the newlines
+files=$(cd "${stage}" && find usr etc -type f | sort | while read -r f; do
+    printf '%s %s@@' "${f}" "$(base64 < "${f}" | tr -d '\n')"
+done)
 
-name="$(tr '[:lower:]' '[:upper:]' <<< "${BRAND:0:1}")${BRAND:1}"
-sed -e "s|__BRAND_NAME__|${name}|g" -e "s|__BRAND__|${BRAND}|g" -e "s|__URL__|${url}|g" \
-    -e "s|__FILES__|${files}|" "${HERE}/kura-adopt.in"
+sed -e "s|__BRAND_NAME__|${OS_NAME:-${DEFAULT_NAME}}|g" -e "s|__BRAND__|${BRAND}|g" -e "s|__URL__|${url}|g" \
+    -e "s|__FILES__|${files}|" "${HERE}/kura-adopt.in" | awk '{ gsub(/@@/, "\n"); print }'

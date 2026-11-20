@@ -16,8 +16,7 @@ setup() {
     export ADOPT_ROOT ADOPT_SOURCED CALLS
     mkdir -p "${ADOPT_ROOT}/usr/lib/systemd/system" "${ADOPT_ROOT}/var/lib/kura"
     # shellcheck disable=SC1090
-    source "${ADOPT}"
-    set +euo pipefail
+    source "${ADOPT}"    # sourced, it sets no shell options (bats needs its own)
 }
 
 stub_tools() {
@@ -48,6 +47,16 @@ stub_tools() {
     file_has "${ADOPT_ROOT}/etc/apt/preferences.d/kura-archive" "Pin-Priority: -1"
 }
 
+@test "adopt_files: writes the three files itself, never an archive's folders (their owner would become the device's)" {
+    run grep -c "tar " "${ADOPT}"
+    [ "$(grep -c 'tar -x[a-z]*f - -C' "${ADOPT}")" -eq 0 ]
+    mkdir -p "${ADOPT_ROOT}/etc"
+    chmod 0750 "${ADOPT_ROOT}/etc"
+    adopt_files
+    [ "$(file_mode "${ADOPT_ROOT}/etc")" = "750" ]          # existing folders keep their mode
+    [ "$(file_mode "${ADOPT_ROOT}/etc/apt/sources.list.d/kura.sources")" = "644" ]
+}
+
 @test "seed_units: units the device already has keep their on/off state; new ones get enabled" {
     touch "${ADOPT_ROOT}/usr/lib/systemd/system/kura-desktopd.service"
     printf '%s\n' "multi-user.target kura-desktopd.service" "multi-user.target kura-new.service" | seed_units
@@ -59,11 +68,11 @@ stub_tools() {
     touch "${ADOPT_ROOT}/usr/lib/systemd/system/kura-desktopd.service"
     run adopt
     [ "$status" -eq 0 ]
-    file_has "${CALLS}" "apt-get update -o Dir::Etc::sourcelist=sources.list.d/kura.sources -o Dir::Etc::sourceparts=-"
+    file_has "${CALLS}" "apt-get update -o DPkg::Lock::Timeout=120 -o Dir::Etc::sourcelist=sources.list.d/kura.sources -o Dir::Etc::sourceparts=-"
     file_has "${CALLS}" "apt-get download kura"
-    grep -q "^dpkg -i .*kura_0.6.0_amd64.deb" "${CALLS}"
+    # through apt, which waits for the lock and brings what the package depends on
+    grep -q "^apt-get install -y -o DPkg::Lock::Timeout=120 /.*kura_0.6.0_amd64.deb" "${CALLS}"
     [ "$(cat "${ADOPT_ROOT}/var/lib/kura/units-enabled")" = "multi-user.target kura-desktopd.service" ]
-    # the seeding comes before the install, whose postinst reads it
     output_has "sudo apt full-upgrade"
 }
 

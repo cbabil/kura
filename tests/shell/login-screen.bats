@@ -254,7 +254,8 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     LOGIN_UPGRADE="Kura 0.6.1"
     LOGIN_RESTART="yes"
     run kura_issue "The lightweight OS for your home server." 9146ff
-    output_has "Kura 0.6.1 available · sudo apt full-upgrade"
+    output_has "Kura 0.6.1 available"
+    output_has "sudo apt update && sudo apt full-upgrade"
     output_has "restart required · sudo reboot"
     LOGIN_UPGRADE="" LOGIN_RESTART=""
     run kura_issue "The lightweight OS for your home server." 9146ff

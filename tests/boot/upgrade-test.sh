@@ -118,7 +118,9 @@ qemu-system-x86_64 -machine q35,smm=on -m 2048 -smp 2 "${ACCEL[@]}" \
 # owner_state: what an upgrade must leave as the owner set it
 owner_state() {
     sudo_run "sh -c 'hostname; sha256sum /etc/${BRAND}/config.json /etc/ssh/sshd_config.d/10-${BRAND}.conf \
-        /etc/${BRAND}/brand.env /etc/fstab; systemctl is-enabled ${BRAND}-desktopd ssh'" 2>&1
+        /etc/${BRAND}/brand.env /etc/fstab; systemctl is-enabled ${BRAND}-desktopd ssh;
+        stat -c \"%u:%g %a %n\" / /etc /etc/apt /etc/apt/sources.list.d /etc/apt/preferences.d /usr /usr/share \
+            /usr/share/keyrings'" 2>&1
 }
 
 # upgrade: adopt a release without the package, else point its source at the
@@ -127,9 +129,9 @@ upgrade() {
     local url="http://10.0.2.2:${HTTP_PORT}/kura-adopt.sh"
     if ssh_run "dpkg-query -W -f='\${Status}' ${BRAND} 2>/dev/null" | grep -q "install ok installed"; then
         report "  path: apt (the release has the ${BRAND} package)"
-        sudo_run "bash -c 'curl -fsSL ${url} > /run/adopt.sh && ADOPT_SOURCED=1 . /run/adopt.sh && adopt_files &&
-            apt-get update -o Dir::Etc::sourcelist=sources.list.d/${BRAND}.sources -o Dir::Etc::sourceparts=- \
-                -o APT::Get::List-Cleanup=0 &&
+        # the test repository in place of the release's, with the adopt script's own steps
+        sudo_run "bash -c 'curl -fsSL ${url} > /run/adopt.sh && ADOPT_SOURCED=1 . /run/adopt.sh &&
+            adopt_files && adopt_refresh &&
             DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade ${BRAND}'"
     else
         report "  path: kura-adopt.sh (the release has no ${BRAND} package)"
@@ -154,19 +156,6 @@ ${NEW_RELEASE}
 
 version_shown() { ssh_run "grep -qF '$(sed 's/.*"\(.*\)"/\1/' <<< "${NEW_RELEASE}")' /etc/issue"; }
 owner_state_kept() { local now; now=$(owner_state); report_facts "${now}"; [ "${now}" = "${BEFORE}" ]; }
-back_after_restart() {
-    sudo_run "systemctl reboot" || true
-    sleep 20
-    wait_for "SSH after the restart" ssh_run true
-}
-# running_services: the services that run on every boot (first boot's own
-# units, which boot-checks.sh's services_active also expects, are done)
-running_services() {
-    local states
-    states=$(ssh_run systemctl is-active docker ssh "${BRAND}-config" || true)
-    report_facts "${states}"
-    [ "$(echo "${states}" | grep -cx active)" -eq 3 ]
-}
 failed_units() { ssh_run "systemctl --failed --no-legend --plain | cut -d' ' -f1 | sort" || true; }
 # no_new_failed_units: none that the released version did not already have
 no_new_failed_units() {
@@ -188,11 +177,12 @@ check "upgrade runs" upgrade
 check "package installed, new version, no restart by itself, apt satisfied" upgraded
 check "the owner's settings and choices are unchanged" owner_state_kept
 check "login screen shows the new version" wait_for "kura-issue" version_shown
-check "back after a restart" back_after_restart
+check "back after a restart" restart_device
 check "still upgraded after the restart" upgraded
 check "the owner's settings and choices are unchanged after the restart" owner_state_kept
 check "password logins still refused" password_login_refused
-check "Docker, SSH and ${BRAND}-config active" running_services
+# first boot's own units, which the default list expects, are done by now
+check "Docker, SSH and ${BRAND}-config active" services_active docker ssh "${BRAND}-config"
 check "no unit failed that worked before" no_new_failed_units
 
 if [ "${FAILED}" -ne 0 ]; then

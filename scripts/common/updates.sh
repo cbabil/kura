@@ -12,3 +12,11 @@ newer_version() {
         $1 == "Candidate:" { want = $2 }
         END { if (want != "" && want != "(none)" && have != "(none)" && want != have) print want }' || true
 }
+
+# upgrade_notice <brand> <name>: "<Name> 0.6.1" when that version waits in
+# the repository
+upgrade_notice() {
+    local newer
+    newer=$(newer_version "$1")
+    [ -z "${newer}" ] || echo "$2 ${newer}"
+}

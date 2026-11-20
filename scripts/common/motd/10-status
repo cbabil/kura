@@ -50,8 +50,7 @@ MOTD_REBOOT=""
 MOTD_UPGRADE=""
 # shellcheck source=SCRIPTDIR/../updates.sh
 if . "/usr/lib/${BRAND_PREFIX:-kura}/updates.sh" 2>/dev/null; then
-    newer=$(newer_version "${BRAND_PREFIX:-kura}")
-    [ -z "${newer}" ] || MOTD_UPGRADE="${BRAND_NAME:-Kura} ${newer}"
+    MOTD_UPGRADE=$(upgrade_notice "${BRAND_PREFIX:-kura}" "${BRAND_NAME:-Kura}")
 fi
 
 motd_render

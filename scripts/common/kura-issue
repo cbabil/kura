@@ -35,7 +35,8 @@ SERVICE_NAMES=(docker ssh network)
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
 # the version installed (the kura package's), over the image's
 # shellcheck disable=SC1090
-[ ! -f "${KURA_RELEASE:-/usr/lib/${BRAND_PREFIX:-kura}/release}" ] || . "${KURA_RELEASE:-/usr/lib/${BRAND_PREFIX:-kura}/release}"
+RELEASE_FILE="${KURA_RELEASE:-/usr/lib/${BRAND_PREFIX:-kura}/release}"
+[ ! -f "${RELEASE_FILE}" ] || . "${RELEASE_FILE}"
 
 # human_uptime <seconds>: "3 min" in the first hour, then "5 h", then "4 days",
 # so the screen (and /etc/issue) changes at most hourly once the device is up
@@ -71,8 +72,7 @@ LOGIN_SETUP=""
 LOGIN_UPGRADE=""
 # shellcheck source=SCRIPTDIR/updates.sh
 if . "$(dirname "$0")/updates.sh" 2>/dev/null; then
-    newer=$(newer_version "${BRAND_PREFIX:-kura}")
-    [ -z "${newer}" ] || LOGIN_UPGRADE="${BRAND_NAME:-Kura} ${newer}"
+    LOGIN_UPGRADE=$(upgrade_notice "${BRAND_PREFIX:-kura}" "${BRAND_NAME:-Kura}")
 fi
 LOGIN_RESTART=""
 [ ! -f "${KURA_REBOOT_REQUIRED:-/run/reboot-required}" ] || LOGIN_RESTART="yes"

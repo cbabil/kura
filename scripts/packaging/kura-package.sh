@@ -7,7 +7,8 @@
 #
 # In the package: Kura's programs, units and snippets. Not in it: what a
 # device changes (config.json, brand.env, hardening.json, the sshd snippet,
-# /etc/issue, fstab, the unit links). hardening.json ships as a default,
+# /etc/issue, fstab, the unit links, and 20auto-upgrades, the owner's on/off
+# for automatic updates). hardening.json ships as a default,
 # and the Kura units the image enables as units.list; pkg-hooks.sh (run by
 # the postinst) applies both on the device.
 #
@@ -22,7 +23,7 @@ kura_owned() {
         usr/share/dbus-1/system.d/io.kura.Helper.conf \
         "usr/lib/sysusers.d/${b}-desktop.conf" "usr/lib/tmpfiles.d/${b}-desktop.conf" \
         etc/update-motd.d "etc/NetworkManager/conf.d/00-${b}-network.conf" "etc/profile.d/${b}.sh" \
-        etc/apt/apt.conf.d/20auto-upgrades "etc/apt/apt.conf.d/52${b}-upgrades" \
+        "etc/apt/apt.conf.d/52${b}-upgrades" \
         etc/apt/apt.conf.d/53"${b}"-*-upgrades "etc/apt/apt.conf.d/90${b}-efi" \
         "etc/kernel/postinst.d/zz-${b}-boot" \
         "usr/share/keyrings/${b}-archive.asc" "etc/apt/sources.list.d/${b}.sources" \
@@ -45,8 +46,10 @@ kura_units() {
 stage_kura_package() {
     local rootfs="$1" b="$2" version="$3" arch="$4" stage="$5" here f
     here="$(dirname "${BASH_SOURCE[0]}")"
-    if ! [[ "${version}" =~ ^[0-9][A-Za-z0-9.+~-]*$ ]]; then
-        echo "ERROR: '${version}' is not a Debian package version" >&2
+    # digits and dots only: "0.6.0-rc1" would sort after "0.6.0", and devices
+    # on it would never be offered the final version
+    if ! [[ "${version}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+        echo "ERROR: '${version}' is not a plain version (digits and dots)" >&2
         return 1
     fi
     rm -rf "${stage}"

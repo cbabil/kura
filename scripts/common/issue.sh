@@ -134,8 +134,10 @@ issue_panel() {
                 issue_bar "  ${ISSUE_AMBER}${LOGIN_SETUP#*: }" ;;
     esac
     # What waits for the owner (ADR-025): a new version, a restart
-    [ -z "${LOGIN_UPGRADE:-}" ] ||
-        issue_bar "${ISSUE_AMBER}▲ ${LOGIN_UPGRADE} available · sudo apt full-upgrade"
+    if [ -n "${LOGIN_UPGRADE:-}" ]; then   # the command on its own line, so it fits
+        issue_bar "${ISSUE_AMBER}▲ ${LOGIN_UPGRADE} available"
+        issue_bar "  ${ISSUE_AMBER}sudo apt update && sudo apt full-upgrade"
+    fi
     [ -z "${LOGIN_RESTART:-}" ] || issue_bar "${ISSUE_AMBER}▲ restart required · sudo reboot"
     issue_bar
     printf '%s└%s\n' "${ISSUE_MUTED}" "${rule}"

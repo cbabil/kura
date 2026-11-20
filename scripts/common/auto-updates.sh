@@ -26,7 +26,8 @@ CONF
     cat > "${conf}/52${brand}-upgrades" <<'CONF'
 Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
-// Never a restart by itself: the login screen and the message after login
+// Kura's policy, replaced by each Kura version: put your own settings in a
+// later file (99-local, say). Never a restart by itself: the login screen and the message after login
 // say when one is due, and the owner restarts when it suits them
 Unattended-Upgrade::Automatic-Reboot "false";
 // No translated package descriptions: less to download and write each day

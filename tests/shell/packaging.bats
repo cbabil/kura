@@ -23,13 +23,14 @@ setup() {
 
 # fake_rootfs: a finished image, as much of it as the package cares about
 fake_rootfs() {
-    local f units="${ROOTFS}/usr/lib/systemd/system" wants="${ROOTFS}/etc/systemd/system"
+    local f wants="${ROOTFS}/etc/systemd/system"
     for f in usr/bin/kura-config usr/bin/kura-security usr/lib/kura/firstboot.sh usr/lib/kura/security/common.sh \
              usr/lib/kura/kura-desktopd usr/lib/systemd/system/kura-firstboot.service \
              usr/lib/systemd/system/kura-desktopd.service usr/lib/systemd/system/kura-issue.timer \
              usr/lib/systemd/system/docker.service usr/share/dbus-1/system.d/io.kura.Helper.conf \
              usr/lib/sysusers.d/kura-desktop.conf usr/lib/tmpfiles.d/kura-desktop.conf \
              etc/update-motd.d/10-status etc/apt/apt.conf.d/52kura-upgrades etc/apt/apt.conf.d/53kura-docker-upgrades \
+             etc/apt/apt.conf.d/20auto-upgrades \
              etc/apt/apt.conf.d/90kura-efi etc/profile.d/kura.sh usr/share/grub/themes/kura/theme.txt \
              usr/share/plymouth/themes/kura/kura.script \
              etc/kura/config.json etc/kura/brand.env etc/kura/security/hardening.json \
@@ -43,7 +44,6 @@ fake_rootfs() {
     ln -s /usr/lib/systemd/system/kura-desktopd.service "${wants}/multi-user.target.wants/"
     ln -s /usr/lib/systemd/system/docker.service "${wants}/multi-user.target.wants/"
     ln -s /usr/lib/systemd/system/kura-issue.timer "${wants}/timers.target.wants/"
-    : "${units}"
 }
 
 # ---- build time: staging the package ----
@@ -61,6 +61,8 @@ fake_rootfs() {
              usr/share/plymouth/themes/kura/kura.script; do
         [ -f "${STAGE}/${f}" ] || { echo "missing ${f}"; return 1; }
     done
+    # the owner's on/off for automatic updates (dpkg-reconfigure) is theirs
+    [ ! -e "${STAGE}/etc/apt/apt.conf.d/20auto-upgrades" ]
     for f in etc/kura/config.json etc/kura/brand.env etc/kura/security/hardening.json \
              etc/ssh/sshd_config.d/10-kura.conf etc/issue etc/fstab usr/bin/bash \
              usr/lib/systemd/system/docker.service etc/systemd; do
@@ -94,6 +96,9 @@ fake_rootfs() {
 @test "stage: a version Debian would refuse stops the build" {
     fake_rootfs
     run stage_kura_package "${ROOTFS}" kura "v0.6 beta" amd64 "${STAGE}"
+    [ "$status" -ne 0 ]
+    # 0.6.0-rc1 would sort after 0.6.0: devices on it would never get the final
+    run stage_kura_package "${ROOTFS}" kura "0.6.0-rc1" amd64 "${STAGE}"
     [ "$status" -ne 0 ]
 }
 
@@ -134,6 +139,15 @@ link() { echo "${PKG_ROOT}/etc/systemd/system/$1.wants/$2"; }
     [ "$(file_mode "${PKG_ROOT}/etc/kura/security/hardening.json")" = "600" ]
 }
 
+@test "seed_defaults: a device file jq cannot read is left alone, and the upgrade goes on" {
+    mkdir -p "${PKG_ROOT}/usr/lib/kura/defaults" "${PKG_ROOT}/etc/kura/security"
+    echo '{"a":1}' > "${PKG_ROOT}/usr/lib/kura/defaults/hardening.json"
+    echo 'not json' > "${PKG_ROOT}/etc/kura/security/hardening.json"
+    run seed_defaults
+    [ "$status" -eq 0 ]
+    [ "$(cat "${PKG_ROOT}/etc/kura/security/hardening.json")" = "not json" ]
+}
+
 @test "run_migrations: each runs once, in order; a failing one stops and is tried again next time" {
     local dir="${PKG_ROOT}/usr/lib/kura/migrations" log="${BATS_TEST_TMPDIR}/ran"
     mkdir -p "${dir}"
@@ -156,7 +170,9 @@ link() { echo "${PKG_ROOT}/etc/systemd/system/$1.wants/$2"; }
     run kura_configure 0.5.9
     [ "$status" -eq 0 ]
     file_has "${BATS_TEST_TMPDIR}/systemctl" "systemctl daemon-reload"
-    file_has "${BATS_TEST_TMPDIR}/systemctl" "systemctl try-restart kura-desktopd.service kura-issue.service"
+    file_has "${BATS_TEST_TMPDIR}/systemctl" "systemctl try-restart kura-helper.service kura-desktopd.service kura-issue.service"
+    # the rest (hardening, new units) takes effect at the next start: say so
+    [ -e "${PKG_ROOT}/run/reboot-required" ]
 }
 
 @test "kura_configure: inside the image build (no running systemd) nothing is restarted" {
@@ -165,6 +181,7 @@ link() { echo "${PKG_ROOT}/etc/systemd/system/$1.wants/$2"; }
     run kura_configure ""
     [ "$status" -eq 0 ]
     [ ! -e "${BATS_TEST_TMPDIR}/systemctl" ]
+    [ ! -e "${PKG_ROOT}/run/reboot-required" ]
 }
 
 # ---- wiring ----
