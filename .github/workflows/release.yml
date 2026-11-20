@@ -74,8 +74,10 @@ jobs:
           gpg --batch --quiet --import "${KURA_KEY_FILE}"
           gpg --batch --verify InRelease
           rm -rf "${GNUPGHOME}"; unset GNUPGHOME
+          # For devices installed before Kura had packages (0.5.2)
+          ../scripts/release/make-adopt.sh kura "${REPO}" > kura-adopt.sh
           # The one list of assets that get signed and published
-          ls ./*.img.zst ./*.deb Packages Release InRelease SHA512SUMS manifest.json etchwise.json > ASSETS
+          ls ./*.img.zst ./*.deb Packages Release InRelease kura-adopt.sh SHA512SUMS manifest.json etchwise.json > ASSETS
 
       - name: Sign assets (Sigstore, keyless) and verify our own signatures
         working-directory: dist

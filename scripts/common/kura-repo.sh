@@ -27,7 +27,7 @@ install_kura_repo() {
         install -m 0644 "${tmp}" "${rootfs}/${keyring}"
         cat > "${rootfs}/etc/apt/sources.list.d/${b}.sources" <<SOURCE
 Types: deb
-URIs: https://github.com/$3/releases/latest/download/
+URIs: ${KURA_REPO_URL:-https://github.com/$3/releases/latest/download/}
 Suites: ./
 Signed-By: /${keyring}
 SOURCE
