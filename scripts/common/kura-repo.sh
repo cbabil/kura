@@ -31,6 +31,19 @@ URIs: https://github.com/$3/releases/latest/download/
 Suites: ./
 Signed-By: /${keyring}
 SOURCE
+        # The repository's key can vouch for the kura package only: any other
+        # package it lists (one of Debian's names, say) is never installed
+        install -d -m 0755 "${rootfs}/etc/apt/preferences.d"
+        cat > "${rootfs}/etc/apt/preferences.d/${b}-archive" <<PREFERENCES
+# ${b}: its repository supplies the ${b} package and nothing else
+Package: *
+Pin: release o=Kura
+Pin-Priority: -1
+
+Package: ${b}
+Pin: release o=Kura
+Pin-Priority: 500
+PREFERENCES
     else
         status=1
     fi

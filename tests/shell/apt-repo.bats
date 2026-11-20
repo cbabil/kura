@@ -32,6 +32,22 @@ setup() {
     file_has "${src}" "Signed-By: /usr/share/keyrings/kura-archive.asc"
 }
 
+@test "install_kura_repo: the repository may only supply the kura package, nothing of Debian's" {
+    install_kura_repo "${ROOTFS}" kura cbabil/kura
+    local pref="${ROOTFS}/etc/apt/preferences.d/kura-archive"
+    [ "$(grep -v '^#' "${pref}")" = "Package: *
+Pin: release o=Kura
+Pin-Priority: -1
+
+Package: kura
+Pin: release o=Kura
+Pin-Priority: 500" ]
+    # shellcheck disable=SC1091
+    source "${REPO_ROOT}/scripts/packaging/kura-package.sh"
+    run kura_owned "${ROOTFS}" kura
+    output_has "etc/apt/preferences.d/kura-archive"
+}
+
 @test "install_kura_repo: a key file without the pinned key is refused" {
     KURA_GPG_FINGERPRINT="0000000000000000000000000000000000000000"
     run install_kura_repo "${ROOTFS}" kura cbabil/kura

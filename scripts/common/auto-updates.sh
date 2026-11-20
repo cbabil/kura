@@ -3,8 +3,8 @@
 # Security updates that install themselves. unattended-upgrades runs daily
 # (apt-daily-upgrade.timer). Debian's own 50unattended-upgrades covers
 # Debian and Debian-Security; Kura adds Docker's repo and, per target, its
-# own (the Pi's kernel and firmware). A device reboots at 04:30 only when an
-# update needs it (a new kernel). systemd-timesyncd keeps the clock right,
+# own (the Pi's kernel and firmware). A device never restarts by itself: when
+# an update needs it (a new kernel), its screens say so. systemd-timesyncd keeps the clock right,
 # which TLS and APT's signature dates need (a Pi has no battery clock).
 #
 # Source this file; it defines functions only.
@@ -26,8 +26,9 @@ CONF
     cat > "${conf}/52${brand}-upgrades" <<'CONF'
 Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
-Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+// Never a restart by itself: the login screen and the message after login
+// say when one is due, and the owner restarts when it suits them
+Unattended-Upgrade::Automatic-Reboot "false";
 // No translated package descriptions: less to download and write each day
 Acquire::Languages "none";
 CONF

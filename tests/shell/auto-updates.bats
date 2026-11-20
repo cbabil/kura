@@ -64,13 +64,14 @@ EOF
     grep -qxF 'APT::Periodic::Unattended-Upgrade "1";' "${f}"
 }
 
-@test "install_auto_updates: Docker's repo too, and a reboot at 04:30 when needed" {
+@test "install_auto_updates: Docker's repo too, and never a restart by itself" {
     install_auto_updates "${ROOTFS}" kura
     file_has "${ROOTFS}/etc/apt/apt.conf.d/53kura-docker-upgrades" \
         '"origin=Docker,label=Docker CE,archive=${distro_codename}";'
     local f="${ROOTFS}/etc/apt/apt.conf.d/52kura-upgrades"
-    file_has "${f}" 'Unattended-Upgrade::Automatic-Reboot "true";'
-    file_has "${f}" 'Unattended-Upgrade::Automatic-Reboot-Time "04:30";'
+    # the owner restarts when it suits them; the screens say when one is due
+    file_has "${f}" 'Unattended-Upgrade::Automatic-Reboot "false";'
+    [ -z "$(grep 'Automatic-Reboot-Time' "${f}")" ]
     file_has "${f}" 'Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";'
     file_has "${f}" 'Acquire::Languages "none";'
 }

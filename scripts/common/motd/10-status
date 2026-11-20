@@ -38,13 +38,20 @@ if running=$(timeout 3 docker ps -q 2>/dev/null) && all=$(timeout 3 docker ps -a
     MOTD_RIGHT+=("Containers:|${running} running, $(( all - running )) stopped")
 fi
 
-# Updates install themselves daily (auto-updates.sh) and the device
-# restarts at 04:30 when they need it
+# Updates install themselves daily (auto-updates.sh); a restart they need
+# waits for the owner
 stamp=/var/lib/apt/periodic/upgrade-stamp
 MOTD_UPDATES=""
 [ -f "${stamp}" ] && MOTD_UPDATES=$(date -r "${stamp}" '+%b %-d %H:%M')
 MOTD_FAILED=$(timeout 2 systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -c .)
 MOTD_REBOOT=""
-[ -f /run/reboot-required ] && MOTD_REBOOT="04:30"
+[ -f /run/reboot-required ] && MOTD_REBOOT="yes"
+# A newer Kura in its repository: installed when the owner asks (ADR-025)
+MOTD_UPGRADE=""
+# shellcheck source=SCRIPTDIR/../updates.sh
+if . "/usr/lib/${BRAND_PREFIX:-kura}/updates.sh" 2>/dev/null; then
+    newer=$(newer_version "${BRAND_PREFIX:-kura}")
+    [ -z "${newer}" ] || MOTD_UPGRADE="${BRAND_NAME:-Kura} ${newer}"
+fi
 
 motd_render

@@ -67,6 +67,15 @@ while read -r state; do
 done < <(timeout 2 systemctl is-active "${SERVICES[@]}" 2>/dev/null)
 LOGIN_SETUP=""
 [ -f "${SETUP_STATUS}" ] && read -r LOGIN_SETUP < "${SETUP_STATUS}"
+# What waits for the owner: a newer Kura in its repository, a restart
+LOGIN_UPGRADE=""
+# shellcheck source=SCRIPTDIR/updates.sh
+if . "$(dirname "$0")/updates.sh" 2>/dev/null; then
+    newer=$(newer_version "${BRAND_PREFIX:-kura}")
+    [ -z "${newer}" ] || LOGIN_UPGRADE="${BRAND_NAME:-Kura} ${newer}"
+fi
+LOGIN_RESTART=""
+[ ! -f "${KURA_REBOOT_REQUIRED:-/run/reboot-required}" ] || LOGIN_RESTART="yes"
 LOGIN_COLS="${LOGIN_COLS:-$(console_cols)}"
 # Kura Desktop's certificate (os-desktop-cert), once made
 LOGIN_DESKTOP_FP=""
