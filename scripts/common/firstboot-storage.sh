@@ -8,8 +8,13 @@
 # Reads the "storage" key of the imager's __BRAND__-setup.json (format in
 # firstboot-storage-check.sh; first boot's setup deletes the file later).
 # Sizes the root partition, puts the rest of the disk in one LVM volume group
-# named __BRAND__ (a volume can grow later with lvextend), and makes one ext4
-# volume per folder, moving what the folder held onto it. A layout that does
+# named __BRAND__ (a volume can grow later with lvextend), makes one ext4
+# volume per folder holding a copy of what the folder held, plus an optional
+# swap volume, writes their fstab lines, and restarts. The folders move across
+# the restart, so nothing that runs early in this boot (and might write under
+# /var) can be caught halfway: the next boot mounts the volumes from fstab
+# before anything uses them, and "finish" (__BRAND__-storage-finish.service)
+# then clears the root's old copies, which the volumes cover. A layout that does
 # not fit, or an invalid key, leaves the disk as it is: first boot then grows
 # the root over it, and the login screen says why. The outcome is kept in
 # /var/lib/__BRAND__/storage-status.
@@ -18,6 +23,10 @@ SETUP_BRAND="${SETUP_BRAND:-__BRAND__}"
 SETUP_ROOT="${SETUP_ROOT:-}"                    # tests write under a scratch root
 STORAGE_SYS="${STORAGE_SYS:-/sys/class/block}"
 STORAGE_DONE="/var/lib/${SETUP_BRAND}/.storage-done"
+STORAGE_PENDING="/var/lib/${SETUP_BRAND}/.storage-pending"   # built, restart to use
+# This boot built the layout (gone at the restart: /run is a RAM disk): the
+# finishing step, which the pending flag would start, waits for the next boot
+STORAGE_BUILT="/run/${SETUP_BRAND}-storage-built"
 GIB=1073741824
 MIB=1048576
 STORAGE_SLACK=$(( 16 * MIB ))   # LVM metadata and extent rounding
@@ -30,43 +39,48 @@ source "$(dirname "${BASH_SOURCE[0]}")/firstboot-storage-check.sh"
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/firstboot-disk.sh"
 
-# storage_mount_opts <mount>: os-security's hardening for the folders it
-# knows (packages/os-security/src/lib/filesystem.sh), and the same for logs
+# storage_mount_opts <mount>: noexec for scratch and log folders (as
+# os-security hardens /tmp and /var/tmp), the defaults for the rest of /var,
+# where dpkg, Docker and other services run programs and keep device nodes,
+# and nosuid,nodev for every other folder (/home, /srv, /opt, the user's own).
+# /tmp as a volume: its fstab line makes the next boot mount it instead of
+# the RAM disk (the fstab generator's tmp.mount overrides Debian's).
 storage_mount_opts() {
     case "$1" in
-        /var/log|/var/tmp) echo "noexec,nosuid,nodev" ;;
-        /home|/srv|/opt) echo "nosuid,nodev" ;;
-        *) echo "defaults" ;;
+        /tmp|/var/log|/var/tmp) echo "noexec,nosuid,nodev" ;;
+        /var|/var/*) echo "defaults" ;;
+        *) echo "nosuid,nodev" ;;
     esac
 }
 
 # storage_plan <file> <disk-bytes> <root-start-bytes> <root-bytes>: the
-# layout, one line each: "root <bytes>", "pv <start-bytes>", then
-# "lv <name> <mount> <GiB|rest> <options>" (the rest last). "skipped: <why>"
-# when it does not fit; nothing when there is no root size.
+# layout, one line each: "root <bytes>", "pv <start-bytes>", "swap <GiB>" if
+# asked for, then "lv <name> <mount> <GiB|rest> <options>", parents before the
+# folders under them. "skipped: <why>" when it does not fit; nothing when
+# there is no root size.
 storage_plan() {
-    local disk="$2" root mount name size fixed=0 rest=0 pv needed lvs=""
+    local disk="$2" root swap name mount size fixed=0 rest=0 pv needed lvs=""
     {
         read -r root
-        while read -r mount size; do
+        read -r swap
+        while read -r name mount size; do
             if [ "${size}" = rest ]; then rest=1; else fixed=$(( fixed + size )); fi
-            name="${mount#/}"
-            lvs+="lv ${name//\//-} ${mount} ${size} $(storage_mount_opts "${mount}")"$'\n'
+            lvs+="lv ${name} ${mount} ${size} $(storage_mount_opts "${mount}")"$'\n'
         done
-    } < <(jq -r '.storage | (.rootGiB // ""), ((.volumes // [])
-        | (map(select(.sizeGiB != null)) + map(select(.sizeGiB == null)))[]
-        | "\(.mount) \(.sizeGiB // "rest")")' "$1")
+    } < <(jq -r "${STORAGE_JQ_DEFS}"'.storage | (.rootGiB // ""), (.swapGiB // ""), ((.volumes // [])
+        | sort_by(.mount | split("/") | length)[]
+        | "\(.mount | lv_name) \(.mount) \(.sizeGiB // "rest")")' "$1")
     [ -n "${root}" ] || return 0
     root=$(( root * GIB ))
     # never shrink the root; whole MiB, whatever the disk's sector size
     [ "${root}" -ge "$4" ] || root=$(( ($4 + MIB - 1) / MIB * MIB ))
     pv=$(( ($3 + root + MIB - 1) / MIB * MIB ))
-    needed=$(( pv + (fixed + rest) * GIB + STORAGE_SLACK + STORAGE_TAIL ))
+    needed=$(( pv + (fixed + rest + ${swap:-0}) * GIB + STORAGE_SLACK + STORAGE_TAIL ))
     if [ "${disk}" -lt "${needed}" ]; then
         echo "skipped: needs $(( (needed + 999999999) / 1000000000 )) GB, disk has $(( disk / 1000000000 )) GB"
         return 0
     fi
-    printf 'root %s\npv %s\n%s' "${root}" "${pv}" "${lvs}"
+    printf 'root %s\npv %s\n%s%s' "${root}" "${pv}" "${swap:+swap ${swap}$'\n'}" "${lvs}"
 }
 
 # step <what> <command...>: run it; on failure remember what failed
@@ -77,20 +91,29 @@ step() {
     "$@" || { STORAGE_FAILED="${what}"; echo "ERROR: disk layout: ${what} failed" >&2; return 1; }
 }
 
-# copy_folder <dir>: MOVE_FROM's content into <dir> (cp -a of "dir/." also
-# carries the folder's owner and mode)
-copy_folder() { cp -a "${MOVE_FROM}/." "$1/"; }
+# fstab_add <line...>: appended to the system's fstab, one line each
+fstab_add() { printf '%s\n' "$@" >> "${SETUP_ROOT}/etc/fstab"; }
 
-# move_into_volume <device> <dir> <options>: the folder's content onto the
-# new volume, its fstab line (so a later failure never leaves it emptied
-# and unmounted at the next boot), then the volume mounted in its place
-move_into_volume() {
-    MOVE_FROM="${SETUP_ROOT}$2"
-    mkdir -p "${MOVE_FROM}" &&
-    with_mount "$1" copy_folder &&
-    echo "$1 $2 ext4 $3 0 2" >> "${SETUP_ROOT}/etc/fstab" &&
-    find "${MOVE_FROM}" -mindepth 1 -delete &&
-    mount -o "$3" "$1" "${MOVE_FROM}"
+# prune_nested <copy> <mount>: in a folder's copy, empty the folders under it
+# that get volumes of their own (STORAGE_MOUNTS), so each byte is on one
+# volume; the folders stay as their mount points
+prune_nested() {
+    local other
+    for other in "${STORAGE_MOUNTS[@]}"; do
+        [[ "${other}" == "$2"/* ]] || continue
+        [ ! -d "$1${other#"$2"}" ] || find "$1${other#"$2"}" -xdev -mindepth 1 -delete || return 1
+    done
+}
+
+# copy_folder <dir>: MOVE_FROM's content into <dir> (cp -a of "dir/." also
+# carries the folder's owner and mode; -x never copies another filesystem)
+copy_folder() { cp -ax "${MOVE_FROM}/." "$1/" && prune_nested "$1" "${MOVE_MOUNT}"; }
+
+# fill_volume <device> <dir>: a copy of the folder on its volume; the
+# folder itself stays as it is until the restart
+fill_volume() {
+    MOVE_FROM="${SETUP_ROOT}$2" MOVE_MOUNT="$2"
+    mkdir -p "${MOVE_FROM}" && with_mount "$1" copy_folder
 }
 
 # make_partitions <disk> <root-partition-number> <root-device> <root-bytes> <pv-bytes>
@@ -108,28 +131,49 @@ make_partitions() {
     { udevadm settle || true; }
 }
 
-fstab_header() { echo "# ${SETUP_BRAND} disk layout" >> "${SETUP_ROOT}/etc/fstab"; }
+fstab_header() { fstab_add "# ${SETUP_BRAND} disk layout"; }
 
-# build_storage <disk> <root-partition-number> <root-device> <plan>
+# create_volume <name> <GiB|rest>: the rest takes what the others left
+create_volume() {
+    local size_args=(-L "$2G")
+    [ "$2" != rest ] || size_args=(-l 100%FREE)
+    step "creating the $1 volume" lvcreate -y -n "$1" "${size_args[@]}" "${SETUP_BRAND}"
+}
+
+# build_storage <disk> <root-partition-number> <root-device> <plan>: every
+# volume first (the one taking the rest last), then each folder copied onto
+# its volume, then every fstab line at once: a failure on the way leaves
+# fstab as it was, and the next boot as this one
 build_storage() {
-    local disk="$1" part="$2" kind root pv pv_dev name mount size opts dev size_args
+    local disk="$1" part="$2" kind root pv swap pv_dev name mount size opts line lvs=() lines=()
     while read -r kind name _; do
-        case "${kind}" in root) root="${name}" ;; pv) pv="${name}" ;; esac
+        case "${kind}" in root) root="${name}" ;; pv) pv="${name}" ;; swap) swap="${name}" ;; esac
     done <<< "$4"
+    while IFS= read -r line; do lvs+=("${line}"); done < <(grep '^lv ' <<< "$4")
+    STORAGE_MOUNTS=()
+    for line in "${lvs[@]}"; do read -r _ _ mount _ <<< "${line}"; STORAGE_MOUNTS+=("${mount}"); done
     pv_dev="/dev/$(disk_partition "${disk#/dev/}" $(( part + 1 )))"
     make_partitions "${disk}" "${part}" "$3" "${root}" "${pv}" &&
     step pvcreate pvcreate -ff -y "${pv_dev}" &&
-    step vgcreate vgcreate "${SETUP_BRAND}" "${pv_dev}" &&
-    step "writing /etc/fstab" fstab_header || return 1
-    while read -r _ name mount size opts; do
-        dev="/dev/${SETUP_BRAND}/${name}"
-        size_args=(-L "${size}G")
-        [ "${size}" != rest ] || size_args=(-l 100%FREE)
-        step "creating ${mount}" lvcreate -y -n "${name}" "${size_args[@]}" "${SETUP_BRAND}" &&
-        { udevadm settle || true; } &&
-        step "formatting ${mount}" mkfs.ext4 -q -L "${name}" "${dev}" &&
-        step "moving ${mount}" move_into_volume "${dev}" "${mount}" "${opts}" || return 1
-    done < <(grep '^lv ' <<< "$4")
+    step vgcreate vgcreate "${SETUP_BRAND}" "${pv_dev}" || return 1
+    while read -r name size; do
+        create_volume "${name}" "${size}" || return 1
+    done < <([ -z "${swap}" ] || echo "swap ${swap}"
+             printf '%s\n' "${lvs[@]}" | awk '$4 != "rest" {print $2, $4}'
+             printf '%s\n' "${lvs[@]}" | awk '$4 == "rest" {print $2, $4}')
+    udevadm settle || true
+    lines=("# ${SETUP_BRAND} disk layout")
+    if [ -n "${swap}" ]; then
+        step "formatting swap" mkswap -L swap "/dev/${SETUP_BRAND}/swap" || return 1
+        lines+=("/dev/${SETUP_BRAND}/swap none swap sw 0 0")
+    fi
+    for line in "${lvs[@]}"; do
+        read -r _ name mount _ opts <<< "${line}"
+        step "formatting ${mount}" mkfs.ext4 -q -L "${name:0:16}" "/dev/${SETUP_BRAND}/${name}" &&
+        step "copying ${mount}" fill_volume "/dev/${SETUP_BRAND}/${name}" "${mount}" || return 1
+        lines+=("/dev/${SETUP_BRAND}/${name} ${mount} ext4 ${opts} 0 2")
+    done
+    step "writing /etc/fstab" fstab_add "${lines[@]}"
 }
 
 # skip_storage <why>: leave the disk as it is, and say why
@@ -155,7 +199,74 @@ apply_storage_dir() {
         "") return 0 ;;
         skipped:*) skip_storage "${plan#skipped: }"; return 0 ;;
     esac
+    install -d "${SETUP_ROOT}/run" && touch "${SETUP_ROOT}${STORAGE_BUILT}" || return 1
+    # before the copies, so the volume holding /var/lib carries it too
+    install -d "$(dirname "${SETUP_ROOT}${STORAGE_PENDING}")" && touch "${SETUP_ROOT}${STORAGE_PENDING}" || return 1
     if ! build_storage "/dev/${disk}" "${part}" "${root_dev}" "${plan}"; then
+        rm -f "${SETUP_ROOT}${STORAGE_PENDING}"
+        record_state storage-status "failed: ${STORAGE_FAILED}"
+        return 1
+    fi
+    record_state storage-status "restarting"
+    echo "Disk layout built; restarting to use it."
+    # this boot's messages to the root's /var/log, kept by the next boot
+    journalctl --flush || true
+    systemctl --no-block reboot
+}
+
+# covered_folders: the folders the layout's fstab lines put on volumes
+covered_folders() {
+    awk -v h="# ${SETUP_BRAND} disk layout" '$0 == h {f = 1; next} f && $3 == "ext4" {print $2}' \
+        "${SETUP_ROOT}/etc/fstab"
+}
+
+# keep_first_journal <root-view>: the journal the first boot flushed to the
+# root's /var/log, kept next to this boot's on the volume now holding it
+keep_first_journal() {
+    local f id
+    for f in "$1"/var/log/journal/*/*.journal; do
+        [ -f "${f}" ] || continue
+        id=$(basename "$(dirname "${f}")")
+        mkdir -p "${SETUP_ROOT}/var/log/journal/${id}" &&
+        cp -a "${f}" "${SETUP_ROOT}/var/log/journal/${id}/layout-first-$(basename "${f/system/boot}")" || return 1
+    done
+}
+
+# clear_covered <root-view>: under the bind-mounted root, empty each folder
+# whose volume is mounted on it; one that is not keeps its folder
+clear_covered() {
+    local mount
+    while read -r mount; do
+        if ! mountpoint -q "${SETUP_ROOT}${mount}"; then
+            STORAGE_FAILED="${STORAGE_FAILED:-mounting ${mount}}"
+            continue
+        fi
+        [ ! -d "$1${mount}" ] || find "$1${mount}" -xdev -mindepth 1 -delete ||
+            : "${STORAGE_FAILED:=clearing the old ${mount} on the root}"
+    done < <(covered_folders)
+}
+
+# finish_storage: the next boot, the volumes mounted: the root's old copies
+# of their folders are cleared (seen through a bind mount of /, which shows
+# the root without what is mounted on it). First boot's setup waits for this;
+# a failure is recorded for the login screen and does not stop it.
+finish_storage() {
+    local view
+    [ ! -e "${SETUP_ROOT}${STORAGE_BUILT}" ] || return 0   # the restart comes first
+    STORAGE_FAILED=""
+    if view=$(mktemp -d) && mount --bind "${SETUP_ROOT:-/}" "${view}"; then
+        if covered_folders | grep -qxE '/var|/var/log'; then
+            keep_first_journal "${view}" || echo "WARNING: the first boot's journal was not kept" >&2
+        fi
+        clear_covered "${view}"
+        umount "${view}" || STORAGE_FAILED="${STORAGE_FAILED:-unmounting the view of the root}"
+    else
+        STORAGE_FAILED="seeing the root under the volumes"
+    fi
+    [ -z "${view}" ] || rmdir "${view}" 2>/dev/null || true
+    rm -f "${SETUP_ROOT}${STORAGE_PENDING}"
+    if [ -n "${STORAGE_FAILED}" ]; then
+        echo "ERROR: disk layout: ${STORAGE_FAILED} failed" >&2
         record_state storage-status "failed: ${STORAGE_FAILED}"
         return 1
     fi
@@ -186,5 +297,5 @@ run_storage() {
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
-    run_storage "${SETUP_ROOT}${STORAGE_DONE}"
+    if [ "${1:-}" = finish ]; then finish_storage; else run_storage "${SETUP_ROOT}${STORAGE_DONE}"; fi
 fi

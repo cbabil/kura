@@ -9,24 +9,43 @@
 
 report() { echo "$*" | tee -a "${REPORT}"; }
 
+# report_facts <text>: what a check read from the guest, indented in the report
+# shellcheck disable=SC2001  # indent every line, not one substitution
+report_facts() { sed 's/^/  /' <<< "$1" >> "${REPORT}"; }
+
 # The user a setup file creates
 SETUP_USER="tester"
 
+# The disk layout the setup file asks for (LAYOUT, from boot-test.sh):
+# server: a 4 GiB root, /tmp capped at 1 GiB, 1 GiB volumes for /var/log and
+#   /var/tmp, Docker on the rest
+# full: every folder kind on its own volume, nested under /var, /tmp on disk,
+#   a folder of the user's own and swap, Docker on the rest
+LAYOUT_SERVER='{rootGiB: 4, tmpGiB: 1, volumes: [{mount: "/var/log", sizeGiB: 1},
+    {mount: "/var/tmp", sizeGiB: 1}, {mount: "/var/lib/docker"}]}'
+LAYOUT_FULL='{rootGiB: 4, swapGiB: 1, volumes: [{mount: "/var/lib/docker"},
+    {mount: "/var/lib", sizeGiB: 2}, {mount: "/var", sizeGiB: 2}, {mount: "/var/log", sizeGiB: 1},
+    {mount: "/tmp", sizeGiB: 1}, {mount: "/echange", sizeGiB: 1}]}'
+
 # make_setup_file <dest>: a kura-setup.json as Etchwise writes it (new user
 # with LOGIN_PASS's hash and a new SSH key at KEY, password logins off,
-# hostname, Wi-Fi, time zone, and a disk layout: a 4 GiB root, /tmp capped at
-# 1 GiB, 1 GiB volumes for /var/log and /var/tmp, Docker on the rest)
+# hostname, Wi-Fi, time zone, LAYOUT's disk layout, and Kura Desktop on or
+# off as DESKTOP says)
+LAYOUT="${LAYOUT:-server}"   # installer-test.sh sources this file without them
+DESKTOP="${DESKTOP:-true}"
+
 make_setup_file() {
+    local layout="${LAYOUT_SERVER}"
+    [ "${LAYOUT}" != full ] || layout="${LAYOUT_FULL}"
     ssh-keygen -q -t ed25519 -N "" -C "kura-boot-test" -f "${KEY}"
     jq -n --arg user "${SETUP_USER}" --arg hash "$(openssl passwd -6 "${LOGIN_PASS}")" \
-          --arg key "$(cat "${KEY}.pub")" '{
+          --arg key "$(cat "${KEY}.pub")" --argjson desktop "${DESKTOP}" '{
         version: 1, hostname: "kura-ci",
         user: {name: $user, passwordHash: $hash},
         ssh: {enabled: true, passwordAuth: false, authorizedKeys: [$key]},
         wifi: {ssid: "CIWifi", psk: "password-ci", hidden: false, country: "FR"},
-        timezone: "Europe/Paris", keyboard: "fr",
-        storage: {rootGiB: 4, tmpGiB: 1, volumes: [{mount: "/var/log", sizeGiB: 1},
-            {mount: "/var/tmp", sizeGiB: 1}, {mount: "/var/lib/docker"}]}}' > "$1"
+        timezone: "Europe/Paris", keyboard: "fr", desktop: $desktop,
+        storage: '"${layout}"'}' > "$1"
 }
 
 # wait_for <description> <command...>: poll every 10 s until the command
@@ -233,9 +252,14 @@ splash_in_initrd() {
 # console_font: the first boot cached the Terminus 16x32 font setup
 console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setup_font.sh'; }
 
-# layout_built: the setup file's disk layout: the root sized, the volumes
-# mounted with their options, /var/tmp still world-writable, /tmp capped
+# layout_built: the setup file's disk layout (LAYOUT's)
 layout_built() {
+    if [ "${LAYOUT}" = full ]; then full_layout_built; else server_layout_built; fi
+}
+
+# server_layout_built: the root sized, the volumes mounted with their
+# options, /var/tmp still world-writable, /tmp capped
+server_layout_built() {
     local facts status root docker logopts mode tmpopts
     facts=$(ssh_run "cat /var/lib/${BRAND}/storage-status
         lsblk -bdno SIZE \$(findmnt -no SOURCE /)
@@ -243,13 +267,37 @@ layout_built() {
         findmnt -no OPTIONS /var/log
         stat -c %a /var/tmp
         findmnt -no OPTIONS /tmp")
-    # shellcheck disable=SC2001  # indent every line, not one substitution
-    sed 's/^/  /' <<< "${facts}" >> "${REPORT}"
+    report_facts "${facts}"
     { read -r status; read -r root; read -r docker; read -r logopts; read -r mode; read -r tmpopts; } <<< "${facts}"
     [ "${status}" = "applied" ] && [ "${root}" = "4294967296" ] &&
     [ "${docker}" = "/dev/mapper/${BRAND}-var--lib--docker" ] &&
     [[ "${logopts}" == *noexec* ]] && [ "${mode}" = "1777" ] &&
     [[ "${tmpopts}" =~ size=(1048576k|1G) ]]
+}
+
+# full_layout_built: each folder on its volume (the nested ones inside their
+# parents, /tmp world-writable on disk, not the RAM disk), swap on, dpkg's
+# database readable from the moved /var/lib, and the root's old copies gone
+full_layout_built() {
+    local facts
+    facts=$(ssh_run "cat /var/lib/${BRAND}/storage-status
+        for d in /var /var/lib /var/lib/docker /var/log /tmp /echange; do findmnt -no SOURCE \"\$d\"; done
+        stat -c %a /tmp
+        [ \"\$(awk 'NR > 1 { print \$1 }' /proc/swaps | xargs -r readlink -f)\" = \"\$(readlink -f /dev/${BRAND}/swap)\" ] && echo swap-on
+        dpkg-query -W -f='\${Status}\n' bash")
+    facts+=$'\n'$(sudo_run "sh -c 'v=\$(mktemp -d) && mount --bind / \$v && find \$v/var -mindepth 1 | wc -l; umount \$v; rmdir \$v'")
+    report_facts "${facts}"
+    [ "${facts}" = "applied
+/dev/mapper/${BRAND}-var
+/dev/mapper/${BRAND}-var--lib
+/dev/mapper/${BRAND}-var--lib--docker
+/dev/mapper/${BRAND}-var--log
+/dev/mapper/${BRAND}-tmp
+/dev/mapper/${BRAND}-echange
+1777
+swap-on
+install ok installed
+0" ]
 }
 
 # layout_after_restart: the layout comes back on the next boot (fstab, LVM
@@ -291,8 +339,7 @@ services_active() {
     local states
     states=$(ssh_run systemctl is-active docker "${BRAND}-firstboot" "${BRAND}-ssh-keygen" \
         "${BRAND}-config" || true)
-    # shellcheck disable=SC2001  # indent every line, not one substitution
-    sed 's/^/  /' <<< "${states}" >> "${REPORT}"
+    report_facts "${states}"
     [ "$(echo "${states}" | grep -cx active)" -eq 4 ]
 }
 
@@ -320,8 +367,16 @@ less_works() {
 }
 
 collect_diagnostics() {
-    sudo_run "journalctl -b --no-pager -u docker -u ${BRAND}-firstboot -u ${BRAND}-config" \
+    # every boot (the disk layout is built in one and finished in the next),
+    # with the units a failed check most often comes down to
+    sudo_run "journalctl --no-pager -u docker -u ${BRAND}-firstboot -u ${BRAND}-config \
+        -u ${BRAND}-storage -u ${BRAND}-storage-finish \
+        -u ${BRAND}-desktopd -u ${BRAND}-desktop-cert -u ${BRAND}-helper" \
         > "${OUT}/journal.txt" 2>&1 || true
+    sudo_run "systemctl --no-pager --failed; systemctl --no-pager status ${BRAND}-desktopd ${BRAND}-helper
+        namei -l /var/lib/${BRAND}/desktop/tls.crt; id ${BRAND}-desktop
+        journalctl --no-pager -u systemd-sysusers -u systemd-tmpfiles-setup | tail -20" \
+        > "${OUT}/units.txt" 2>&1 || true
     { sudo_run "docker ps -a"; sudo_run "lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT"; } \
         > "${OUT}/system.txt" 2>&1 || true
 }

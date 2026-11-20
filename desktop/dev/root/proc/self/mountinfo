@@ -1,0 +1,2 @@
+22 1 259:2 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p2 rw
+23 22 0:5 / /proc rw - proc proc rw

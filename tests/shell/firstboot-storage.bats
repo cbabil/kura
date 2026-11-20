@@ -60,11 +60,7 @@ SERVER='{"rootGiB":16,"tmpGiB":1,"volumes":[{"mount":"/var/log","sizeGiB":4},
     [ "$(validate_storage "${F}")" = "volumes is not a list" ]
 }
 
-@test "validate_storage: only the listed mount points, each once, one taking the rest" {
-    storage '{"rootGiB":16,"volumes":[{"mount":"/var","sizeGiB":8}]}'
-    [ "$(validate_storage "${F}")" = "/var cannot be a separate volume" ]
-    storage '{"rootGiB":16,"volumes":[{"mount":"/etc/../home","sizeGiB":8}]}'
-    [ "$(validate_storage "${F}")" = "a volume's mount point is not allowed" ]
+@test "validate_storage: each folder once, one taking the rest" {
     storage '{"rootGiB":16,"volumes":[{"mount":"/home","sizeGiB":8},{"mount":"/home","sizeGiB":2}]}'
     [ "$(validate_storage "${F}")" = "/home is listed twice" ]
     storage '{"rootGiB":16,"volumes":[{"mount":"/home"},{"mount":"/srv"}]}'
@@ -75,18 +71,112 @@ SERVER='{"rootGiB":16,"tmpGiB":1,"volumes":[{"mount":"/var/log","sizeGiB":4},
     [ "$(validate_storage "${F}")" = "a volume is not an object" ]
 }
 
+@test "validate_storage: any plain folder, /var and /var/lib included" {
+    for m in /var /var/lib /var/cache /tmp /echange /data/media /srv/my_app.d; do
+        storage "{\"rootGiB\":16,\"volumes\":[{\"mount\":\"${m}\",\"sizeGiB\":4}]}"
+        [ -z "$(validate_storage "${F}")" ] || { echo "${m} rejected"; return 1; }
+    done
+}
+
+@test "validate_storage: a folder that is not a plain absolute path" {
+    for m in "" "home" "/" "/home/" "//home" "/etc/../home" "/a/./b" "/a b" '/a;b' \
+             "/$(printf 'x%.0s' {1..64})"; do
+        storage "{\"rootGiB\":16,\"volumes\":[{\"mount\":\"${m}\",\"sizeGiB\":4}]}"
+        [ "$(validate_storage "${F}")" = "a volume's folder is not a plain absolute path" ] ||
+            { echo "${m} accepted"; return 1; }
+    done
+    storage '{"rootGiB":16,"volumes":[{"sizeGiB":4}]}'
+    [ "$(validate_storage "${F}")" = "a volume's folder is not a plain absolute path" ]
+}
+
+@test "validate_storage: system folders, the brand's state and folders under /tmp stay on the root" {
+    for m in /boot /boot/efi /etc /etc/ssh /usr /usr/local /bin /sbin /lib /lib64 /dev /proc /sys \
+             /run /root /var/run /var/lock /var/lib/kura /var/lib/kura/x /tmp/x; do
+        storage "{\"rootGiB\":16,\"volumes\":[{\"mount\":\"${m}\",\"sizeGiB\":4}]}"
+        [ "$(validate_storage "${F}")" = "${m} cannot be a separate volume" ] ||
+            { echo "${m}: $(validate_storage "${F}")"; return 1; }
+    done
+}
+
+@test "validate_storage: names LVM refuses or keeps for itself" {
+    for m in /-data /srv/-x /snapshot /pvmove /data_tmeta /a/b_rimage_1 /x_cdata; do
+        storage "{\"rootGiB\":16,\"volumes\":[{\"mount\":\"${m}\",\"sizeGiB\":4}]}"
+        [ "$(validate_storage "${F}")" = "${m} cannot be a separate volume" ] ||
+            { echo "${m}: $(validate_storage "${F}")"; return 1; }
+    done
+    storage '{"rootGiB":16,"volumes":[{"mount":"/srv/snapshots","sizeGiB":4},{"mount":"/data-x","sizeGiB":4}]}'
+    [ -z "$(validate_storage "${F}")" ]
+}
+
+@test "validate_storage: two folders that would share a volume name" {
+    storage '{"rootGiB":16,"volumes":[{"mount":"/a/b","sizeGiB":4},{"mount":"/a-b","sizeGiB":4}]}'
+    [ "$(validate_storage "${F}")" = "/a/b and /a-b would share a volume name" ]
+    storage '{"rootGiB":16,"swapGiB":2,"volumes":[{"mount":"/swap","sizeGiB":4}]}'
+    [ "$(validate_storage "${F}")" = "/swap would share the swap volume's name" ]
+}
+
+@test "validate_storage: swap" {
+    storage '{"rootGiB":16,"swapGiB":8,"volumes":[{"mount":"/home"}]}'
+    [ -z "$(validate_storage "${F}")" ]
+    storage '{"rootGiB":16,"swapGiB":8}'
+    [ -z "$(validate_storage "${F}")" ]
+    storage '{"rootGiB":16,"swapGiB":0,"volumes":[{"mount":"/home"}]}'
+    [ "$(validate_storage "${F}")" = "the swap size is not a whole number of GiB" ]
+    storage '{"swapGiB":8}'
+    [ "$(validate_storage "${F}")" = "swap needs a root size" ]
+}
+
+@test "validate_storage: /tmp is either in RAM or a volume" {
+    storage '{"rootGiB":16,"tmpGiB":2,"volumes":[{"mount":"/tmp","sizeGiB":4}]}'
+    [ "$(validate_storage "${F}")" = "/tmp is either in RAM or a volume" ]
+}
+
 # ---- storage_plan ----
 
-@test "storage_plan: lays out a 500 GB NVMe disk: root, then the volumes, the rest last" {
+@test "storage_plan: lays out a 500 GB NVMe disk: root, then the volumes, parents first" {
     storage "${SERVER}"
     run storage_plan "${F}" 500107862016 $(( 257 * MIB )) $(( 3 * GIB ))
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "root $(( 16 * GIB ))" ]
     [ "${lines[1]}" = "pv $(( 257 * MIB + 16 * GIB ))" ]
-    [ "${lines[2]}" = "lv var-log /var/log 4 noexec,nosuid,nodev" ]
-    [ "${lines[3]}" = "lv var-tmp /var/tmp 2 noexec,nosuid,nodev" ]
-    [ "${lines[4]}" = "lv home /home 8 nosuid,nodev" ]
+    [ "${lines[2]}" = "lv home /home 8 nosuid,nodev" ]
+    [ "${lines[3]}" = "lv var-log /var/log 4 noexec,nosuid,nodev" ]
+    [ "${lines[4]}" = "lv var-tmp /var/tmp 2 noexec,nosuid,nodev" ]
     [ "${lines[5]}" = "lv var-lib-docker /var/lib/docker rest defaults" ]
+}
+
+# the 256 GB layout the user asked for (their 1 TB machine, scaled down)
+FULL='{"rootGiB":20,"swapGiB":8,"volumes":[
+  {"mount":"/var/lib/docker","sizeGiB":40},{"mount":"/var/lib","sizeGiB":10},{"mount":"/var","sizeGiB":8},
+  {"mount":"/var/log","sizeGiB":4},{"mount":"/var/cache","sizeGiB":8},{"mount":"/tmp","sizeGiB":4},
+  {"mount":"/opt","sizeGiB":10},{"mount":"/home","sizeGiB":40},{"mount":"/srv","sizeGiB":50},
+  {"mount":"/echange","sizeGiB":20}]}'
+
+@test "storage_plan: the full layout fits a 256 GB SSD with room to grow, parents first" {
+    storage "${FULL}"
+    [ -z "$(validate_storage "${F}")" ]
+    run storage_plan "${F}" 256060514304 $(( 257 * MIB )) $(( 3 * GIB ))
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "root $(( 20 * GIB ))" ]
+    [ "${lines[2]}" = "swap 8" ]
+    # depth order, JSON order within a depth
+    [ "$(grep '^lv ' <<< "${output}" | cut -d' ' -f3 | tr '\n' ' ')" = \
+      "/var /tmp /opt /home /srv /echange /var/lib /var/log /var/cache /var/lib/docker " ]
+    output_has "lv var /var 8 defaults"
+    output_has "lv var-lib /var/lib 10 defaults"
+    output_has "lv var-cache /var/cache 8 defaults"
+    output_has "lv var-log /var/log 4 noexec,nosuid,nodev"
+    output_has "lv tmp /tmp 4 noexec,nosuid,nodev"
+    output_has "lv echange /echange 20 nosuid,nodev"
+    # about 16 GiB left in the volume group for lvextend
+    run storage_plan "${F}" $(( 256060514304 - 16 * GIB )) $(( 257 * MIB )) $(( 3 * GIB ))
+    [ "${lines[0]}" = "root $(( 20 * GIB ))" ]
+}
+
+@test "storage_plan: swap counts in the space needed" {
+    storage '{"rootGiB":16,"swapGiB":40,"volumes":[{"mount":"/home","sizeGiB":8}]}'
+    run storage_plan "${F}" $(( 64 * GIB )) $(( 260 * MIB )) $(( 2 * GIB ))
+    [ "$output" = "skipped: needs 70 GB, disk has 68 GB" ]
 }
 
 @test "storage_plan: a 64 GB card fits the server layout" {
@@ -142,6 +232,9 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
     lvcreate() { log_call "lvcreate $*"; }
     udevadm() { :; }
     mkfs.ext4() { log_call "mkfs.ext4 $*"; }
+    mkswap() { log_call "mkswap $*"; }
+    systemctl() { log_call "systemctl $*"; }
+    journalctl() { log_call "journalctl $*"; }
     mount() { log_call "mount $*"; }
     umount() { log_call "umount $*"; }
     cp() { log_call "cp $*"; }
@@ -158,7 +251,7 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
     [ ! -e "${SETUP_ROOT}/var/lib/kura/storage-status" ]
 }
 
-@test "apply_storage_dir: sizes the root, then builds and mounts the volumes" {
+@test "apply_storage_dir: sizes the root, builds and fills the volumes, writes fstab, restarts" {
     stub_storage_device 500107862016
     storage "${SERVER}"
     run apply_storage_dir "${BOOT}"
@@ -174,26 +267,28 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
     file_has "${CALLS}" "lvcreate -y -n var-log -L 4G kura"
     file_has "${CALLS}" "lvcreate -y -n var-lib-docker -l 100%FREE kura"
     file_has "${CALLS}" "mkfs.ext4 -q -L var-lib-docker /dev/kura/var-lib-docker"
-    file_has "${CALLS}" "mount -o noexec,nosuid,nodev /dev/kura/var-log ${SETUP_ROOT}/var/log"
     file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2"
     file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/home /home ext4 nosuid,nodev 0 2"
     file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/var-lib-docker /var/lib/docker ext4 defaults 0 2"
-    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "applied" ]
+    # nothing is mounted over a folder in use: the restart mounts them all
+    run grep -c "^mount -o [a-z,]* /dev/kura/" "${CALLS}"
+    [ "$output" = "0" ]
+    file_has "${CALLS}" "journalctl --flush"
+    file_has "${CALLS}" "systemctl --no-block reboot"
+    # the finishing pass on the next boot cleans up and says it was applied
+    [ -f "${SETUP_ROOT}/var/lib/kura/.storage-pending" ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "restarting" ]
 }
 
-@test "apply_storage_dir: moves what a folder holds onto its volume" {
+@test "apply_storage_dir: copies what a folder holds onto its volume and leaves the root as it was" {
     stub_storage_device 500107862016
     storage '{"rootGiB":16,"volumes":[{"mount":"/var/log"}]}'
     mkdir -p "${SETUP_ROOT}/var/log/apt"
     touch "${SETUP_ROOT}/var/log/apt/history.log"
     run apply_storage_dir "${BOOT}"
     [ "$status" -eq 0 ]
-    file_has "${CALLS}" "cp -a ${SETUP_ROOT}/var/log/."
-    [ -d "${SETUP_ROOT}/var/log" ]
-    [ ! -e "${SETUP_ROOT}/var/log/apt" ]
-    # the copy comes before the folder is emptied and the volume mounted in it
-    [ "$(grep -n '^cp -a' "${CALLS}" | cut -d: -f1)" -lt \
-      "$(grep -n "^mount -o .* ${SETUP_ROOT}/var/log$" "${CALLS}" | cut -d: -f1)" ]
+    file_has "${CALLS}" "cp -ax ${SETUP_ROOT}/var/log/."
+    [ -f "${SETUP_ROOT}/var/log/apt/history.log" ]
 }
 
 @test "apply_storage_dir: a layout that does not fit is skipped, the disk untouched" {
@@ -207,11 +302,11 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
 
 @test "apply_storage_dir: an invalid storage key is skipped, the disk untouched" {
     stub_storage_device 500107862016
-    storage '{"rootGiB":16,"volumes":[{"mount":"/var"}]}'
+    storage '{"rootGiB":16,"volumes":[{"mount":"/etc"}]}'
     run apply_storage_dir "${BOOT}"
     [ "$status" -eq 0 ]
     [ ! -e "${CALLS}" ]
-    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "skipped: /var cannot be a separate volume" ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "skipped: /etc cannot be a separate volume" ]
 }
 
 @test "apply_storage_dir: an MBR disk (the Pi's) has no backup table to move" {
@@ -224,18 +319,83 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
     [ "$output" = "0" ]
 }
 
-@test "apply_storage_dir: each volume is in fstab before its folder is emptied" {
+@test "apply_storage_dir: a failure leaves fstab as it was and does not restart" {
     stub_storage_device 500107862016
     storage "${SERVER}"
-    lvcreate() { log_call "lvcreate $*"; [[ "$*" != *home* ]]; }
+    echo "/dev/sda2 / ext4 defaults 0 1" > "${SETUP_ROOT}/etc/fstab"
+    mkfs.ext4() { log_call "mkfs.ext4 $*"; [[ "$*" != *var-tmp* ]]; }
     run apply_storage_dir "${BOOT}"
     [ "$status" -eq 1 ]
-    file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/var-log /var/log"
-    file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/var-tmp /var/tmp"
-    run grep -c "/dev/kura/home" "${SETUP_ROOT}/etc/fstab"
+    [ "$(cat "${SETUP_ROOT}/etc/fstab")" = "/dev/sda2 / ext4 defaults 0 1" ]
+    run grep -c "reboot" "${CALLS}"
     [ "$output" = "0" ]
-    run grep -c "^# kura disk layout" "${SETUP_ROOT}/etc/fstab"
-    [ "$output" = "1" ]
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/.storage-pending" ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "failed: formatting /var/tmp" ]
+}
+
+@test "apply_storage_dir: every volume is created before any folder moves, the rest last" {
+    stub_storage_device 500107862016
+    storage "${SERVER}"
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ "$(grep '^lvcreate' "${CALLS}" | cut -d' ' -f4 | tr '\n' ' ')" = "home var-log var-tmp var-lib-docker " ]
+    [ "$(grep -n '^lvcreate .*var-lib-docker' "${CALLS}" | cut -d: -f1)" -lt \
+      "$(grep -n '^mkfs.ext4' "${CALLS}" | head -1 | cut -d: -f1)" ]
+}
+
+@test "apply_storage_dir: a folder's copy leaves out the folders with volumes of their own" {
+    stub_storage_device 500107862016
+    storage '{"rootGiB":16,"volumes":[{"mount":"/var/lib/docker"},{"mount":"/var/lib","sizeGiB":20},
+      {"mount":"/var","sizeGiB":8}]}'
+    mkdir -p "${SETUP_ROOT}/var/lib/docker/image" "${SETUP_ROOT}/var/lib/dpkg" "${SETUP_ROOT}/var/cache"
+    touch "${SETUP_ROOT}/var/lib/docker/image/layer" "${SETUP_ROOT}/var/lib/dpkg/status"
+    COPIES="${BATS_TEST_TMPDIR}/copies"
+    # each volume's copy in a scratch folder of its own (_var, _var_lib, ...)
+    copy_folder() {
+        local into="${COPIES}/${MOVE_MOUNT//\//_}"
+        mkdir -p "${into}" && command cp -R "${MOVE_FROM}/." "${into}/" && prune_nested "${into}" "${MOVE_MOUNT}"
+    }
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    # each byte lands on one volume only; the mount points stay, empty
+    [ -f "${COPIES}/_var_lib_docker/image/layer" ]
+    [ -f "${COPIES}/_var_lib/dpkg/status" ]
+    [ -d "${COPIES}/_var_lib/docker" ]
+    [ -z "$(ls -A "${COPIES}/_var_lib/docker")" ]
+    [ -d "${COPIES}/_var/cache" ]
+    [ -d "${COPIES}/_var/lib" ]
+    [ -z "$(ls -A "${COPIES}/_var/lib")" ]
+}
+
+@test "apply_storage_dir: swap gets its volume and an fstab line" {
+    stub_storage_device 500107862016
+    storage '{"rootGiB":16,"swapGiB":8,"volumes":[{"mount":"/home"}]}'
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    file_has "${CALLS}" "lvcreate -y -n swap -L 8G kura"
+    file_has "${CALLS}" "mkswap -L swap /dev/kura/swap"
+    file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/swap none swap sw 0 0"
+    # created before the volume that takes the rest
+    [ "$(grep -n '^lvcreate .* swap ' "${CALLS}" | cut -d: -f1)" -lt \
+      "$(grep -n '^lvcreate .* home ' "${CALLS}" | cut -d: -f1)" ]
+}
+
+@test "apply_storage_dir: swap alone next to the root" {
+    stub_storage_device 500107862016
+    storage '{"rootGiB":16,"swapGiB":4}'
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/swap none swap sw 0 0"
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "restarting" ]
+}
+
+@test "apply_storage_dir: /tmp on disk, with long names labelled within ext4's 16 characters" {
+    stub_storage_device 500107862016
+    storage '{"rootGiB":16,"volumes":[{"mount":"/tmp","sizeGiB":4},{"mount":"/srv/photos-archive"}]}'
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    file_has "${SETUP_ROOT}/etc/fstab" "/dev/kura/tmp /tmp ext4 noexec,nosuid,nodev 0 2"
+    file_has "${CALLS}" "mkfs.ext4 -q -L srv-photos-archi /dev/kura/srv-photos-archive"
 }
 
 @test "run_storage: marks itself done before building, so a cut-off run is not repeated" {
@@ -264,6 +424,105 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
     [ ! -e "${CALLS}" ]
 }
 
+# ---- finish_storage (the next boot, volumes mounted) ----
+
+stub_root_view() {  # the bind mount of / shows SETUP_ROOT as it is underneath
+    mount() { log_call "mount $*"; [ "$1" != --bind ] || { rmdir "$3"; ln -s "${SETUP_ROOT}" "$3"; }; }
+    umount() { log_call "umount $*"; rm -f "$1"; mkdir "$1"; }
+    mountpoint() { [[ " ${MOUNTED:-} " == *" ${2#"${SETUP_ROOT}"} "* ]]; }
+    MOUNTED="/var/log /home /var /var/lib/docker"
+    LIVE="${BATS_TEST_TMPDIR}/live"   # what the mounted /var/log shows
+}
+
+@test "finish_storage: clears what the volumes now cover from the root, and says it was applied" {
+    stub_root_view
+    mkdir -p "${SETUP_ROOT}/var/lib/kura" "${SETUP_ROOT}/var/log/apt" "${SETUP_ROOT}/home/u"
+    touch "${SETUP_ROOT}/var/lib/kura/.storage-pending" "${SETUP_ROOT}/var/log/apt/h.log" "${SETUP_ROOT}/home/u/f"
+    printf '%s\n' "/dev/sda2 / ext4 defaults 0 1" "# kura disk layout" \
+        "/dev/kura/swap none swap sw 0 0" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        "/dev/kura/home /home ext4 nosuid,nodev 0 2" > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$status" -eq 0 ]
+    file_has "${CALLS}" "mount --bind ${SETUP_ROOT} "
+    [ -d "${SETUP_ROOT}/var/log" ]
+    [ -d "${SETUP_ROOT}/home" ]
+    [ -z "$(ls -A "${SETUP_ROOT}/var/log")" ]
+    [ -z "$(ls -A "${SETUP_ROOT}/home")" ]
+    [ -s "${SETUP_ROOT}/etc/fstab" ]
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/.storage-pending" ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "applied" ]
+}
+
+@test "finish_storage: not in the boot that built the layout (its volumes mount after the restart)" {
+    stub_root_view
+    MOUNTED=""
+    mkdir -p "${SETUP_ROOT}/var/lib/kura" "${SETUP_ROOT}/run" "${SETUP_ROOT}/var/log/apt"
+    touch "${SETUP_ROOT}/var/lib/kura/.storage-pending" "${SETUP_ROOT}/run/kura-storage-built"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$status" -eq 0 ]
+    # left for the next boot
+    [ -e "${SETUP_ROOT}/var/lib/kura/.storage-pending" ]
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/storage-status" ]
+    [ ! -e "${CALLS}" ]
+}
+
+@test "apply_storage_dir: marks this boot as the one that built the layout" {
+    stub_storage_device 500107862016
+    storage "${SERVER}"
+    run apply_storage_dir "${BOOT}"
+    [ "$status" -eq 0 ]
+    [ -e "${SETUP_ROOT}/run/kura-storage-built" ]
+}
+
+@test "finish_storage: names the first volume that did not mount" {
+    stub_root_view
+    MOUNTED=""
+    mkdir -p "${SETUP_ROOT}/var/lib/kura"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        "/dev/kura/home /home ext4 nosuid,nodev 0 2" > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "failed: mounting /var/log" ]
+}
+
+@test "finish_storage: a volume that did not mount keeps its folder, and says so" {
+    stub_root_view
+    MOUNTED="/var/log"
+    mkdir -p "${SETUP_ROOT}/var/lib/kura" "${SETUP_ROOT}/var/log/apt" "${SETUP_ROOT}/home/u"
+    touch "${SETUP_ROOT}/var/lib/kura/.storage-pending" "${SETUP_ROOT}/home/u/f"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        "/dev/kura/home /home ext4 nosuid,nodev 0 2" > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$status" -eq 1 ]
+    [ -f "${SETUP_ROOT}/home/u/f" ]
+    # first boot's setup still runs, and the login screen says what failed
+    [ ! -e "${SETUP_ROOT}/var/lib/kura/.storage-pending" ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "failed: mounting /home" ]
+}
+
+@test "finish_storage: keeps the first boot's journal on the volume that now holds /var/log" {
+    stub_root_view
+    mkdir -p "${SETUP_ROOT}/var/log/journal/abc"
+    touch "${SETUP_ROOT}/var/log/journal/abc/system.journal"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        > "${SETUP_ROOT}/etc/fstab"
+    cp() { log_call "cp $*"; }
+    run finish_storage
+    [ "$status" -eq 0 ]
+    file_has "${CALLS}" "/var/log/journal/abc/system.journal ${SETUP_ROOT}/var/log/journal/abc/layout-first-boot.journal"
+}
+
+@test "finish_storage: the root's copy of a nested folder goes with its parent's" {
+    stub_root_view
+    mkdir -p "${SETUP_ROOT}/var/lib/docker/x"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var /var ext4 defaults 0 2" \
+        "/dev/kura/var-lib-docker /var/lib/docker ext4 defaults 0 2" > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$status" -eq 0 ]
+    [ ! -e "${SETUP_ROOT}/var/lib/docker" ]
+}
+
 @test "storage_applied: true once the layout was built" {
     run storage_applied
     [ "$status" -ne 0 ]
@@ -287,6 +546,24 @@ stub_storage_device() {  # an NVMe disk of <bytes>, root on p2 at 257 MiB, 3 GiB
     file_has "${unit}" "DefaultDependencies=no"
     file_has "${unit}" "After=systemd-remount-fs.service systemd-udevd.service"
     file_has "${unit}" "Before=local-fs.target boot-efi.mount tmp.mount systemd-journal-flush.service docker.service kura-security.service kura-firstboot.service"
+    # its done flag may live on a volume: checked once that volume is mounted
+    file_has "${unit}" "RequiresMountsFor=/var/lib/kura"
+    # the folders move across a restart: no unit has to be listed to keep out
+    run grep -c "systemd-random-seed" "${unit}"
+    [ "$output" = "0" ]
+    local finish="${ROOTFS}/usr/lib/systemd/system/kura-storage-finish.service"
+    file_has "${finish}" "DefaultDependencies=no"
+    file_has "${finish}" "After=local-fs.target"
+    file_has "${finish}" "Before=sysinit.target docker.service kura-firstboot.service"
+    file_has "${finish}" "ConditionPathExists=/var/lib/kura/.storage-pending"
+    # never in the boot that built the layout: the volumes are not mounted yet
+    file_has "${finish}" "ConditionPathExists=!/run/kura-storage-built"
+    file_has "${finish}" "ExecStart=/usr/lib/kura/firstboot-storage.sh finish"
+    [ "$(readlink "${ROOTFS}/etc/systemd/system/sysinit.target.wants/kura-storage-finish.service")" = \
+      "/usr/lib/systemd/system/kura-storage-finish.service" ]
+    # first boot's setup waits for the restart that puts the volumes in place
+    file_has "${ROOTFS}/usr/lib/systemd/system/kura-firstboot.service" \
+        "ConditionPathExists=!/var/lib/kura/.storage-pending"
     # scratch mounts never under /tmp, which tmp.mount may cover
     file_has "${unit}" "Environment=TMPDIR=/run"
     file_has "${unit}" "ConditionPathExists=!/var/lib/kura/.storage-done"

@@ -1,0 +1,79 @@
+name: Desktop dist
+
+# Kura Desktop's server and helper for both image architectures (ADR-024),
+# with the interface embedded: desktopd static (musl), the helper against
+# glibc and libpam. Called by desktop.yml and images.yml, which builds them
+# into the images; the binaries are uploaded as desktop-dist-<arch> for a day.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: desktop
+
+jobs:
+  dist:
+    name: dist ${{ matrix.arch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            deb: amd64
+          - arch: aarch64
+            deb: arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install libpam for ${{ matrix.deb }}
+        run: |
+          if [ "${{ matrix.deb }}" = arm64 ]; then
+            sudo dpkg --add-architecture arm64
+            # Ubuntu serves arm64 from ports; keep the default archive amd64-only.
+            sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+            printf 'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports\nSuites: noble noble-updates noble-security\nComponents: main\nArchitectures: arm64\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' \
+              | sudo tee /etc/apt/sources.list.d/ports.sources
+          fi
+          sudo apt-get update && sudo apt-get install -y "libpam0g-dev:${{ matrix.deb }}"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch }}-unknown-linux-musl,${{ matrix.arch }}-unknown-linux-gnu
+
+      - name: Install zig
+        uses: mlugg/setup-zig@v2
+
+      - name: Install cargo-zigbuild
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+          key: ${{ matrix.arch }}
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build (interface, then both binaries)
+        run: |
+          make dist ARCH=${{ matrix.arch }}
+          file dist/${{ matrix.arch }}/*
+          ls -l dist/${{ matrix.arch }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-dist-${{ matrix.arch }}   # not kura-*: release.yml publishes those
+          path: desktop/dist/${{ matrix.arch }}
+          retention-days: 1

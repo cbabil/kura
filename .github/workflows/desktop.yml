@@ -1,0 +1,96 @@
+name: Desktop
+
+# Kura Desktop's Rust server (ADR-023, ADR-024). The Mac runs the unit tests
+# with fakes; this workflow proves the Linux parts: the real /proc and /sys,
+# systemd over D-Bus, PAM in kura-helper, an end-to-end sign-in, and the
+# x86_64 and aarch64 binaries for the images.
+
+on:
+  push:
+    branches: [dev, master]
+    paths:
+      - desktop/**
+      - .github/workflows/desktop.yml
+      - .github/workflows/desktop-dist.yml
+  pull_request:
+    branches: [master]
+    paths:
+      - desktop/**
+      - .github/workflows/desktop.yml
+      - .github/workflows/desktop-dist.yml
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: desktop
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install libpam headers
+        run: sudo apt-get update && sudo apt-get install -y libpam0g-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Install cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,cargo-deny
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop
+
+      - name: Lint
+        run: make lint
+
+      - name: Unit tests
+        run: make test
+
+      - name: Coverage (90% of lines)
+        run: make coverage
+
+      - name: Make throwaway users
+        run: |
+          password="$(openssl rand -hex 16)"
+          echo "::add-mask::${password}"
+          echo "KURA_PAM_PASSWORD=${password}" >> "$GITHUB_ENV"
+          for u in kura-ci kura-ci-old; do
+            sudo useradd -m "$u"
+            echo "$u:${password}" | sudo chpasswd
+          done
+          sudo chage -d 0 kura-ci-old
+
+      - name: Linux tests against the runner (/proc, /sys, systemd)
+        run: make test-live
+
+      - name: PAM tests as root
+        run: make test-pam
+        env:
+          KURA_PAM_USER: kura-ci
+          KURA_PAM_EXPIRED_USER: kura-ci-old
+
+      - name: End to end
+        run: make e2e E2E_USER=kura-ci
+
+  # Both architectures. On a push, images.yml builds them for the images
+  # already, so only pull requests and manual runs build them here.
+  dist:
+    if: github.event_name != 'push'
+    uses: ./.github/workflows/desktop-dist.yml

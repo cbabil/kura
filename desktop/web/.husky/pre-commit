@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+# Kura pre-commit (whole repo): blocks credential files, secrets, tokens and
+# email addresses; then, when the desktop interface changed, lint, types and tests.
+set -e
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+# .env and .env.local hold secrets; templates (.env.example) do not
+if echo "$staged" | grep -Ev '(^|/)\.env\.(example|sample|template)$' | grep -Eq '(^|/)\.env(\..*)?$|\.(pem|key|p12|pfx|credentials)$'; then
+  echo "pre-commit: blocked, credential-looking file staged" >&2; exit 1
+fi
+secrets='(sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|npm_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
+emails='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+# Not addresses: RFC 2606 example domains, mDNS hosts (user@host.local) and
+# systemd template units (serial-getty@tty1.service).
+allowed='@example\.(com|org|net)\b|\.local$|\.(service|socket|timer|target|mount|path)$'
+IFS='
+'
+for f in $staged; do
+  case "$f" in *bun.lock|*.lock|*.svg|*.png|*.woff2) continue;; esac
+  if git show ":$f" | grep -Eq "$secrets"; then echo "pre-commit: blocked, secret pattern in $f" >&2; exit 1; fi
+  if git show ":$f" | grep -Eo "$emails" | grep -Evq "$allowed"; then echo "pre-commit: blocked, email address in $f" >&2; exit 1; fi
+done
+if echo "$staged" | grep -q '^desktop/web/'; then
+  # shellcheck disable=SC1090
+  . ~/source/reactvenv/bin/activate 2>/dev/null || true
+  cd desktop/web && bun run lint && bun run test
+fi

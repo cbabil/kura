@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="files-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0f2fe"/><stop offset="1" stop-color="#93c5fd"/></linearGradient>
+  <linearGradient id="files-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <filter id="files-plate" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#020617" flood-opacity=".38"/></filter>
+  <filter id="files-obj" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity=".32"/></filter>
+  <clipPath id="files-clip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <linearGradient id="files-front" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#files-bg)" filter="url(#files-plate)"/>
+<g clip-path="url(#files-clip)">
+
+  <g filter="url(#files-obj)">
+    <path d="M190 300a40 40 0 0 1 40-40h190l60 64h314a40 40 0 0 1 40 40v390a40 40 0 0 1-40 40H230a40 40 0 0 1-40-40z" fill="#1d6fe0"/>
+    <rect x="232" y="352" width="560" height="120" rx="18" fill="#fff" opacity=".9"/>
+    <path d="M190 420a40 40 0 0 1 40-40h564a40 40 0 0 1 40 40v334a40 40 0 0 1-40 40H230a40 40 0 0 1-40-40z" fill="url(#files-front)"/>
+    <path d="M190 420a40 40 0 0 1 40-40h564a40 40 0 0 1 40 40" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="6"/>
+  </g>
+  <g fill="none" stroke="#1e40af" stroke-opacity=".45" stroke-width="14" stroke-linejoin="round">
+    <path d="M412 560L512 498L612 560"/>
+    <path d="M436 560V712H588V560"/>
+    <path d="M512 560V712M436 612H588M436 662H588"/>
+  </g>
+</g>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#files-gloss)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3"/>
+</svg>

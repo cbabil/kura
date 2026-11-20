@@ -1,0 +1,31 @@
+# __BRAND_NAME__ Desktop helper (ADR-023): the root side of the desktop. In D1 it
+# only checks passwords through PAM; the D-Bus policy lets only the
+# __BRAND__-desktop user call it. No network.
+[Unit]
+Description=__BRAND_NAME__ Desktop helper
+After=dbus.service
+
+[Service]
+Type=dbus
+BusName=io.kura.Helper
+ExecStart=/usr/lib/__BRAND__/__BRAND__-helper
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# pam_faillock and the login records
+ReadWritePaths=-/run/faillock -/var/log
+
+[Install]
+WantedBy=multi-user.target

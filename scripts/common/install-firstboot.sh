@@ -7,16 +7,18 @@
 source "$(dirname "${BASH_SOURCE[0]}")/systemd-units.sh"
 
 # install_firstboot <rootfs> <brand> <os-name> <scripts-dir>
-# Installs the first-boot scripts and three units:
+# Installs the first-boot scripts and four units:
 #   <brand>-ssh-keygen.service  generates SSH host keys before sshd starts.
 #                               (Neither unit orders itself before ssh.socket:
 #                               sockets come before basic.target, which both
 #                               follow, so that would be a cycle.)
 #                               Standalone so SSH never waits for first boot.
 #   <brand>-storage.service     builds the disk layout the setup file asks
-#                               for, once, early: before the disks are
-#                               mounted, journald writes to /var/log and
-#                               Docker starts.
+#                               for, once, early (before the disks are
+#                               mounted), and restarts to use it.
+#   <brand>-storage-finish.service  the next boot, volumes mounted: clears
+#                               the root's old copies of their folders,
+#                               before Docker and first boot.
 #   <brand>-firstboot.service   applies the imager's setup file, grows the
 #                               root partition and applies the hostname from
 #                               attached user-data, before sshd, os-config and
@@ -54,6 +56,8 @@ EOF
 Description=${name} first boot setup
 Before=ssh.service ${brand}-config.service systemd-user-sessions.service
 ConditionPathExists=!/var/lib/${brand}/.firstboot-done
+# not until the restart has put the disk layout's volumes in place
+ConditionPathExists=!/var/lib/${brand}/.storage-pending
 StartLimitIntervalSec=0
 
 [Service]
@@ -77,6 +81,8 @@ Description=${name} disk layout
 DefaultDependencies=no
 After=systemd-remount-fs.service systemd-udevd.service
 Before=local-fs.target boot-efi.mount tmp.mount systemd-journal-flush.service docker.service ${brand}-security.service ${brand}-firstboot.service
+# the flag is on a volume once /var or /var/lib is one: wait for its mount
+RequiresMountsFor=/var/lib/${brand}
 ConditionPathExists=!/var/lib/${brand}/.storage-done
 
 [Service]
@@ -93,7 +99,32 @@ StandardError=journal+console
 WantedBy=local-fs.target
 EOF
 
+    cat > "${units}/${brand}-storage-finish.service" <<EOF
+[Unit]
+Description=${name} disk layout (finishing after the restart)
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target docker.service ${brand}-firstboot.service
+ConditionPathExists=/var/lib/${brand}/.storage-pending
+# not in the boot that built the layout, before its restart: the volumes
+# are not mounted yet
+ConditionPathExists=!/run/${brand}-storage-built
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/${brand}/firstboot-storage.sh finish
+Environment=TMPDIR=/run
+RemainAfterExit=yes
+TimeoutStartSec=900
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=sysinit.target
+EOF
+
     enable_unit "${rootfs}" local-fs.target "/usr/lib/systemd/system/${brand}-storage.service"
+    enable_unit "${rootfs}" sysinit.target "/usr/lib/systemd/system/${brand}-storage-finish.service"
     enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-ssh-keygen.service"
     enable_unit "${rootfs}" multi-user.target "/usr/lib/systemd/system/${brand}-firstboot.service"
 }

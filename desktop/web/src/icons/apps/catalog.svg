@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="cat-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#0f766e"/></linearGradient>
+  <linearGradient id="cat-gloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".30"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <filter id="cat-plate" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#020617" flood-opacity=".38"/></filter>
+  <filter id="cat-obj" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity=".32"/></filter>
+  <clipPath id="cat-clip"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+  <linearGradient id="cat-bag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d1fae5"/></linearGradient>
+</defs>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#cat-bg)" filter="url(#cat-plate)"/>
+<g clip-path="url(#cat-clip)">
+
+  <path d="M400 400V340a112 112 0 0 1 224 0v60" fill="none" stroke="#ecfdf5" stroke-width="34" stroke-linecap="round"/>
+  <g filter="url(#cat-obj)"><path d="M270 400h484l-36 420a40 40 0 0 1-40 36H346a40 40 0 0 1-40-36z" fill="url(#cat-bag)"/></g>
+  <path d="M400 400V460M624 400V460" stroke="#0f766e" stroke-width="34" stroke-linecap="round"/>
+  <path d="M512 520L540 610L630 638L540 666L512 756L484 666L394 638L484 610Z" fill="#9146ff"/>
+</g>
+<rect x="100" y="100" width="824" height="824" rx="185" fill="url(#cat-gloss)"/>
+<rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="3"/>
+</svg>

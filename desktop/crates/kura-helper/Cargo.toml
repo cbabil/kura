@@ -1,0 +1,23 @@
+[package]
+name = "kura-helper"
+description = "Kura Desktop's privileged helper: checks passwords through PAM for kura-desktopd over D-Bus."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+kura-desktop-core.workspace = true
+zbus.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zeroize.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+zbus = { workspace = true, features = ["p2p"] }
+tempfile.workspace = true

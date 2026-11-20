@@ -1,0 +1,14 @@
+# Makes the desktop's own HTTPS certificate once, after first boot set the
+# hostname (ADR-023). Its fingerprint is on the login screen.
+[Unit]
+Description=__BRAND_NAME__ Desktop certificate
+After=__BRAND__-firstboot.service systemd-tmpfiles-setup.service
+ConditionPathExists=!/var/lib/__BRAND__/desktop/tls.crt
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/__BRAND__/__BRAND__-desktop-cert /var/lib/__BRAND__/desktop __BRAND__-desktop
+
+[Install]
+WantedBy=multi-user.target

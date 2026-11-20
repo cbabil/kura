@@ -407,8 +407,45 @@ umount_chroot() {
 
 install_os_pkgs() {
     local ROOTFS="$1"
+    local ARCH="$2"
 
     "${SCRIPTS_DIR}/common/install-os-pkgs.sh" "${ROOTFS}" "${PACKAGES_DIR}"
+    "${SCRIPTS_DIR}/common/install-desktop.sh" "${ROOTFS}" "${PACKAGES_DIR}" "$(build_desktop "${ARCH}")"
+}
+
+# ============================================================================
+# build_desktop -- Kura Desktop's server and helper for one architecture
+# (ADR-023, ADR-024). Prints the folder holding the two binaries.
+# OS_DESKTOP_DIST names a folder of binaries built elsewhere (CI's
+# desktop-dist.yml): it must hold both, nothing is rebuilt. Otherwise they are
+# built under desktop/dist/<arch> unless already there or left out
+# (OS_DESKTOP=false).
+# ============================================================================
+
+build_desktop() {
+    local machine
+    case "$1" in
+        amd64) machine="x86_64" ;;
+        arm64) machine="aarch64" ;;
+        *) print_error "Kura Desktop: no build for architecture $1"; exit 1 ;;
+    esac
+    if [ -n "${OS_DESKTOP_DIST:-}" ]; then
+        local given="${OS_DESKTOP_DIST}/${machine}"
+        if [ "${OS_DESKTOP:-true}" != "false" ] && \
+           { [ ! -f "${given}/kura-desktopd" ] || [ ! -f "${given}/kura-helper" ]; }; then
+            print_error "Kura Desktop: ${given} lacks kura-desktopd or kura-helper (OS_DESKTOP_DIST)"
+            exit 1
+        fi
+        echo "${given}"
+        return
+    fi
+    local dist="${PROJECT_DIR}/desktop/dist/${machine}"
+    if [ "${OS_DESKTOP:-true}" != "false" ] && \
+       { [ ! -f "${dist}/kura-desktopd" ] || [ ! -f "${dist}/kura-helper" ]; }; then
+        print_status "  Building Kura Desktop for ${machine}..." >&2
+        make -C "${PROJECT_DIR}/desktop" dist ARCH="${machine}" >&2
+    fi
+    echo "${dist}"
 }
 
 # ============================================================================
@@ -721,7 +758,7 @@ build_target() {
     # Phase 3: Install OS packages
     print_status "[3/6] Installing OS packages..."
     print_status "  Source: ${PACKAGES_DIR}/"
-    install_os_pkgs "${ROOTFS}"
+    install_os_pkgs "${ROOTFS}" "${ARCH}"
 
     # Phase 4: Customize
     print_status "[4/6] Customizing rootfs (common + ${TARGET_DIRNAME})..."
