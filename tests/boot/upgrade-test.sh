@@ -159,6 +159,14 @@ back_after_restart() {
     sleep 20
     wait_for "SSH after the restart" ssh_run true
 }
+# running_services: the services that run on every boot (first boot's own
+# units, which boot-checks.sh's services_active also expects, are done)
+running_services() {
+    local states
+    states=$(ssh_run systemctl is-active docker ssh "${BRAND}-config" || true)
+    report_facts "${states}"
+    [ "$(echo "${states}" | grep -cx active)" -eq 3 ]
+}
 failed_units() { ssh_run "systemctl --failed --no-legend --plain | cut -d' ' -f1 | sort" || true; }
 # no_new_failed_units: none that the released version did not already have
 no_new_failed_units() {
@@ -184,7 +192,7 @@ check "back after a restart" back_after_restart
 check "still upgraded after the restart" upgraded
 check "the owner's settings and choices are unchanged after the restart" owner_state_kept
 check "password logins still refused" password_login_refused
-check "core services active" services_active
+check "Docker, SSH and ${BRAND}-config active" running_services
 check "no unit failed that worked before" no_new_failed_units
 
 if [ "${FAILED}" -ne 0 ]; then
