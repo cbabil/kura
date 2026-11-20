@@ -137,6 +137,7 @@ else
     check "one-time password on the login screen" wait_for "one-time password" console_password
     check "first login replaces the one-time password" first_login_changes_password
 fi
+check "Kura registered as a package" kura_package
 check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
 check "core services active" services_active

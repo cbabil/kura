@@ -20,6 +20,8 @@
 #   LOGIN_SERVICES  "docker:active ssh:failed ..."
 #   LOGIN_SETUP     "applied", "ignored: <reason>", ... or empty
 #   LOGIN_PASSWORD  the one-time password, until the owner changed it
+#   LOGIN_UPGRADE   "Kura 0.6.1" when that version is in the repository
+#   LOGIN_RESTART   non-empty when an update needs a restart
 # Source this file; it defines functions and constants only.
 
 ISSUE_LOGO=(
@@ -113,7 +115,7 @@ issue_panel() {
         issue_row Password "${ISSUE_AMBER}" "${LOGIN_PASSWORD} · one-time, choose yours at login"
     issue_row System "${ISSUE_TEXT}" "${system}"
     [ -z "${LOGIN_UPTIME:-}" ] || issue_row Uptime "${ISSUE_TEXT}" "${LOGIN_UPTIME}"
-    [ -z "${LOGIN_SERVICES:-}${LOGIN_SETUP:-}" ] || issue_bar
+    [ -z "${LOGIN_SERVICES:-}${LOGIN_SETUP:-}${LOGIN_UPGRADE:-}${LOGIN_RESTART:-}" ] || issue_bar
     if [ -n "${LOGIN_SERVICES:-}" ]; then
         local line="" entry dot
         for entry in ${LOGIN_SERVICES}; do
@@ -131,6 +133,12 @@ issue_panel() {
             [ "${LOGIN_SETUP#*: }" = "${LOGIN_SETUP}" ] ||
                 issue_bar "  ${ISSUE_AMBER}${LOGIN_SETUP#*: }" ;;
     esac
+    # What waits for the owner (ADR-025): a new version, a restart
+    if [ -n "${LOGIN_UPGRADE:-}" ]; then   # the command on its own line, so it fits
+        issue_bar "${ISSUE_AMBER}▲ ${LOGIN_UPGRADE} available"
+        issue_bar "  ${ISSUE_AMBER}sudo apt update && sudo apt full-upgrade"
+    fi
+    [ -z "${LOGIN_RESTART:-}" ] || issue_bar "${ISSUE_AMBER}▲ restart required · sudo reboot"
     issue_bar
     printf '%s└%s\n' "${ISSUE_MUTED}" "${rule}"
 }

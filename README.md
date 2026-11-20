@@ -26,6 +26,7 @@ A lightweight home-server OS built on Debian 13 (Trixie) for the Raspberry Pi 5 
 - **First boot**: grows the root partition to fill the disk (or builds the disk layout chosen in Etchwise), generates this device's own SSH host keys and machine ID, and applies the settings an imager left on the boot partition (`kura-setup.json`)
 - **Four targets**: RPi5 SD card image, x86_64 PC disk image (UEFI, Secure Boot, e.g. Intel NUC), a small PC installer USB image that puts Kura on a PC's internal drive, and a Docker rootfs
 - **Login screen**: a boot splash (PC) and a console login screen with the address, the exact `ssh` command, service status and whether the Etchwise setup was applied
+- **Updates you control**: Debian and Docker updates install daily; a new Kura version installs with `sudo apt full-upgrade`; the device never restarts by itself (see [Updating Kura](#updating-kura))
 - **Security**: hardening at boot (kernel parameters, SSH, audit rules, firewall, filesystem mounts)
 - **Network Management**: NetworkManager for flexible configuration
 - **Rebrandable**: All user-visible branding controlled via `.env` variables
@@ -299,6 +300,28 @@ docker run -it kura:latest-arm64 /bin/bash   # RPi5/ARM64
 docker import release/<version>/docker/kura-*-amd64-*.tar kura:latest-amd64
 docker import release/<version>/docker/kura-*-arm64-*.tar kura:latest-arm64
 ```
+
+## Updating Kura
+
+- **Debian, Docker and (on a Pi) the kernel and firmware** install by themselves every day.
+- **The device never restarts by itself.** When an update needs a restart, the login screen and the message after login say "restart required"; run `sudo reboot` when it suits you.
+- **A new Kura version** shows on both screens as "Kura 0.6.1 available". Install it with:
+
+  ```bash
+  sudo apt update && sudo apt full-upgrade
+  ```
+
+  Your settings, users, containers and data are not touched, and a service you turned off stays off.
+
+How it works: Kura's own programs, units and settings are one Debian package, `kura`, built from each image and published with every release as a small apt repository (the release's assets), signed with the Kura Archive key (`config/keys/kura-archive.asc`, fingerprint `BEDA AE58 BB6B 8D7A 6221 4351 94D0 EA5C B90A 6B6E`). The repository is pinned to that one package.
+
+**A device installed from 0.5.2** has no `kura` package yet. Run this once, then upgrade with `apt` like any other:
+
+```bash
+curl -fsSL https://github.com/cbabil/kura/releases/latest/download/kura-adopt.sh | sudo bash
+```
+
+Devices on 0.5.1 or older need one last reinstall.
 
 ## Project Structure
 

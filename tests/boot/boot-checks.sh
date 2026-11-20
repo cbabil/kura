@@ -221,6 +221,15 @@ sys.exit(1)
 PY
 }
 
+# kura_package: dpkg knows the image's Kura version (ADR-025), so apt can
+# install the next one
+kura_package() {
+    local facts
+    facts=$(ssh_run "dpkg-query -W -f='\${Status} \${Version}' ${BRAND}; echo; cat /usr/lib/${BRAND}/release")
+    report_facts "${facts}"
+    [[ "${facts}" == "install ok installed "* ]] && [[ "${facts}" == *BRAND_VERSION=* ]]
+}
+
 # installer_full_size: the installer's last screens are at the display's
 # resolution (1920 wide here): the boot menu's smaller mode was left
 installer_full_size() {
@@ -302,10 +311,13 @@ install ok installed
 
 # layout_after_restart: the layout comes back on the next boot (fstab, LVM
 # activation, and the root's PARTUUID unchanged by the resize)
-layout_after_restart() {
+layout_after_restart() { restart_device && layout_built; }
+
+# restart_device: restart, and wait until SSH answers again
+restart_device() {
     sudo_run "systemctl reboot" || true
     sleep 20
-    wait_for "SSH after the restart" ssh_run true && layout_built
+    wait_for "SSH after the restart" ssh_run true
 }
 
 # setup_shown: kura-issue has put the setup outcome on the login screen
@@ -336,11 +348,11 @@ root_grown() {
 # systemctl is-active exits 0 if ANY listed unit is active, so check each
 # unit's own state line.
 services_active() {
-    local states
-    states=$(ssh_run systemctl is-active docker "${BRAND}-firstboot" "${BRAND}-ssh-keygen" \
-        "${BRAND}-config" || true)
+    local states units=("$@")
+    [ "$#" -gt 0 ] || units=(docker "${BRAND}-firstboot" "${BRAND}-ssh-keygen" "${BRAND}-config")
+    states=$(ssh_run systemctl is-active "${units[@]}" || true)
     report_facts "${states}"
-    [ "$(echo "${states}" | grep -cx active)" -eq 4 ]
+    [ "$(echo "${states}" | grep -cx active)" -eq "${#units[@]}" ]
 }
 
 docker_answers() { sudo_run "docker info --format '{{.ServerVersion}}'" | grep -q .; }

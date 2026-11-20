@@ -2,7 +2,7 @@
 # scripts/common/motd.sh
 # The message after login, laid out as Ubuntu's: a welcome line, where to
 # look things up, the system information in two columns, then notices
-# (updates, failed services, a pending restart). Plain text; every line fits
+# (updates, failed services, a new Kura version, a pending restart). Plain text; every line fits
 # 80 columns.
 #
 # Facts come from MOTD_* variables, which motd/10-status gathers on the
@@ -11,7 +11,8 @@
 #   MOTD_DATE     "Tue Nov 10 17:02:31 UTC 2026"
 #   MOTD_LEFT, MOTD_RIGHT  arrays of "Label:|value", one column each
 #   MOTD_UPDATES  when updates last ran ("Nov 10 04:30"), empty if never
-#   MOTD_FAILED   failed units         MOTD_REBOOT  restart time, empty if none
+#   MOTD_FAILED   failed units         MOTD_REBOOT  non-empty when a restart is due
+#   MOTD_UPGRADE  "Kura 0.6.1" when that version is in the repository
 # Widths are counted in characters: callers set LC_ALL=C.UTF-8.
 # Source this file; it defines functions only.
 
@@ -75,8 +76,9 @@ motd_render() {
         1) printf '\n1 service has failed: systemctl --failed\n' ;;
         *) printf '\n%s services have failed: systemctl --failed\n' "${MOTD_FAILED}" ;;
     esac
-    [ -z "${MOTD_REBOOT:-}" ] ||
-        printf '\n*** System restart required *** (it restarts by itself at %s)\n' "${MOTD_REBOOT}"
+    [ -z "${MOTD_UPGRADE:-}" ] ||
+        printf '\n%s is available: sudo apt update && sudo apt full-upgrade\n' "${MOTD_UPGRADE}"
+    [ -z "${MOTD_REBOOT:-}" ] || printf '\n*** System restart required *** (sudo reboot)\n'
     echo
 }
 

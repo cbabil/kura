@@ -49,7 +49,7 @@ setup() {
 
 @test "motd: fits an 80-column terminal, with every notice shown" {
     MOTD_FAILED=12
-    MOTD_REBOOT="04:30"
+    MOTD_REBOOT="yes"
     run motd_render
     local line
     while IFS= read -r line; do
@@ -76,17 +76,17 @@ setup() {
     output_has "3 services have failed: systemctl --failed"
 }
 
-@test "motd: a pending restart, and when it happens by itself" {
+@test "motd: a pending restart, and how to do it (the device never restarts by itself)" {
     run motd_render
     ! output_has "restart" || false
-    MOTD_REBOOT="04:30"
+    MOTD_REBOOT="yes"
     run motd_render
-    output_has "*** System restart required *** (it restarts by itself at 04:30)"
+    output_has "*** System restart required *** (sudo reboot)"
 }
 
 @test "motd: plain text, no colours" {
     MOTD_FAILED=1
-    MOTD_REBOOT="04:30"
+    MOTD_REBOOT="yes"
     run motd_render
     [[ "$output" != *$'\e'* ]]
 }
@@ -128,4 +128,19 @@ setup() {
     file_has "${status}" "motd_render"
     file_has "${status}" "LC_ALL=C.UTF-8"
     shellcheck -x "${status}"
+}
+
+@test "motd: a new Kura version, and the command that installs it" {
+    run motd_render
+    ! output_has "is available" || false
+    MOTD_UPGRADE="Kura 0.6.1"
+    run motd_render
+    output_has "Kura 0.6.1 is available: sudo apt update && sudo apt full-upgrade"
+}
+
+@test "10-status: a pending restart and a new version come from the device" {
+    local status="${REPO_ROOT}/scripts/common/motd/10-status"
+    file_has "${status}" 'MOTD_REBOOT="yes"'
+    file_has "${status}" "updates.sh"
+    file_has "${status}" "MOTD_UPGRADE="
 }

@@ -195,6 +195,13 @@ jobs:
         run: |
           tests/boot/installer-test.sh release/*/pc-installer/*.img release/*/pc/*.img install
 
+      # The latest released Kura, upgraded in place to the package just built
+      # (ADR-025): the path an owner's device takes
+      - name: Upgrade test
+        if: matrix.target == 'pc'
+        run: |
+          command -v dpkg-scanpackages >/dev/null || sudo apt-get install -y -qq dpkg-dev
+          tests/boot/upgrade-test.sh release/*/pc/kura_*_amd64.deb upgrade
 
       # Raw images are mostly empty space: releases ship them as .img.zst. Dev
       # runs only have to build and boot, so nothing is compressed or uploaded.
@@ -209,7 +216,7 @@ jobs:
         run: |
           mkdir artifact
           find release/*/${{ matrix.release_glob }} -maxdepth 1 -type f \
-            -name '*.img.zst' -exec ln -t artifact {} +
+            \( -name '*.img.zst' -o -name '*.deb' \) -exec ln -t artifact {} +
 
       # The images are only needed by release.yml
       - name: Upload image
@@ -236,6 +243,11 @@ jobs:
             boot-b/
             boot-c/
             install/
+            upgrade/
+            !upgrade/*.img*
+            !upgrade/id_ed25519*
+            !upgrade/monitor.sock
+            !upgrade/repo/
             !boot-*/disk.img
             !boot-*/id_ed25519*
             !boot-*/monitor.sock

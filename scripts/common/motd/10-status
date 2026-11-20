@@ -10,6 +10,9 @@ export LC_ALL=C.UTF-8
 BRAND_ENV="/etc/kura/brand.env"
 # shellcheck disable=SC1090
 [ -f "${BRAND_ENV}" ] && . "${BRAND_ENV}"
+# the version installed (the kura package's), over the image's
+# shellcheck disable=SC1090
+[ ! -f "/usr/lib/${BRAND_PREFIX:-kura}/release" ] || . "/usr/lib/${BRAND_PREFIX:-kura}/release"
 # shellcheck source=SCRIPTDIR/../motd.sh
 . "/usr/lib/${BRAND_PREFIX:-kura}/motd.sh" || exit 0
 # shellcheck disable=SC1091
@@ -35,13 +38,19 @@ if running=$(timeout 3 docker ps -q 2>/dev/null) && all=$(timeout 3 docker ps -a
     MOTD_RIGHT+=("Containers:|${running} running, $(( all - running )) stopped")
 fi
 
-# Updates install themselves daily (auto-updates.sh) and the device
-# restarts at 04:30 when they need it
+# Updates install themselves daily (auto-updates.sh); a restart they need
+# waits for the owner
 stamp=/var/lib/apt/periodic/upgrade-stamp
 MOTD_UPDATES=""
 [ -f "${stamp}" ] && MOTD_UPDATES=$(date -r "${stamp}" '+%b %-d %H:%M')
 MOTD_FAILED=$(timeout 2 systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -c .)
 MOTD_REBOOT=""
-[ -f /run/reboot-required ] && MOTD_REBOOT="04:30"
+[ -f /run/reboot-required ] && MOTD_REBOOT="yes"
+# A newer Kura in its repository: installed when the owner asks (ADR-025)
+MOTD_UPGRADE=""
+# shellcheck source=SCRIPTDIR/../updates.sh
+if . "/usr/lib/${BRAND_PREFIX:-kura}/updates.sh" 2>/dev/null; then
+    MOTD_UPGRADE=$(upgrade_notice "${BRAND_PREFIX:-kura}" "${BRAND_NAME:-Kura}")
+fi
 
 motd_render

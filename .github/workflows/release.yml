@@ -52,6 +52,7 @@ jobs:
         working-directory: dist
         env:
           REPO: ${{ github.repository }}
+          KURA_APT_KEY: ${{ secrets.KURA_APT_KEY }}
         run: |
           set -euo pipefail
           sha512sum ./*.img.zst > SHA512SUMS
@@ -59,8 +60,26 @@ jobs:
             ./*-x86_64-installer-*.img.zst > manifest.json
           cat manifest.json
           ../scripts/release/make-etchwise-list.sh manifest.json > etchwise.json
+          # Kura's apt repository (ADR-025): the packages, Packages, Release
+          # and InRelease, signed with the Kura Archive key and checked
+          # against the public key in the repo
+          command -v dpkg-scanpackages >/dev/null || sudo apt-get install -y -qq dpkg-dev
+          export GNUPGHOME; GNUPGHOME=$(mktemp -d /tmp/g.XXXXXX)
+          # the signing key never outlives this step, whatever fails
+          trap 'gpgconf --kill all 2>/dev/null; rm -rf /tmp/g.*' EXIT
+          printf '%s\n' "${KURA_APT_KEY}" | gpg --batch --quiet --import
+          # shellcheck disable=SC1091
+          source ../scripts/common/kura-repo.sh
+          ../scripts/release/make-apt-repo.sh . "${KURA_GPG_FINGERPRINT}"
+          gpgconf --kill all; rm -rf "${GNUPGHOME}"
+          GNUPGHOME=$(mktemp -d /tmp/g.XXXXXX)
+          gpg --batch --quiet --import "${KURA_KEY_FILE}"
+          gpg --batch --verify InRelease
+          rm -rf "${GNUPGHOME}"; unset GNUPGHOME
+          # For devices installed before Kura had packages (0.5.2)
+          ../scripts/release/make-adopt.sh kura "${REPO}" > kura-adopt.sh
           # The one list of assets that get signed and published
-          ls ./*.img.zst SHA512SUMS manifest.json etchwise.json > ASSETS
+          ls ./*.img.zst ./*.deb Packages Release InRelease kura-adopt.sh SHA512SUMS manifest.json etchwise.json > ASSETS
 
       - name: Sign assets (Sigstore, keyless) and verify our own signatures
         working-directory: dist

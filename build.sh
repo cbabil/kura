@@ -56,6 +56,8 @@ source "${PROJECT_DIR}/scripts/common/install-firstboot.sh"
 source "${PROJECT_DIR}/scripts/common/passwords.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_DIR}/scripts/common/verify-rootfs.sh"
+# shellcheck source=scripts/packaging/kura-package.sh
+source "${PROJECT_DIR}/scripts/packaging/kura-package.sh"
 
 OS_DEBIAN_SUITE="${OS_DEBIAN_SUITE:-trixie}"
 OS_DEBIAN_MIRROR="${OS_DEBIAN_MIRROR:-https://deb.debian.org/debian}"
@@ -449,6 +451,28 @@ build_desktop() {
 }
 
 # ============================================================================
+# package_kura -- Kura's own parts as the kura package (ADR-025): built from
+# the finished rootfs into the target's release folder, then installed into
+# that rootfs, so dpkg on the device knows the version it has and apt can
+# install the next one
+# ============================================================================
+
+package_kura() {
+    local ROOTFS="$1" ARCH="$2" TARGET="$3" out deb
+    case "${TARGET}" in
+        rpi5) out="${RELEASE_DIR}/${VERSION}/arm64" ;;
+        *)    out="${RELEASE_DIR}/${VERSION}/${TARGET}" ;;
+    esac
+    deb=$(build_kura_package "${ROOTFS}" "${BRAND}" "${VERSION}" "${ARCH}" "${out}") || {
+        print_error "Packaging failed"; exit 1; }
+    cp "${deb}" "${ROOTFS}/tmp/${BRAND}.deb"
+    mount_chroot "${ROOTFS}"
+    chroot "${ROOTFS}" dpkg -i "/tmp/${BRAND}.deb" || { umount_chroot "${ROOTFS}"; print_error "dpkg -i failed"; exit 1; }
+    umount_chroot "${ROOTFS}"
+    rm -f "${ROOTFS}/tmp/${BRAND}.deb"
+}
+
+# ============================================================================
 # customize_rootfs -- apply common + target-specific customization
 # ============================================================================
 
@@ -771,6 +795,10 @@ build_target() {
     set_passwords "${ROOTFS}"
     # Each flashed device must get its own SSH host keys and machine ID
     reset_device_identity "${ROOTFS}"
+
+    # Kura's own parts as a package, registered in the image (ADR-025)
+    print_status "Packaging ${OS_NAME} ${VERSION} (${ARCH})..."
+    package_kura "${ROOTFS}" "${ARCH}" "${TARGET}"
 
     # Verify critical files, enable links and device identity (fail fast)
     print_status "Verifying rootfs..."

@@ -1,0 +1,77 @@
+#!/bin/bash
+# kura-adopt.sh — run once on a __BRAND_NAME__ device installed before
+# __BRAND_NAME__ had packages (0.5.2):
+#
+#     curl -fsSL __URL__kura-adopt.sh | sudo bash
+#
+# It adds __BRAND_NAME__'s package repository (its key, pinned to the one
+# package) and installs the __BRAND__ package over the files already on the
+# device. Your settings, users and data are not touched. From then on a new
+# version installs with: sudo apt update && sudo apt full-upgrade
+#
+# Made by scripts/release/make-adopt.sh (ADR-025); the repository's files
+# below are the ones every new image has.
+
+# Strict when run; sourced (the tests, the upgrade test), the caller's options stay
+[ -n "${ADOPT_SOURCED:-}" ] || set -euo pipefail
+
+BRAND="__BRAND__"
+ROOT="${ADOPT_ROOT:-}"            # a scratch root in the tests
+FILES='__FILES__'
+
+# adopt_files: the archive key, the source and the pin. FILES holds one
+# "<path> <base64>" per line; each is written as a root-owned 0644 file, and
+# folders that exist keep their owner and mode.
+adopt_files() {
+    local path data
+    while read -r path data; do
+        [ -n "${data}" ] || continue
+        # a new folder is world-readable whatever root's umask; an existing one is left
+        [ -d "${ROOT}/$(dirname "${path}")" ] || (umask 022 && mkdir -p "${ROOT}/$(dirname "${path}")")
+        (umask 022 && base64 -d <<< "${data}" > "${ROOT}/${path}.new") &&
+            chmod 0644 "${ROOT}/${path}.new" && mv "${ROOT}/${path}.new" "${ROOT}/${path}" || return 1
+    done <<< "${FILES}"
+}
+
+# has_package: dpkg has the package installed
+has_package() { dpkg-query -W -f='${Status}' "${BRAND}" 2>/dev/null | grep -q "install ok installed"; }
+
+# adopt_refresh: Kura's lists only; nothing else is refreshed or upgraded
+adopt_refresh() {
+    apt-get update -o DPkg::Lock::Timeout=120 -o "Dir::Etc::sourcelist=sources.list.d/${BRAND}.sources" \
+        -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+}
+
+# seed_units: units.list ("<target> <unit>") on stdin. A unit this device
+# already has is recorded as given, so the package leaves it as the owner
+# set it (on or off); one that is new gets enabled by the package.
+seed_units() {
+    local target unit seen="${ROOT}/var/lib/${BRAND}/units-enabled"
+    mkdir -p "$(dirname "${seen}")"
+    : > "${seen}"
+    while read -r target unit; do
+        [ ! -e "${ROOT}/usr/lib/systemd/system/${unit}" ] || echo "${target} ${unit}" >> "${seen}"
+    done
+}
+
+adopt() {
+    local tmp deb
+    [ "$(id -u)" -eq 0 ] || { echo "ERROR: run this as root (sudo bash)" >&2; return 1; }
+    if has_package; then
+        echo "This device already has the ${BRAND} package: sudo apt update && sudo apt full-upgrade"
+        return 0
+    fi
+    adopt_files
+    adopt_refresh
+    tmp=$(mktemp -d)
+    # apt checks the download against the signed index
+    ( cd "${tmp}" && apt-get download "${BRAND}" ) || { rm -rf "${tmp}"; echo "ERROR: download failed" >&2; return 1; }
+    deb=$(ls "${tmp}"/*.deb)
+    dpkg-deb --fsys-tarfile "${deb}" | tar -xO "./usr/lib/${BRAND}/units.list" | seed_units
+    # through apt: it waits for a running update and brings what the package needs
+    apt-get install -y -o DPkg::Lock::Timeout=120 "${deb}" || { rm -rf "${tmp}"; return 1; }
+    rm -rf "${tmp}"
+    echo "Done. From now on: sudo apt update && sudo apt full-upgrade"
+}
+
+[ -n "${ADOPT_SOURCED:-}" ] || adopt

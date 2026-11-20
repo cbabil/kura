@@ -159,6 +159,7 @@ install_login_screen() {
     sed "s|__BRAND__|${brand}|g" "${src}/kura-issue" > "${rootfs}/usr/lib/${brand}/kura-issue"
     chmod 0755 "${rootfs}/usr/lib/${brand}/kura-issue"
     install -m 0644 "${src}/issue.sh" "${rootfs}/usr/lib/${brand}/issue.sh"
+    install -m 0644 "${src}/updates.sh" "${rootfs}/usr/lib/${brand}/updates.sh"
 
     cat > "${units}/${brand}-issue.service" <<EOF
 [Unit]
