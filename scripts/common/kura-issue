@@ -60,6 +60,15 @@ disk="${disk// /}"
 LOGIN_VERSION="${BRAND_NAME:-Kura} ${BRAND_VERSION:-}"
 LOGIN_UPTIME="$(human_uptime "${up%.*}") · disk ${disk:-?} used"
 LOGIN_USER=$(awk -F: -v uid="${LOGIN_UID}" '$3 == uid { print $1; exit }' "${PASSWD_FILE}" 2>/dev/null)
+# This device's own name, address and system: their widths are then known,
+# and the panel is a closed box (issue.sh)
+LOGIN_HOST=$(hostname 2>/dev/null) || LOGIN_HOST=""
+LOGIN_ADDRESS=""
+read -r _ _ _ LOGIN_ADDRESS _ < <(ip -o -4 addr show scope global 2>/dev/null) || true
+LOGIN_ADDRESS="${LOGIN_ADDRESS%/*}"
+# shellcheck disable=SC1090
+LOGIN_SYSTEM=$(. "${KURA_OS_RELEASE:-/etc/os-release}" 2>/dev/null; echo "${PRETTY_NAME:-Linux}")
+LOGIN_SYSTEM+=" · $(uname -m)"
 LOGIN_SERVICES=""
 i=0
 while read -r state; do
@@ -91,12 +100,15 @@ if [ -f "${ONE_TIME_PASSWORD}" ]; then
     fi
 fi
 
-screen=$(kura_issue "${BRAND_TAGLINE:-}" "${BRAND_COLOR:+${BRAND_COLOR#\#}}") || exit 1
+# "x" keeps the screen's closing newlines and the prompt's indent, which
+# $(...) would drop
+screen=$(kura_issue "${BRAND_TAGLINE:-}" "${BRAND_COLOR:+${BRAND_COLOR#\#}}"; echo x) || exit 1
+screen="${screen%x}"
 # Unchanged (most minutes once the device is up): compared in memory, so the
 # disk is not written and nothing is redrawn
 [ -f "${ISSUE}" ] && [ "${screen}" = "$(<"${ISSUE}")" ] && exit 0
-# $(...) dropped the screen's two closing newlines; the .new file sits next to
-# /etc/issue so mv replaces it atomically
+# the .new file sits next to /etc/issue so mv replaces it atomically
 tmp="${ISSUE}.new"
-printf '%s\n\n' "${screen}" > "${tmp}" && mv "${tmp}" "${ISSUE}" || { rm -f "${tmp}"; exit 1; }
+# (kept: the screen may end with the login prompt's indent)
+printf '%s' "${screen}" > "${tmp}" && mv "${tmp}" "${ISSUE}" || { rm -f "${tmp}"; exit 1; }
 agetty --reload 2>/dev/null || true

@@ -23,6 +23,9 @@ usr/lib/systemd/system/${b}-config.service
 usr/lib/systemd/system/${b}-security.service
 etc/${b}/security/hardening.json
 usr/lib/${b}/firstboot.sh
+usr/lib/${b}/kanji.sh
+usr/lib/${b}/updates.sh
+usr/lib/${b}/migrations/001-storage-status.sh
 usr/lib/${b}/pkg-hooks.sh
 usr/lib/${b}/release
 var/lib/dpkg/info/${b}.list

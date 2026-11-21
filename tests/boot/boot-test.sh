@@ -169,6 +169,7 @@ if [ "${LAYOUT}" != full ]; then
     check "splash: theme in the initrd that boots" splash_in_initrd
     check "GRUB menu in Kura's colours" grub_themed
     check "console font is Terminus 16x32" console_font
+check "console font has the blocks and box corners the screens use" console_glyphs
     check "login screen has the Kura look (login.png)" login_screen
 fi
 [ -z "${SETUP}" ] || check "setup: disk layout back after a restart" layout_after_restart

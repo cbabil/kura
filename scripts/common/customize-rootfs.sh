@@ -163,6 +163,12 @@ install -d "${ROOTFS}/usr/lib/${BRAND}"
 printf 'BRAND_VERSION="%s"\n' "${VERSION}" > "${ROOTFS}/usr/lib/${BRAND}/release"
 sed "s|__BRAND__|${BRAND}|g" "$(dirname "$0")/pkg-hooks.sh" > "${ROOTFS}/usr/lib/${BRAND}/pkg-hooks.sh"
 chmod 0644 "${ROOTFS}/usr/lib/${BRAND}/release" "${ROOTFS}/usr/lib/${BRAND}/pkg-hooks.sh"
+# What a new version has to put right on a device, once (pkg-hooks.sh)
+install -d "${ROOTFS}/usr/lib/${BRAND}/migrations"
+for migration in "$(dirname "$0")"/migrations/*.sh; do
+    sed "s|__BRAND__|${BRAND}|g" "${migration}" > "${ROOTFS}/usr/lib/${BRAND}/migrations/$(basename "${migration}")"
+    chmod 0755 "${ROOTFS}/usr/lib/${BRAND}/migrations/$(basename "${migration}")"
+done
 
 # ---- Patch config.json with env values ----
 if [ -f "${ROOTFS}/etc/${BRAND}/config.json" ]; then

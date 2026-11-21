@@ -119,6 +119,31 @@ stub_screen() {
     [ "${UI_COLS}" -eq 80 ]
 }
 
+@test "ui_header: the storehouse character before the logo, on a screen with the room" {
+    export LC_ALL=C.UTF-8
+    UI_COLS=120
+    run ui_header
+    output_has "▀▀▀▀▀██▀▀▀▀▀▀██▀▀▀▀▀"
+    output_has "Installer"
+    local line
+    while IFS= read -r line; do [ "${#line}" -le 120 ] || { echo "too wide: ${line}"; return 1; }; done <<< "$(plain)"
+    # the logo sits beside the character's middle rows
+    [ "$(plain | grep -n '██   ██ ██    ██ ██████   █████' | head -1 | cut -d: -f1)" -gt \
+      "$(plain | grep -n '▀▀▀▀▀██▀▀▀▀▀▀██▀▀▀▀▀' | cut -d: -f1)" ]
+    UI_COLS=110
+    run ui_header
+    ! output_has "▀▀▀▀▀██" || false
+    output_has "Installer"
+}
+
+@test "the character is drawn once, for the login screen and the installer" {
+    file_has "${REPO_ROOT}/scripts/common/issue.sh" "kanji.sh"
+    file_has "${REPO_ROOT}/scripts/pc-installer/ui.sh" "kanji.sh"
+    file_has "${REPO_ROOT}/scripts/pc-installer/build-initrd.sh" "kanji.sh"
+    file_has "${REPO_ROOT}/scripts/common/install-firstboot.sh" "kanji.sh"
+    [ "$(grep -c '▀▀▀▀▀██▀▀▀▀▀▀██▀▀▀▀▀' "${REPO_ROOT}"/scripts/common/*.sh "${REPO_ROOT}"/scripts/pc-installer/*.sh | grep -vc ':0$')" = 1 ]
+}
+
 @test "ui_header: on a narrow screen the caption goes and the rule fits" {
     export LC_ALL=C.UTF-8
     UI_COLS=80
