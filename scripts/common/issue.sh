@@ -9,7 +9,7 @@
 # The Linux console has 16 colours and no CJK glyphs, so the screen first
 # re-colours the palette with the console's "ESC ] P n RRGGBB" escape and
 # draws with block, box-drawing, middle-dot, bullet and triangle characters
-# only (Terminus Uni3, set in customize-rootfs.sh). agetty fills the
+# only (Terminus, the set chosen in customize-rootfs.sh). agetty fills the
 # backslash escapes (\n host, \4 IPv4, \S{...} os-release, \m architecture,
 # \d \t date and time) at the prompt, so those are always current.
 #

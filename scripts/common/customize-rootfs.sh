@@ -96,13 +96,15 @@ install_firstboot "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
 install_login_screen "${ROOTFS}" "${BRAND}" "${OS_NAME}" "$(dirname "$0")"
 
 # ---- Console font: Terminus 16x32, the login screen's design size ----
-# (120x33 on a 1080p screen; console-setup applies it at boot). Uni3 has the
-# blocks, box drawing, bullet and triangle the screen draws (ADR-019).
+# (120x33 on a 1080p screen; console-setup applies it at boot). The set is
+# console-setup's "Vietnamese", its widest Latin one: it has the full and
+# half blocks, box drawing, bullet and triangle the screens draw (ADR-019,
+# ADR-026). Uni3, used before, has no half blocks.
 install -d "${ROOTFS}/etc/default"
 cat > "${ROOTFS}/etc/default/console-setup" <<'CONSOLEEOF'
 ACTIVE_CONSOLES="/dev/tty[1-6]"
 CHARMAP="UTF-8"
-CODESET="Uni3"
+CODESET="Vietnamese"
 FONTFACE="Terminus"
 FONTSIZE="16x32"
 VIDEOMODE=

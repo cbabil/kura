@@ -162,10 +162,10 @@ stub_screen() {
     for file in install.sh run.sh screen.sh ui.sh; do
         grep -q "\${SCRIPT_DIR}/${file}" "${build}"
     done
-    file_has "${build}" "/usr/share/consolefonts/Uni3-Terminus32x16.psf.gz"
+    file_has "${build}" "/usr/share/consolefonts/Vietnamese-Terminus32x16.psf.gz"
     file_has "${build}" '/font.psf"'
     # the fallback for low-resolution screens
-    file_has "${build}" "/usr/share/consolefonts/Uni3-Terminus16.psf.gz"
+    file_has "${build}" "/usr/share/consolefonts/Vietnamese-Terminus16.psf.gz"
     file_has "${build}" '/font-small.psf"'
     grep -qx "console-setup-linux" "${REPO_ROOT}/config/packages-pc-installer.list"
 }

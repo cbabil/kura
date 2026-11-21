@@ -266,7 +266,7 @@ console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setu
 console_glyphs() {
     local want="2588 2580 2584 2500 2502 250C 2510 2514 2518" have code missing=""
     # distinct code points: the table can list several for one glyph on a line
-    have=$(ssh_run "zcat /usr/share/consolefonts/Uni3-Terminus32x16.psf.gz | psfgettable - 2>/dev/null" |
+    have=$(ssh_run "zcat /usr/share/consolefonts/Vietnamese-Terminus32x16.psf.gz | psfgettable - 2>/dev/null" |
         grep -oiE 'U\+[0-9a-f]{4}' | tr 'a-f' 'A-F' | sort -u)
     for code in ${want}; do
         grep -qx "U+${code}" <<< "${have}" || missing+=" U+${code}"

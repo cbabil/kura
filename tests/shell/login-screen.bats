@@ -189,10 +189,12 @@ kura_issue_env() {
     [ -L "${rootfs}/etc/systemd/system/timers.target.wants/kura-issue.timer" ]
 }
 
-@test "console font: Terminus 16x32 Uni3 (has the bullet and triangle), as the screen was designed" {
+@test "console font: Terminus 16x32 in the set that has every character the screens draw" {
     file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'FONTFACE="Terminus"'
     file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'FONTSIZE="16x32"'
-    file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'CODESET="Uni3"'
+    # "Vietnamese" is console-setup's name for its widest Latin set; unlike Uni3
+    # it has the half blocks the storehouse character is drawn with
+    file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'CODESET="Vietnamese"'
 }
 
 @test "console font: the package's cached setup is dropped, so the first boot applies Terminus" {

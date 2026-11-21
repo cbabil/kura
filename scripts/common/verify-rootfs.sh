@@ -26,6 +26,7 @@ usr/lib/${b}/firstboot.sh
 usr/lib/${b}/kanji.sh
 usr/lib/${b}/updates.sh
 usr/lib/${b}/migrations/001-storage-status.sh
+usr/lib/${b}/migrations/002-console-font.sh
 usr/lib/${b}/pkg-hooks.sh
 usr/lib/${b}/release
 var/lib/dpkg/info/${b}.list

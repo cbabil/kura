@@ -61,3 +61,27 @@ status() { cat "${ROOT}/var/lib/kura/$1"; }
     local m
     for m in "${MIG}"/*.sh; do [ -x "${m}" ]; done
 }
+
+@test "002: a device on the old font set moves to the one with the half blocks, and applies it" {
+    mkdir -p "${ROOT}/etc/default" "${ROOT}/etc/console-setup" "${ROOT}/run/systemd/system"
+    printf 'CHARMAP="UTF-8"\nCODESET="Uni3"\nFONTFACE="Terminus"\nFONTSIZE="16x32"\n' > "${ROOT}/etc/default/console-setup"
+    touch "${ROOT}/etc/console-setup/cached_setup_font.sh" "${ROOT}/etc/console-setup/cached_Uni3-Terminus32x16.psf.gz"
+    printf '#!/bin/sh\necho "setupcon $*" >> "%s/calls"\n' "${BATS_TEST_TMPDIR}" > "${BATS_TEST_TMPDIR}/bin/setupcon"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/setupcon"
+    run "${MIG}/002-console-font.sh"
+    [ "$status" -eq 0 ]
+    file_has "${ROOT}/etc/default/console-setup" 'CODESET="Vietnamese"'
+    file_has "${ROOT}/etc/default/console-setup" 'FONTSIZE="16x32"'
+    [ -z "$(ls "${ROOT}/etc/console-setup")" ]
+    file_has "${BATS_TEST_TMPDIR}/calls" "setupcon --save --force"
+}
+
+@test "002: a font set the owner chose, or no console setup (the image build), is left alone" {
+    run "${MIG}/002-console-font.sh"
+    [ "$status" -eq 0 ]
+    mkdir -p "${ROOT}/etc/default"
+    printf 'CODESET="Lat15"\n' > "${ROOT}/etc/default/console-setup"
+    run "${MIG}/002-console-font.sh"
+    [ "$(cat "${ROOT}/etc/default/console-setup")" = 'CODESET="Lat15"' ]
+    [ ! -e "${BATS_TEST_TMPDIR}/calls" ]
+}
