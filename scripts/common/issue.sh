@@ -152,8 +152,9 @@ issue_row() {
 }
 
 # issue_short_fp <AA:BB:...>: the first and last four bytes, enough to
-# compare with the browser's certificate details
-issue_short_fp() { printf '%s … %s' "${1:0:11}" "${1: -11}"; }
+# compare with the browser's certificate details (plain dots between: the
+# console font has no ellipsis)
+issue_short_fp() { printf '%s .. %s' "${1:0:11}" "${1: -11}"; }
 
 # issue_panel_lines <width>: what the panel says, one line each, none wider
 # than <width>. LOGIN_HOST set means kura-issue gave this device's own name,

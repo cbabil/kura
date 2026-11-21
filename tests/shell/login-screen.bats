@@ -71,10 +71,10 @@ setup() {
 @test "only characters the console font can draw" {
     LOGIN_SETUP="ignored: x"
     run kura_issue
-    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2580}\x{2584}\x{2500}\x{2502}\x{250C}\x{2510}\x{2514}\x{2518}\x{00B7}\x{2022}\x{25B2}\x{2026}]/g')" ]
+    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2580}\x{2584}\x{2500}\x{2502}\x{250C}\x{2510}\x{2514}\x{2518}\x{00B7}\x{2022}\x{25B2}]/g')" ]
     LOGIN_COLS=240 LOGIN_HOST=nuc LOGIN_ADDRESS=10.0.5.98 LOGIN_SYSTEM="Debian GNU/Linux 13 (trixie) · x86_64"
     run kura_issue
-    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2580}\x{2584}\x{2500}\x{2502}\x{250C}\x{2510}\x{2514}\x{2518}\x{00B7}\x{2022}\x{25B2}\x{2026}]/g')" ]
+    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2580}\x{2584}\x{2500}\x{2502}\x{250C}\x{2510}\x{2514}\x{2518}\x{00B7}\x{2022}\x{25B2}]/g')" ]
 }
 
 @test "without runtime facts (build time): agetty's own system line, no services" {
@@ -226,7 +226,7 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     LOGIN_DESKTOP_FP="${FP}"
     run kura_issue
     output_has 'https://\4'
-    output_has "SHA-256 4F:9A:3B:10 … 7E:C2:18:05"
+    output_has "SHA-256 4F:9A:3B:10 .. 7E:C2:18:05"
     LOGIN_DESKTOP_FP=""
     run kura_issue
     ! output_has "https://"
@@ -248,7 +248,7 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     export KURA_DESKTOP_FINGERPRINT="${BATS_TEST_TMPDIR}/fingerprint"
     run "${REPO_ROOT}/scripts/common/kura-issue"
     [ "$status" -eq 0 ]
-    file_has "${KURA_ISSUE}" "SHA-256 4F:9A:3B:10 … 7E:C2:18:05"
+    file_has "${KURA_ISSUE}" "SHA-256 4F:9A:3B:10 .. 7E:C2:18:05"
     rm "${BATS_TEST_TMPDIR}/fingerprint"
     run "${REPO_ROOT}/scripts/common/kura-issue"
     ! file_has "${KURA_ISSUE}" "https://"
@@ -346,4 +346,21 @@ plain() { printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*[A-Za-z]//g; s/\033\\]
     file_has "${KURA_ISSUE}" "ssh chris@10.0.5.98"
     file_has "${KURA_ISSUE}" "Kura 0.4.2 · Debian GNU/Linux 13 (trixie) · x86_64"
     file_has "${KURA_ISSUE}" "┐"
+}
+
+@test "kura-issue: a name or system text with escapes or control characters cannot draw on the screen" {
+    kura_issue_env
+    hostname() { printf 'nuc\\4\033[2Jx\n'; }
+    ip() { echo "2: eno1    inet 10.0.5.98/24 scope global eno1"; }
+    uname() { echo x86_64; }
+    export -f hostname ip uname
+    printf 'PRETTY_NAME="Debian \\\\n\\\\S 13"\n' > "${BATS_TEST_TMPDIR}/os-release"
+    export KURA_OS_RELEASE="${BATS_TEST_TMPDIR}/os-release"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    [ "$status" -eq 0 ]
+    # the name without its backslash and escape character, as plain text
+    file_has "${KURA_ISSUE}" "nuc4[2Jx"
+    file_has "${KURA_ISSUE}" "Debian nS 13"
+    # the only backslashes left are the date and time agetty fills in
+    [ "$(grep -o '\\.' "${KURA_ISSUE}" | sort -u | tr -d '\n')" = '\d\t' ]
 }

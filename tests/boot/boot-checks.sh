@@ -264,11 +264,15 @@ console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setu
 # console_glyphs: that font draws what the login screen is made of: full and
 # half blocks (the logo and the storehouse character) and the box's corners
 console_glyphs() {
-    local have
-    have=$(ssh_run "zcat /usr/share/consolefonts/Uni3-Terminus32x16.psf.gz | psfgettable - 2>/dev/null |
-        grep -ciE 'U\+(2588|2580|2584|250c|2510|2514|2518|2502|2500)\b'")
-    report_facts "glyphs found: ${have:-0} of 9"
-    [ "${have:-0}" -ge 9 ]
+    local want="2588 2580 2584 2500 2502 250C 2510 2514 2518" have code missing=""
+    # distinct code points: the table can list several for one glyph on a line
+    have=$(ssh_run "zcat /usr/share/consolefonts/Uni3-Terminus32x16.psf.gz | psfgettable - 2>/dev/null" |
+        grep -oiE 'U\+[0-9a-f]{4}' | tr 'a-f' 'A-F' | sort -u)
+    for code in ${want}; do
+        grep -qx "U+${code}" <<< "${have}" || missing+=" U+${code}"
+    done
+    report_facts "glyphs missing from the console font:${missing:- none}"
+    [ -z "${missing}" ]
 }
 
 # layout_built: the setup file's disk layout (LAYOUT's)
