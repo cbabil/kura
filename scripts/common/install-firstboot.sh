@@ -160,6 +160,7 @@ install_login_screen() {
     chmod 0755 "${rootfs}/usr/lib/${brand}/kura-issue"
     install -m 0644 "${src}/issue.sh" "${rootfs}/usr/lib/${brand}/issue.sh"
     install -m 0644 "${src}/updates.sh" "${rootfs}/usr/lib/${brand}/updates.sh"
+    install -m 0644 "${src}/kanji.sh" "${rootfs}/usr/lib/${brand}/kanji.sh"
 
     cat > "${units}/${brand}-issue.service" <<EOF
 [Unit]

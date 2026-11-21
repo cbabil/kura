@@ -15,6 +15,17 @@ UI_COLS="${UI_COLS:-120}"
 # What the full layout needs: the logo with its caption, and enough rows
 UI_MIN_COLS=100
 UI_MIN_ROWS=30
+# ...and what the storehouse character before the logo needs too
+UI_KANJI_COLS=116
+
+# The storehouse character, drawn in blocks (kanji.sh): next to this file in
+# the installer, in scripts/common in the repository
+KURA_KANJI=()
+for _kanji in "$(dirname "${BASH_SOURCE[0]}")/kanji.sh" "$(dirname "${BASH_SOURCE[0]}")/../common/kanji.sh"; do
+    # shellcheck source=scripts/common/kanji.sh
+    [ ! -f "${_kanji}" ] || { source "${_kanji}"; break; }
+done
+unset _kanji
 # Save and restore the cursor (ESC 7, ESC 8), for parts redrawn in place
 # shellcheck disable=SC2034  # used by screen.sh and run.sh
 UI_SAVE=$'\0337'
@@ -77,7 +88,8 @@ ui_palette() {
 # under the parts redrawn in place
 ui_clear() { printf '\033[0;37;40m\033[2J\033[H\033[?25l\033[?7l'; }
 
-# ui_header: the logo, light to brand purple, its captions and a rule
+# ui_header: the logo, light to brand purple, its captions and a rule; on a
+# screen with the room, the storehouse character (kanji.sh) before the logo
 ui_header() {
     local logo=(
         "██   ██ ██    ██ ██████   █████ "
@@ -85,16 +97,26 @@ ui_header() {
         "█████   ██    ██ ██████  ███████"
         "██  ██  ██    ██ ██   ██ ██   ██"
         "██   ██  ██████  ██   ██ ██   ██")
-    local shades=(D D 5 5 5) i side
+    local shades=(D D 5 5 5) i row side before rows=5 first=0
+    if [ "${UI_COLS}" -ge "${UI_KANJI_COLS}" ] && [ "${#KURA_KANJI[@]}" -gt 0 ]; then
+        rows=${#KURA_KANJI[@]} first=2    # the logo beside the character's middle rows
+    fi
     printf '\n\n'
-    for i in 0 1 2 3 4; do
-        case "${i}" in
+    for (( i = 0; i < rows; i++ )); do
+        row=$(( i - first ))
+        case "${row}" in
             1) side="$(ui_color D)T H E   S T O R E H O U S E" ;;
             3) side="$(ui_color F)Installer$(ui_color 8)  ·  puts Kura on this PC's internal drive" ;;
             *) side="" ;;
         esac
         [ "${UI_COLS}" -ge "${UI_MIN_COLS}" ] || side=""    # the captions need the room
-        printf '%s%s%s      %s\n' "${UI_PAD}" "$(ui_color "${shades[i]}")" "${logo[i]}" "${side}"
+        before=""
+        [ "${first}" -eq 0 ] || before="$(ui_color "$([ "${i}" -lt 4 ] && echo D || echo 5)")${KURA_KANJI[i]}  "
+        if [ "${row}" -ge 0 ] && [ "${row}" -lt 5 ]; then
+            printf '%s%s%s%s      %s\n' "${UI_PAD}" "${before}" "$(ui_color "${shades[row]}")" "${logo[row]}" "${side}"
+        else
+            printf '%s%s\n' "${UI_PAD}" "${before}"
+        fi
     done
     printf '\n%s%s%s\n\n' "${UI_PAD}" "$(ui_color 9)" "$(ui_repeat ─ "$(ui_width 104 4)")"
 }

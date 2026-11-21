@@ -76,11 +76,11 @@ echo "  Installer..."
 mkdir -p "${TREE}/${LIB_DIR}"
 cp "${SCRIPT_DIR}/install.sh" "${SCRIPT_DIR}/run.sh" "${SCRIPT_DIR}/screen.sh" "${SCRIPT_DIR}/ui.sh" \
     "${SCRIPT_DIR}/udhcpc.script" "${SCRIPT_DIR}/modules.list" \
-    "${SCRIPT_DIR}/../common/firstboot-disk.sh" "${TREE}/${LIB_DIR}/"
+    "${SCRIPT_DIR}/../common/firstboot-disk.sh" "${SCRIPT_DIR}/../common/kanji.sh" "${TREE}/${LIB_DIR}/"
 # 16x32 cells: 120x33 on a 1920x1080 screen; unpacked, so setfont needs no gzip
-gzip -dc "${ROOTFS}/usr/share/consolefonts/Uni3-Terminus32x16.psf.gz" > "${TREE}/${LIB_DIR}/font.psf"
+gzip -dc "${ROOTFS}/usr/share/consolefonts/Vietnamese-Terminus32x16.psf.gz" > "${TREE}/${LIB_DIR}/font.psf"
 # 8x16 cells, for screens left at the firmware's low resolution (ui_fit)
-gzip -dc "${ROOTFS}/usr/share/consolefonts/Uni3-Terminus16.psf.gz" > "${TREE}/${LIB_DIR}/font-small.psf"
+gzip -dc "${ROOTFS}/usr/share/consolefonts/Vietnamese-Terminus16.psf.gz" > "${TREE}/${LIB_DIR}/font-small.psf"
 chmod 755 "${TREE}/${LIB_DIR}/udhcpc.script"
 sed -e "s|__BRAND__|${BRAND}|g" -e "s|__BRAND_NAME__|${OS_NAME}|g" \
     -e "s|__LABEL__|${INSTALLER_LABEL}|g" "${SCRIPT_DIR}/init" > "${TREE}/init"

@@ -261,6 +261,20 @@ splash_in_initrd() {
 # console_font: the first boot cached the Terminus 16x32 font setup
 console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setup_font.sh'; }
 
+# console_glyphs: that font draws what the login screen is made of: full and
+# half blocks (the logo and the storehouse character) and the box's corners
+console_glyphs() {
+    local want="2588 2580 2584 2500 2502 250C 2510 2514 2518" have code missing=""
+    # distinct code points: the table can list several for one glyph on a line
+    have=$(ssh_run "zcat /usr/share/consolefonts/Vietnamese-Terminus32x16.psf.gz | psfgettable - 2>/dev/null" |
+        grep -oiE 'U\+[0-9a-f]{4}' | tr 'a-f' 'A-F' | sort -u)
+    for code in ${want}; do
+        grep -qx "U+${code}" <<< "${have}" || missing+=" U+${code}"
+    done
+    report_facts "glyphs missing from the console font:${missing:- none}"
+    [ -z "${missing}" ]
+}
+
 # layout_built: the setup file's disk layout (LAYOUT's)
 layout_built() {
     if [ "${LAYOUT}" = full ]; then full_layout_built; else server_layout_built; fi

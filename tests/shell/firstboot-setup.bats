@@ -173,7 +173,7 @@ conf() { jq -r "$1" "${SETUP_ROOT}/etc/kura/config.json"; }
     echo '{"version":1,"storage":{"rootGiB":16}}' > "${BOOT}/kura-setup.json"
     run apply_setup_dir "${BOOT}"
     [ "$(cat "${SETUP_ROOT}/var/lib/kura/setup-status")" = \
-      "partly applied: disk layout failed (vgcreate; journalctl -u kura-storage)" ]
+      "partly applied: disk layout failed (vgcreate; journalctl -u 'kura-storage*')" ]
 }
 
 @test "apply_setup_dir: caps /tmp at the size asked for" {

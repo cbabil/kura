@@ -10,6 +10,8 @@ TAGLINE="The lightweight OS for your home server."
 
 setup() {
     load test_helper
+    # widths are counted in characters, as kura-issue sets it on the device
+    export LC_ALL=C.UTF-8
     # shellcheck disable=SC1091
     source "${REPO_ROOT}/scripts/common/issue.sh"
     LOGIN_USER="chris"
@@ -69,7 +71,10 @@ setup() {
 @test "only characters the console font can draw" {
     LOGIN_SETUP="ignored: x"
     run kura_issue
-    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2500}\x{2502}\x{250C}\x{2514}\x{00B7}\x{2022}\x{25B2}]/g')" ]
+    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2580}\x{2584}\x{2500}\x{2502}\x{250C}\x{2510}\x{2514}\x{2518}\x{00B7}\x{2022}\x{25B2}]/g')" ]
+    LOGIN_COLS=240 LOGIN_HOST=nuc LOGIN_ADDRESS=10.0.5.98 LOGIN_SYSTEM="Debian GNU/Linux 13 (trixie) · x86_64"
+    run kura_issue
+    [ -z "$(printf '%s' "$output" | perl -CS -ne 'print for /[^\x00-\x7F\x{2588}\x{2580}\x{2584}\x{2500}\x{2502}\x{250C}\x{2510}\x{2514}\x{2518}\x{00B7}\x{2022}\x{25B2}]/g')" ]
 }
 
 @test "without runtime facts (build time): agetty's own system line, no services" {
@@ -105,11 +110,10 @@ kura_issue_env() {
     echo "applied" > "${KURA_SETUP_STATUS}"
     run "${REPO_ROOT}/scripts/common/kura-issue"
     [ "$status" -eq 0 ]
-    file_has "${KURA_ISSUE}" 'Kura 0.4.2 · \S{PRETTY_NAME} · \m'
+    file_has "${KURA_ISSUE}" 'Kura 0.4.2 · '
     file_has "${KURA_ISSUE}" "3 min · disk 3% used"
     # the stubbed systemctl reports ssh inactive: a red dot
     file_has "${KURA_ISSUE}" "${ISSUE_RED}•${ISSUE_TEXT} ssh"
-    file_has "${KURA_ISSUE}" 'ssh chris@\4'
     file_has "${KURA_ISSUE}" "setup applied"
     file_has "${BATS_TEST_TMPDIR}/calls" "agetty --reload"
 }
@@ -185,10 +189,12 @@ kura_issue_env() {
     [ -L "${rootfs}/etc/systemd/system/timers.target.wants/kura-issue.timer" ]
 }
 
-@test "console font: Terminus 16x32 Uni3 (has the bullet and triangle), as the screen was designed" {
+@test "console font: Terminus 16x32 in the set that has every character the screens draw" {
     file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'FONTFACE="Terminus"'
     file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'FONTSIZE="16x32"'
-    file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'CODESET="Uni3"'
+    # "Vietnamese" is console-setup's name for its widest Latin set; unlike Uni3
+    # it has the half blocks the storehouse character is drawn with
+    file_has "${REPO_ROOT}/scripts/common/customize-rootfs.sh" 'CODESET="Vietnamese"'
 }
 
 @test "console font: the package's cached setup is dropped, so the first boot applies Terminus" {
@@ -222,7 +228,7 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     LOGIN_DESKTOP_FP="${FP}"
     run kura_issue
     output_has 'https://\4'
-    output_has "SHA-256 4F:9A:3B:10 … 7E:C2:18:05"
+    output_has "SHA-256 4F:9A:3B:10 .. 7E:C2:18:05"
     LOGIN_DESKTOP_FP=""
     run kura_issue
     ! output_has "https://"
@@ -244,7 +250,7 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     export KURA_DESKTOP_FINGERPRINT="${BATS_TEST_TMPDIR}/fingerprint"
     run "${REPO_ROOT}/scripts/common/kura-issue"
     [ "$status" -eq 0 ]
-    file_has "${KURA_ISSUE}" "SHA-256 4F:9A:3B:10 … 7E:C2:18:05"
+    file_has "${KURA_ISSUE}" "SHA-256 4F:9A:3B:10 .. 7E:C2:18:05"
     rm "${BATS_TEST_TMPDIR}/fingerprint"
     run "${REPO_ROOT}/scripts/common/kura-issue"
     ! file_has "${KURA_ISSUE}" "https://"
@@ -261,4 +267,102 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     run kura_issue "The lightweight OS for your home server." 9146ff
     ! output_has "available" || false
     ! output_has "restart required" || false
+}
+
+# ---- the device's own facts: a closed box, sized to what it holds ----
+
+device_facts() {
+    LOGIN_HOST="AdminWorks" LOGIN_ADDRESS="10.0.5.98"
+    LOGIN_SYSTEM="Debian GNU/Linux 13 (trixie) · x86_64"
+}
+
+# plain: the screen without colour and palette escapes
+plain() { printf '%s\n' "$output" | sed $'s/\033\\[[0-9;]*[A-Za-z]//g; s/\033\\][P][0-9A-F][0-9a-f]\\{6\\}//g'; }
+
+@test "with the device's facts the panel is a closed box: every line ends at its right edge" {
+    device_facts
+    LOGIN_SETUP="partly applied: disk layout failed (mounting /var/lib/docker; journalctl -u 'kura-storage*')"
+    LOGIN_PASSWORD="55p4-rfhf-3fj5"
+    run kura_issue
+    [ "$status" -eq 0 ]
+    output_has "AdminWorks"
+    output_has "ssh chris@10.0.5.98"
+    output_has "Kura 0.4.2 · Debian GNU/Linux 13 (trixie) · x86_64"
+    ! output_has '\4' || false
+    # one column for the left edge, one for the right, on every panel line
+    [ "$(plain | perl -CS -Mutf8 -ne 'print index($_, "│"), " ", rindex($_, "│"), "\n" if /│/' | sort -u | wc -l | tr -d ' ')" = 1 ]
+    [ "$(plain | perl -CS -Mutf8 -ne 'print rindex($_, "┐") - index($_, "┌"), "\n" if /┌/; print rindex($_, "┘") - index($_, "└"), "\n" if /└/' | sort -u | wc -l | tr -d ' ')" = 1 ]
+    # ... and nothing passes the console's width: long lines are wrapped inside
+    [ "$(plain | perl -CS -ne 'print "$.\n" if length($_) - 1 > 120')" = "" ]
+    output_has "disk layout failed"
+    output_has "'kura-storage*')"
+}
+
+@test "without an address yet, the box says so and offers no address to connect to" {
+    device_facts
+    LOGIN_ADDRESS=""
+    run kura_issue
+    output_has "none yet"
+    ! output_has "ssh chris@" || false
+}
+
+@test "a wide console gets the whole screen centred, and the login prompt under it" {
+    device_facts
+    LOGIN_COLS=240
+    run kura_issue
+    # every drawn line starts well inside the screen, the same on both sides
+    [ "$(plain | perl -CS -ne 'next unless /\S/; /^( *)/; print length($1), "\n"' | sort -n | head -1)" -ge 40 ]
+    [ "$(plain | perl -CS -ne 'chomp; print "$.\n" if length($_) > 200')" = "" ]
+    # the screen ends with the prompt's indent, no newline after it
+    matches "$(plain | tail -1)" "  *"
+    LOGIN_COLS=120
+    run kura_issue
+    [ "$(plain | perl -CS -ne 'next unless /\S/; /^( *)/; print length($1), "\n"' | sort -n | head -1)" -eq 6 ]
+}
+
+@test "the storehouse character, drawn in blocks beside the logo, where the console has the room" {
+    device_facts
+    LOGIN_COLS=240
+    run kura_issue
+    output_has "▀▀▀▀▀██▀▀▀▀▀▀██▀▀▀▀▀"
+    # the character, then the logo beside it, then the panel, on the same lines
+    matches "$output" "*     ██      ██     *┌──*"
+    matches "$output" "*▄▄         ██ ▀█▄ *██   ██ ██    ██ ██████   █████*│*"
+    LOGIN_COLS=120
+    run kura_issue
+    ! output_has "▀▀▀▀▀██" || false
+    matches "$output" "*██   ██ ██    ██ ██████   █████*┌──*"
+}
+
+@test "kura-issue: gives the screen this device's name, address and system" {
+    kura_issue_env
+    hostname() { echo AdminWorks; }
+    ip() { echo "2: eno1    inet 10.0.5.98/24 brd 10.0.5.255 scope global dynamic eno1"; }
+    uname() { echo x86_64; }
+    export -f hostname ip uname
+    printf 'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\n' > "${BATS_TEST_TMPDIR}/os-release"
+    export KURA_OS_RELEASE="${BATS_TEST_TMPDIR}/os-release"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    [ "$status" -eq 0 ]
+    file_has "${KURA_ISSUE}" "AdminWorks"
+    file_has "${KURA_ISSUE}" "ssh chris@10.0.5.98"
+    file_has "${KURA_ISSUE}" "Kura 0.4.2 · Debian GNU/Linux 13 (trixie) · x86_64"
+    file_has "${KURA_ISSUE}" "┐"
+}
+
+@test "kura-issue: a name or system text with escapes or control characters cannot draw on the screen" {
+    kura_issue_env
+    hostname() { printf 'nuc\\4\033[2Jx\n'; }
+    ip() { echo "2: eno1    inet 10.0.5.98/24 scope global eno1"; }
+    uname() { echo x86_64; }
+    export -f hostname ip uname
+    printf 'PRETTY_NAME="Debian \\\\n\\\\S 13"\n' > "${BATS_TEST_TMPDIR}/os-release"
+    export KURA_OS_RELEASE="${BATS_TEST_TMPDIR}/os-release"
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    [ "$status" -eq 0 ]
+    # the name without its backslash and escape character, as plain text
+    file_has "${KURA_ISSUE}" "nuc4[2Jx"
+    file_has "${KURA_ISSUE}" "Debian nS 13"
+    # the only backslashes left are the date and time agetty fills in
+    [ "$(grep -o '\\.' "${KURA_ISSUE}" | sort -u | tr -d '\n')" = '\d\t' ]
 }

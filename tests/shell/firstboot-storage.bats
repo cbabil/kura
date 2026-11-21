@@ -486,6 +486,26 @@ stub_root_view() {  # the bind mount of / shows SETUP_ROOT as it is underneath
     [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "failed: mounting /var/log" ]
 }
 
+@test "finish_storage: a view that will not unmount is not a failed layout (the volumes are in place)" {
+    stub_root_view
+    umount() { log_call "umount $*"; return 32; }
+    mkdir -p "${SETUP_ROOT}/var/lib/kura" "${SETUP_ROOT}/var/log/apt"
+    touch "${SETUP_ROOT}/var/lib/kura/.storage-pending"
+    printf '%s\n' "# kura disk layout" "/dev/kura/var-log /var/log ext4 noexec,nosuid,nodev 0 2" \
+        > "${SETUP_ROOT}/etc/fstab"
+    run finish_storage
+    [ "$status" -eq 0 ]
+    [ "$(cat "${SETUP_ROOT}/var/lib/kura/storage-status")" = "applied" ]
+    output_has "WARNING"
+}
+
+@test "the finishing step works in its own mount namespace: a mount made meanwhile cannot hold its view" {
+    local script="${REPO_ROOT}/scripts/common/firstboot-storage.sh"
+    file_has "${script}" "unshare --mount --propagation private"
+    # a drive's EFI partition is nofail: it can mount while the layout finishes
+    file_has "${REPO_ROOT}/scripts/x86_64/pc-image.sh" "nofail"
+}
+
 @test "finish_storage: a volume that did not mount keeps its folder, and says so" {
     stub_root_view
     MOUNTED="/var/log"

@@ -246,6 +246,18 @@ clear_covered() {
     done < <(covered_folders)
 }
 
+# finish_private: finish_storage in a mount namespace of its own, with
+# private propagation. Its view of the root is a bind mount of /; in the
+# system's namespace a mount made meanwhile (the EFI partition is nofail, so
+# it is not waited for) would appear inside the view and hold it, and
+# unmounting it there would unmount the real one.
+finish_private() {
+    if [ -z "${STORAGE_PRIVATE:-}" ] && command -v unshare >/dev/null 2>&1; then
+        STORAGE_PRIVATE=1 exec unshare --mount --propagation private "$0" finish
+    fi
+    finish_storage
+}
+
 # finish_storage: the next boot, the volumes mounted: the root's old copies
 # of their folders are cleared (seen through a bind mount of /, which shows
 # the root without what is mounted on it). First boot's setup waits for this;
@@ -259,7 +271,10 @@ finish_storage() {
             keep_first_journal "${view}" || echo "WARNING: the first boot's journal was not kept" >&2
         fi
         clear_covered "${view}"
-        umount "${view}" || STORAGE_FAILED="${STORAGE_FAILED:-unmounting the view of the root}"
+        # The view is this namespace's own (see below); one that will not
+        # unmount goes with the namespace, and the layout is in place either way
+        umount "${view}" 2>/dev/null || umount -l "${view}" 2>/dev/null ||
+            echo "WARNING: the view of the root stays mounted until this step ends" >&2
     else
         STORAGE_FAILED="seeing the root under the volumes"
     fi
@@ -297,5 +312,5 @@ run_storage() {
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
-    if [ "${1:-}" = finish ]; then finish_storage; else run_storage "${SETUP_ROOT}${STORAGE_DONE}"; fi
+    if [ "${1:-}" = finish ]; then finish_private; else run_storage "${SETUP_ROOT}${STORAGE_DONE}"; fi
 fi

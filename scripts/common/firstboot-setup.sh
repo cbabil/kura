@@ -179,7 +179,7 @@ storage_note() {
     s=$(cat "$(state_file storage-status)" 2>/dev/null) || return 0
     case "${s}" in
         skipped:*) setup_skipped "storage kept as one root (${s#skipped: })" ;;
-        failed:*) setup_skipped "disk layout failed (${s#failed: }; journalctl -u ${SETUP_BRAND}-storage)" ;;
+        failed:*) setup_skipped "disk layout failed (${s#failed: }; journalctl -u '${SETUP_BRAND}-storage*')" ;;
     esac
 }
 
