@@ -172,7 +172,7 @@ env_of() { cat "${ROOT}/srv/apps/$1/.env"; }
 
 @test "install: what an app keeps is for root and the administrators only" {
     main install jellyfin 8096
-    [ "$(stat -f '%Lp' "${ROOT}/srv/apps/jellyfin/data" 2>/dev/null || stat -c '%a' "${ROOT}/srv/apps/jellyfin/data")" = "750" ]
+    [ "$(file_mode "${ROOT}/srv/apps/jellyfin/data")" = "750" ]
 }
 
 @test "install: a folder of that name that is not Kura's is left alone" {

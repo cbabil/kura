@@ -90,7 +90,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("journalctl");
         let args = dir.path().join("args");
-        std::fs::write(&path, format!("#!/bin/sh\necho \"$@\" > {}\n{body}\n", args.display())).unwrap();
+        // Written elsewhere, then copied by another program: Linux will not
+        // run a file that any process has open for writing, and the other
+        // tests' own programs, started meanwhile, would hold this one open.
+        let text = dir.path().join("journalctl.txt");
+        std::fs::write(&text, format!("#!/bin/sh\necho \"$@\" > {}\n{body}\n", args.display())).unwrap();
+        assert!(std::process::Command::new("cp").arg(&text).arg(&path).status().unwrap().success());
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         (Journalctl::new(path), dir)
     }
