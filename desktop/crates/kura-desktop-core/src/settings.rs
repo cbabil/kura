@@ -8,7 +8,7 @@ mod check;
 mod read;
 
 pub use change::{Change, Command, InvalidChange};
-pub use read::{CONFIG, PENDING, STORAGE_STATUS, parse_devices, parse_time, read_config, screen};
+pub use read::{CONFIG, PENDING, STORAGE_STATUS, parse_devices, parse_time, rdp, read_config, screen};
 
 use serde::Serialize;
 
@@ -24,6 +24,9 @@ pub struct Settings {
     /// The local screen (ADR-033): on or off, or `None` on a server whose
     /// image has none.
     pub screen: Option<bool>,
+    /// Remote Desktop (ADR-035): on or off, or `None` on a server whose
+    /// image has none.
+    pub rdp: Option<bool>,
 }
 
 /// The network: the devices as they are now, and what Kura was told.

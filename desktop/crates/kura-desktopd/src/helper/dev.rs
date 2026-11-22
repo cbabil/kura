@@ -93,6 +93,10 @@ impl DevHelper {
         std::fs::write(units.join("kura-kiosk.service"), "").expect("the local screen's unit");
         std::fs::create_dir_all(dir.path().join("usr/bin")).expect("the programs folder");
         std::fs::write(dir.path().join("usr/bin/cage"), "").expect("the local screen's program");
+        // ...and Remote Desktop, off (ADR-035).
+        std::fs::write(units.join("xrdp.service"), "").expect("Remote Desktop's unit");
+        std::fs::create_dir_all(dir.path().join("usr/sbin")).expect("the system programs folder");
+        std::fs::write(dir.path().join("usr/sbin/xrdp"), "").expect("Remote Desktop's program");
         let root = SysRoot::new(dir.path());
         let auth = Arc::new(Authenticator::new(Box::new(backends::DevPam), root.clone()));
         let backends = Backends {

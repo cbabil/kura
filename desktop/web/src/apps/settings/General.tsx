@@ -4,11 +4,12 @@
  * page has to be opened again at the new address.
  */
 import { useState, type FormEvent } from 'react'
-import { Alert, Box, Button, FormControlLabel, Switch, TextField } from '@mui/material'
+import { Alert, Box, Button, TextField } from '@mui/material'
 import type { Settings } from '../../api'
 import { useI18n, type MessageKey } from '../../i18n'
 import { useApi, useUser } from '../../shell/DesktopData'
 import { Card, SectionTitle, ViewBody } from '../parts'
+import { Screens } from './Screens'
 import { ChangeError, refusalKey, useChange, useSettings } from './useSettings'
 
 function HostName({ settings, reload }: { settings: Settings; reload(): void }) {
@@ -73,27 +74,11 @@ function OwnPassword() {
   )
 }
 
-/** The local screen's switch, on a server whose image has one (ADR-033). */
-function LocalScreen({ settings, reload }: { settings: Settings; reload(): void }) {
-  const { t } = useI18n()
-  const change = useChange(reload)
-  if (settings.screen === null) return null
-  return (
-    <Card sx={{ mb: 2 }}>
-      <SectionTitle>{t('settings.screen')}</SectionTitle>
-      <ChangeError error={change.error} />
-      <FormControlLabel label={t('settings.screen.on')}
-        control={<Switch size="small" checked={settings.screen} disabled={change.busy} onChange={(e) => change.run({ what: 'screen', on: e.target.checked })} />} />
-      <Box sx={{ fontSize: 12.5, color: 'text.secondary' }}>{t('settings.screen.note')}</Box>
-    </Card>
-  )
-}
-
 /** The name is for administrators and needs the settings; the password is for everyone and needs nothing. */
 function AdminPart({ minimized }: { minimized: boolean }) {
   const { data, reload } = useSettings(minimized)
   // Not remounted when the name changes: the note about the new address must stay
-  return data ? <><HostName settings={data} reload={reload} /><LocalScreen settings={data} reload={reload} /></> : null
+  return data ? <><HostName settings={data} reload={reload} /><Screens settings={data} reload={reload} /></> : null
 }
 
 export function General({ minimized }: { minimized: boolean }) {

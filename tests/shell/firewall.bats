@@ -172,3 +172,96 @@ DESKTOP_V6="fe80::/10 fc00::/7"
 @test "the default hardening turns mDNS on" {
     [ "$(jq -r '.network_security.mdns' "${BATS_TEST_DIRNAME}/../../packages/os-security/src/hardening.json")" = true ]
 }
+
+# ---- Remote Desktop (ADR-035) ----
+
+@test "rdp_rules: the port from local networks, never from a container, and not without end" {
+    run rdp_rules
+    [ "$status" -eq 0 ]
+    [ "$(sed -n 1p <<< "$output")" = "INPUT -p tcp --dport 3389 -i docker0 -j DROP" ]
+    [ "$(sed -n 2p <<< "$output")" = "INPUT -p tcp --dport 3389 -i br-+ -j DROP" ]
+    # as for SSH: logins here are passwords, so a source that floods is dropped
+    [ "$(sed -n 3p <<< "$output")" = "INPUT -p tcp --dport 3389 -m conntrack --ctstate NEW -m recent --name rdp --set" ]
+    [ "$(sed -n 4p <<< "$output")" = "INPUT -p tcp --dport 3389 -m conntrack --ctstate NEW -m recent --name rdp --update --seconds 60 --hitcount 31 -j DROP" ]
+    for net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16; do
+        grep -qxF -- "INPUT -p tcp --dport 3389 -s ${net} -j ACCEPT" <<< "$output"
+    done
+    [ "$(grep -c . <<< "$output")" -eq 8 ]
+    # nothing accepts the port from anywhere
+    run grep -E -- "--dport 3389 -j ACCEPT" <<< "$output"
+    [ "$status" -ne 0 ]
+}
+
+# A rule the kernel refuses must cost Remote Desktop only, never the firewall
+@test "_build_iptables_rules: the atomic ruleset never has Remote Desktop's rules" {
+    for family in 4 6; do
+        run _build_iptables_rules "${family}" true true
+        run grep -F -- "3389" <<< "$output"
+        [ "$status" -ne 0 ]
+    done
+}
+
+@test "set_rdp_rules: on twice is each rule once, in order; off takes them all away" {
+    fake_iptables
+    set_rdp_rules on
+    set_rdp_rules on
+    [ "$(grep -c . "${RULES}")" -eq 8 ]
+    [ "$(sort "${RULES}" | uniq -d | grep -c . || true)" -eq 0 ]
+    # the refusals before the networks
+    [ "$(head -1 "${RULES}")" = "INPUT -p tcp --dport 3389 -i docker0 -j DROP" ]
+    # a copy left by an older version goes too
+    echo "INPUT -p tcp --dport 3389 -s 10.0.0.0/8 -j ACCEPT" >> "${RULES}"
+    set_rdp_rules off
+    [ ! -s "${RULES}" ]
+    # and every call waits for the lock
+    run grep -v -- "^-w " "${RULES}.calls"
+    [ "$status" -ne 0 ]
+}
+
+@test "set_rdp_rules: a rule that cannot be added fails, and nothing stays" {
+    fake_iptables
+    eval "real_$(declare -f iptables)"
+    iptables() { case "$*" in *"-A INPUT"*169.254*) return 1 ;; esac; real_iptables "$@"; }
+    run set_rdp_rules on
+    [ "$status" -ne 0 ]
+    [ ! -s "${RULES}" ]
+}
+
+@test "set_rdp_rules: off fails when a rule cannot be taken out" {
+    fake_iptables
+    set_rdp_rules on
+    eval "real_$(declare -f iptables)"
+    iptables() { [ "$2" != "-D" ] && real_iptables "$@"; }
+    run set_rdp_rules off
+    [ "$status" -ne 0 ]
+}
+
+@test "apply_firewall: Remote Desktop's rules only when the config says so, and never fatal" {
+    local config="${BATS_TEST_TMPDIR}/hardening.json"
+    iptables-restore() { cat > /dev/null; }
+    ip6tables-restore() { cat > /dev/null; }
+    fake_iptables
+    echo '{"network_security": {"firewall_preset": "strict"}}' > "${config}"
+    run apply_firewall "${config}"
+    [ "$status" -eq 0 ]
+    [ ! -s "${RULES}" ]
+    echo '{"network_security": {"firewall_preset": "strict", "rdp": true}}' > "${config}"
+    apply_firewall "${config}"
+    grep -qxF -- "INPUT -p tcp --dport 3389 -s 192.168.0.0/16 -j ACCEPT" "${RULES}"
+    iptables() { return 1; }
+    run apply_firewall "${config}"
+    [ "$status" -eq 0 ]
+    output_has "Remote Desktop"
+}
+
+# Without the strict ruleset nothing of the firewall is Kura's, these rules
+# included: xrdp's own list of local networks (its drop-in) is what is left
+@test "apply_firewall: with another preset, nothing is touched" {
+    local config="${BATS_TEST_TMPDIR}/hardening.json"
+    iptables-restore() { echo restored >> "${BATS_TEST_TMPDIR}/restored"; }
+    fake_iptables
+    echo '{"network_security": {"firewall_preset": "none", "rdp": true}}' > "${config}"
+    apply_firewall "${config}"
+    [ ! -e "${BATS_TEST_TMPDIR}/restored" ]
+    [ ! -e "${RULES}.calls" ]
+}

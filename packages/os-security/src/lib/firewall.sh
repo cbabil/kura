@@ -23,12 +23,22 @@ apply_firewall() {
     fi
     log_info "IPv4 firewall rules applied"
 
+    _apply_rdp_rules "${config_file}"
+
     # Apply the IPv6 equivalent atomically
     if ! _build_iptables_rules 6 "${desktop}" "${mdns}" | ip6tables-restore 2>/dev/null; then
         log_warning "Failed to apply IPv6 firewall rules"
     else
         log_info "IPv6 firewall rules applied"
     fi
+}
+
+# _apply_rdp_rules <config>: Remote Desktop's rules where it is on. They go
+# in after the ruleset, one by one: a rule this kernel refuses then costs
+# Remote Desktop only.
+_apply_rdp_rules() {
+    [ "$(jq -r '.network_security.rdp == true' "$1")" = "true" ] || return 0
+    set_rdp_rules on || log_warning "Remote Desktop's firewall rules were not applied"
 }
 
 # Local networks Kura Desktop answers (ADR-023): private, link-local, ULA
@@ -77,4 +87,50 @@ RULES
         done
     fi
     echo "COMMIT"
+}
+
+# Remote Desktop (ADR-035): xrdp's port
+RDP_PORT=3389
+
+# rdp_rules: "<chain> <rule>" for each rule Remote Desktop needs. Its port
+# over IPv4: never from a container's network; at most 30 new connections
+# a minute per source, since what is typed there is a password; then from
+# the local networks.
+rdp_rules() {
+    local net port="-p tcp --dport ${RDP_PORT}"
+    echo "INPUT ${port} -i docker0 -j DROP"
+    echo "INPUT ${port} -i br-+ -j DROP"
+    echo "INPUT ${port} -m conntrack --ctstate NEW -m recent --name rdp --set"
+    echo "INPUT ${port} -m conntrack --ctstate NEW -m recent --name rdp --update --seconds 60 --hitcount 31 -j DROP"
+    for net in ${DESKTOP_NETS_4}; do
+        echo "INPUT ${port} -s ${net} -j ACCEPT"
+    done
+}
+
+# _rdp_rule <-C|-A|-D> <"chain rule">: iptables on one rule, waiting for
+# its lock rather than failing on it
+_rdp_rule() {
+    local words
+    read -ra words <<< "$2"
+    iptables -w "$1" "${words[@]}" 2>/dev/null
+}
+
+# set_rdp_rules on|off: on a running system, without restoring the table
+# (that would drop the chains Docker added). Off takes out every copy of
+# each rule; on then adds all of them, or none.
+set_rdp_rules() {
+    local rule rules
+    rules=$(rdp_rules)
+    while IFS= read -r rule; do
+        while _rdp_rule -C "${rule}"; do
+            _rdp_rule -D "${rule}" || return 1
+        done
+    done <<< "${rules}"
+    [ "${1:-}" = "on" ] || return 0
+    while IFS= read -r rule; do
+        if ! _rdp_rule -A "${rule}"; then
+            set_rdp_rules off
+            return 1
+        fi
+    done <<< "${rules}"
 }

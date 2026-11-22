@@ -24,6 +24,10 @@ pub enum Change {
     Screen {
         on: bool,
     },
+    /// Remote Desktop (ADR-035), on a server whose image has it.
+    Rdp {
+        on: bool,
+    },
     WifiAdd {
         ssid: String,
         password: String,
@@ -79,6 +83,7 @@ impl Change {
             Self::Timezone { .. } => "timezone",
             Self::Ntp { .. } => "ntp",
             Self::Screen { .. } => "screen",
+            Self::Rdp { .. } => "rdp",
             Self::WifiAdd { .. } => "wifi-add",
             Self::WifiRemove { .. } => "wifi-remove",
             Self::EthernetAuto | Self::EthernetStatic { .. } => "ethernet",
@@ -105,11 +110,13 @@ impl Change {
     pub fn command(&self) -> Result<Command, InvalidChange> {
         let ok = |valid: bool, what: &'static str| if valid { Ok(()) } else { Err(InvalidChange(what)) };
         let word = |b: bool| if b { "true" } else { "false" };
+        let switch = |on: bool| if on { "on" } else { "off" };
         let (args, secret): (Vec<&str>, Option<&String>) = match self {
             Self::Hostname { name } => (ok(valid_hostname(name), "host name").map(|()| vec!["hostname", name])?, None),
             Self::Timezone { zone } => (ok(valid_zone(zone), "time zone").map(|()| vec!["timezone", zone])?, None),
-            Self::Ntp { on } => (vec!["ntp", if *on { "on" } else { "off" }], None),
-            Self::Screen { on } => (vec!["screen", if *on { "on" } else { "off" }], None),
+            Self::Ntp { on } => (vec!["ntp", switch(*on)], None),
+            Self::Screen { on } => (vec!["screen", switch(*on)], None),
+            Self::Rdp { on } => (vec!["rdp", switch(*on)], None),
             Self::WifiAdd { ssid, password, hidden } => {
                 ok(valid_ssid(ssid), "network name")?;
                 ok((8..=63).contains(&password.len()) && valid_password(password), "Wi-Fi password")?;

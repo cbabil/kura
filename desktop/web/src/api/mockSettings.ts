@@ -32,6 +32,7 @@ function initial(host: string): Settings {
     ],
     storage: 'applied',
     screen: false,
+    rdp: false,
   }
 }
 
@@ -52,6 +53,7 @@ function apply(s: Settings, c: SettingChange, me: string): void {
     case 'timezone': invalid(/^[\w+-]+(\/[\w+-]+){0,2}$/.test(c.zone)); s.time.zone = c.zone; break
     case 'ntp': s.time = { ...s.time, ntp: c.on, synced: c.on }; break
     case 'screen': invalid(s.screen !== null); s.screen = c.on; break
+    case 'rdp': invalid(s.rdp !== null); s.rdp = c.on; break
     case 'wifi-add':
       invalid(SSID.test(c.ssid) && c.password.length >= 8 && c.password.length <= 63)
       s.network.wifi = [...s.network.wifi.filter((w) => w !== c.ssid), c.ssid]

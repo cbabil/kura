@@ -7,20 +7,10 @@ SRC="${REPO_ROOT}/packages/os-desktop/src"
 
 setup() {
     load test_helper
-    ROOTFS="${BATS_TEST_TMPDIR}/rootfs"
-    DIST="${BATS_TEST_TMPDIR}/dist"
+    desktop_rootfs
     DRM="${BATS_TEST_TMPDIR}/drm"
-    mkdir -p "${ROOTFS}/etc/kura/security" "${DIST}" "${DRM}"
-    echo '{"network_security": {"firewall_preset": "strict"}}' > "${ROOTFS}/etc/kura/security/hardening.json"
-    local program
-    for program in kura-desktopd kura-helper kura-agent; do
-        printf '#!/bin/sh\n' > "${DIST}/${program}"
-    done
-    export OS_BRAND=kura OS_NAME=Kura
-    INSTALL="${REPO_ROOT}/scripts/common/install-desktop.sh"
-    KIOSK="${BATS_TEST_TMPDIR}/kura-kiosk"
-    sed 's|__BRAND__|kura|g' "${SRC}/os-kiosk" > "${KIOSK}"
-    chmod +x "${KIOSK}"
+    mkdir -p "${DRM}"
+    KIOSK=$(branded kiosk)
     UNIT="${ROOTFS}/usr/lib/systemd/system/kura-kiosk.service"
     WANTED="${ROOTFS}/etc/systemd/system/multi-user.target.wants/kura-kiosk.service"
 }

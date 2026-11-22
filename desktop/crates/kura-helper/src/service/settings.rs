@@ -5,7 +5,7 @@ use kura_desktop_core::accounts::Accounts;
 use kura_desktop_core::actions::{Action, OwnPasswordArgs};
 use kura_desktop_core::auth::AuthOutcome;
 use kura_desktop_core::settings::{
-    Change, Network, PENDING, Person, STORAGE_STATUS, Settings, parse_devices, parse_time, read_config, screen,
+    Change, Network, PENDING, Person, STORAGE_STATUS, Settings, parse_devices, parse_time, rdp, read_config, screen,
 };
 
 use super::{Service, json};
@@ -39,6 +39,7 @@ impl Service {
             users: accounts.people().map(person).collect(),
             storage: self.root.read(STORAGE_STATUS).unwrap_or_default().trim().to_owned(),
             screen: screen(&self.root),
+            rdp: rdp(&self.root),
         })
     }
 

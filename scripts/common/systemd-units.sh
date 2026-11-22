@@ -13,3 +13,10 @@ enable_unit() {
     install -d "${wants}"
     ln -sf "$3" "${wants}/$(basename "$3")"
 }
+
+# disable_unit <rootfs> <target> <unit-name>
+# Removes the <target>.wants link a package's postinst made for its unit,
+# as `systemctl disable` would.
+disable_unit() {
+    rm -f "${1:?}/etc/systemd/system/$2.wants/$3"
+}

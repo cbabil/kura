@@ -185,6 +185,22 @@ stub_all_ok() {
     [ ! -e "${ROOTFS}/var/lib/dbus/machine-id" ]
 }
 
+# apt makes these when it installs xrdp and ssl-cert: left in, they would be
+# every device's, and whoever has the image could read its Remote Desktop
+@test "reset_device_identity: removes Remote Desktop's keys, which the device makes when it is turned on" {
+    mkdir -p "${ROOTFS}/etc/xrdp" "${ROOTFS}/etc/ssl/private" "${ROOTFS}/etc/ssl/certs"
+    touch "${ROOTFS}/etc/xrdp/rsakeys.ini" "${ROOTFS}/etc/xrdp/xrdp.ini" \
+        "${ROOTFS}/etc/ssl/private/ssl-cert-snakeoil.key" "${ROOTFS}/etc/ssl/certs/ssl-cert-snakeoil.pem" \
+        "${ROOTFS}/etc/ssl/certs/ca-certificates.crt"
+    run reset_device_identity "${ROOTFS}"
+    [ "$status" -eq 0 ]
+    [ ! -e "${ROOTFS}/etc/xrdp/rsakeys.ini" ]
+    [ ! -e "${ROOTFS}/etc/ssl/private/ssl-cert-snakeoil.key" ]
+    [ ! -e "${ROOTFS}/etc/ssl/certs/ssl-cert-snakeoil.pem" ]
+    [ -e "${ROOTFS}/etc/xrdp/xrdp.ini" ]
+    [ -e "${ROOTFS}/etc/ssl/certs/ca-certificates.crt" ]
+}
+
 @test "reset_device_identity: masks systemd-firstboot so an empty machine-id cannot prompt on the console" {
     run reset_device_identity "${ROOTFS}"
     [ "$status" -eq 0 ]

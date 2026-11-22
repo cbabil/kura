@@ -48,6 +48,8 @@ export interface Settings {
   storage: string
   /** The local screen (ADR-033): on or off, or null on a server whose image has none. */
   screen: boolean | null
+  /** Remote Desktop (ADR-035): on or off, or null on a server whose image has none. */
+  rdp: boolean | null
 }
 
 /** One change, the body of POST /api/settings (administrators). */
@@ -56,6 +58,7 @@ export type SettingChange =
   | { what: 'timezone'; zone: string }
   | { what: 'ntp'; on: boolean }
   | { what: 'screen'; on: boolean }
+  | { what: 'rdp'; on: boolean }
   | { what: 'wifi-add'; ssid: string; password: string; hidden: boolean }
   | { what: 'wifi-remove'; ssid: string }
   | { what: 'ethernet-auto' }

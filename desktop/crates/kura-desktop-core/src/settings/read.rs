@@ -82,19 +82,25 @@ pub fn parse_time(timedatectl: &str) -> Time {
     Time { zone: field("Timezone").to_owned(), ntp: field("NTP") == "yes", synced: field("NTPSynchronized") == "yes" }
 }
 
-/// The local screen's unit, and the link that turns it on.
-const SCREEN_UNIT: &str = "/usr/lib/systemd/system/kura-kiosk.service";
-const SCREEN_ON: &str = "/etc/systemd/system/multi-user.target.wants/kura-kiosk.service";
-
-/// The browser's compositor: every PC image has the unit, only one built
-/// for the local screen has this.
-const SCREEN_PROGRAM: &str = "/usr/bin/cage";
-
-/// Whether the local screen is on; `None` where the image has none.
-pub fn screen(root: &crate::root::SysRoot) -> Option<bool> {
-    let has = root.path(SCREEN_UNIT).exists() && root.path(SCREEN_PROGRAM).exists();
+/// Whether a unit of the image is on; `None` where the image has no use
+/// for it: the unit may be in every PC image, the `program` it needs only in
+/// one built for it (`OS_KIOSK`).
+fn switch(root: &crate::root::SysRoot, unit: &str, program: &str) -> Option<bool> {
+    let has = root.path(format!("/usr/lib/systemd/system/{unit}")).exists() && root.path(program).exists();
     // A link to a unit that is elsewhere on this machine still means "on".
-    has.then(|| root.path(SCREEN_ON).symlink_metadata().is_ok())
+    let on = format!("/etc/systemd/system/multi-user.target.wants/{unit}");
+    has.then(|| root.path(&on).symlink_metadata().is_ok())
+}
+
+/// Whether the local screen (ADR-033) is on; `None` where the image has none.
+pub fn screen(root: &crate::root::SysRoot) -> Option<bool> {
+    switch(root, "kura-kiosk.service", "/usr/bin/cage")
+}
+
+/// Whether Remote Desktop (ADR-035), Debian's xrdp, is on; `None` where the
+/// image has none.
+pub fn rdp(root: &crate::root::SysRoot) -> Option<bool> {
+    switch(root, "xrdp.service", "/usr/sbin/xrdp")
 }
 
 #[cfg(test)]

@@ -56,6 +56,7 @@ put "${DIST}/kura-helper" "${lib}/${BRAND}-helper" 0755
 put "${DIST}/kura-agent" "${lib}/${BRAND}-agent" 0755
 brand "${SRC}/os-desktop-cert" "${lib}/${BRAND}-desktop-cert" 0755
 brand "${SRC}/os-settings" "${lib}/${BRAND}-settings" 0755
+brand "${SRC}/os-settings-screens" "${lib}/${BRAND}-settings-screens" 0644
 # The App Catalog (ADR-032): the root command and the templates it installs
 brand "${SRC}/os-apps" "${lib}/${BRAND}-apps" 0755
 for template in "${SRC}"/../catalog/*/; do
@@ -83,6 +84,14 @@ if [ "${OS_KIOSK_FILES:-false}" = "true" ]; then
     brand "${SRC}/os-kiosk" "${lib}/${BRAND}-kiosk" 0755
     brand "${SRC}/os-kiosk.service" "${units}/${BRAND}-kiosk.service" 0644
     brand "${SRC}/sysusers-kiosk.conf" "${ROOTFS}/usr/lib/sysusers.d/${BRAND}-kiosk.conf" 0644
+    # Remote Desktop (ADR-035): Debian's xrdp, where the image has it
+    # (OS_KIOSK). Kura's part is what a session shows and who may connect.
+    # apt turned xrdp on when it installed it; it opens a port, so it is
+    # off here and Settings turns it on.
+    brand "${SRC}/os-rdp-session" "${lib}/${BRAND}-rdp-session" 0755
+    brand "${SRC}/xrdp-dropin.conf" "${units}/xrdp.service.d/10-${BRAND}.conf" 0644
+    disable_unit "${ROOTFS}" multi-user.target xrdp.service
+    disable_unit "${ROOTFS}" multi-user.target xrdp-sesman.service
     if [ "${OS_KIOSK:-false}" = "true" ]; then
         enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-kiosk.service"
     fi

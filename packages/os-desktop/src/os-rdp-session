@@ -1,0 +1,16 @@
+#!/bin/sh
+# __BRAND__-rdp-session — what a Remote Desktop session shows (ADR-035): one
+# browser, full screen, on this server's own desktop.
+#
+# xrdp signs the person in and starts an X session as them; Debian's
+# Xsession runs the "x-session-manager", which __BRAND__-settings makes
+# this while Remote Desktop is on. The session ends when the browser does.
+# Nothing given to this script is opened.
+
+# A window manager whose windows always fill the screen: without one the
+# browser would sit small in a corner, at whatever size the client has
+matchbox-window-manager -use_titlebar no &
+
+# -F full screen; -K no browser shortcuts or menu; -t the certificate is
+# this server's own, at this machine's own address
+exec surf -F -K -t https://localhost/

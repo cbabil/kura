@@ -15,7 +15,50 @@ file_has() { grep -qF -- "$2" "$1"; }
 # stat -f means filesystem status and succeeds with other output.
 file_mode() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
 
+# desktop_rootfs: a rootfs install-desktop.sh can install Kura Desktop
+# into (ROOTFS), the built programs it needs (DIST) and the script (INSTALL)
+desktop_rootfs() {
+    local repo="${BATS_TEST_DIRNAME}/../.." program
+    ROOTFS="${BATS_TEST_TMPDIR}/rootfs"
+    DIST="${BATS_TEST_TMPDIR}/dist"
+    INSTALL="${repo}/scripts/common/install-desktop.sh"
+    mkdir -p "${ROOTFS}/etc/kura/security" "${DIST}"
+    echo '{"network_security": {"firewall_preset": "strict"}}' > "${ROOTFS}/etc/kura/security/hardening.json"
+    for program in kura-desktopd kura-helper kura-agent; do
+        printf '#!/bin/sh\n' > "${DIST}/${program}"
+    done
+    export OS_BRAND=kura OS_NAME=Kura
+}
+
+# branded <name>: packages/os-desktop/src/os-<name> as the runnable
+# kura-<name> a device has; its path is printed
+branded() {
+    local out="${BATS_TEST_TMPDIR}/kura-$1"
+    sed 's|__BRAND__|kura|g' "${BATS_TEST_DIRNAME}/../../packages/os-desktop/src/os-$1" > "${out}"
+    chmod +x "${out}"
+    echo "${out}"
+}
+
 # ---- Stubs ----
+# fake_iptables: iptables as a list of rules in ${RULES}; -C finds, -A
+# adds, -D removes one copy. Every call is in ${RULES}.calls.
+fake_iptables() {
+    RULES="${BATS_TEST_TMPDIR}/rules"
+    : > "${RULES}"
+    iptables() {
+        echo "$*" >> "${RULES}.calls"
+        [ "$1" = "-w" ] || return 2
+        local action="$2" rule="${*:3}"
+        case "${action}" in
+            -C) grep -qxF -- "${rule}" "${RULES}" ;;
+            -A) echo "${rule}" >> "${RULES}" ;;
+            -D) grep -qxF -- "${rule}" "${RULES}" || return 1
+                awk -v r="${rule}" '$0 == r && !done { done = 1; next } { print }' "${RULES}" > "${RULES}.new"
+                mv "${RULES}.new" "${RULES}" ;;
+        esac
+    }
+}
+
 # log_call <words...>: record a stubbed command in ${CALLS}
 log_call() { echo "$*" >> "${CALLS}"; }
 

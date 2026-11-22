@@ -136,9 +136,10 @@ impl DevSystem {
                 lock(&self.clock).1 = args[1] == "on";
                 Ok(())
             }
-            "screen" => {
+            "screen" | "rdp" => {
                 // As systemctl would: the link that turns the unit on.
-                let link = self.path("/etc/systemd/system/multi-user.target.wants/kura-kiosk.service");
+                let unit = if args[0] == "rdp" { "xrdp.service" } else { "kura-kiosk.service" };
+                let link = self.path(&format!("/etc/systemd/system/multi-user.target.wants/{unit}"));
                 match args[1] {
                     "on" => std::fs::create_dir_all(link.parent().unwrap_or(&self.root))
                         .and_then(|()| std::fs::write(&link, ""))

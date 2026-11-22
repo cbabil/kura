@@ -11,6 +11,7 @@
 # Usage: __BRAND__-settings <command> [arguments] [--secret-file <file>]
 #   hostname <name>
 #   timezone <Area/City>            ntp on|off          screen on|off
+#   rdp on|off
 #   wifi-add <ssid> <hidden:true|false> --secret-file F     wifi-remove <ssid>
 #   ethernet auto | ethernet static <address/prefix> <gateway> <dns[,dns]>
 #   network-confirm | network-revert
@@ -23,6 +24,7 @@ umask 077
 
 ROOT="${SETTINGS_ROOT:-}"   # a test's root folder; empty on a device
 BRAND="__BRAND__"
+LIB="${SETTINGS_LIB:-/usr/lib/${BRAND}}"   # a test's folder; the package's on a device
 CONFIG="${ROOT}/etc/${BRAND}/config.json"
 STATE="${ROOT}/var/lib/${BRAND}"
 PREVIOUS="${STATE}/network-previous.json"
@@ -88,15 +90,19 @@ secret_from() {
 # "name:password" lines, so a line break would name a second account)
 one_line() { [ -n "$1" ] && [[ "$1" != *$'\n'* ]] && [[ "$1" != *$'\r'* ]]; }
 
-# edit_config <jq-filter> [jq args...]: change config.json in one step, readable by root only
-edit_config() {
-    local filter="$1" out
-    shift
-    out=$(jq "$@" "${filter}" "${CONFIG}") || fail "config.json could not be changed"
-    printf '%s\n' "${out}" > "${CONFIG}.new"
-    chmod 0600 "${CONFIG}.new"
-    mv "${CONFIG}.new" "${CONFIG}"
+# edit_json <file> <jq-filter> [jq args...]: change a file of settings in
+# one step, readable by root only. A filter that yields nothing changes nothing.
+edit_json() {
+    local file="$1" filter="$2" out
+    shift 2
+    out=$(jq "$@" "${filter}" "${file}") && [ -n "${out}" ] || fail "${file##*/} could not be changed"
+    printf '%s\n' "${out}" > "${file}.new"
+    chmod 0600 "${file}.new"
+    mv "${file}.new" "${file}"
 }
+
+# edit_config <jq-filter> [jq args...]: edit_json on config.json
+edit_config() { edit_json "${CONFIG}" "$@"; }
 
 apply_config() { systemctl restart "${BRAND}-config.service"; }
 
@@ -134,17 +140,9 @@ cmd_ntp() {
     esac
 }
 
-# The local screen (ADR-033), where the image has it
-cmd_screen() {
-    local unit="${BRAND}-kiosk.service"
-    # The unit is in every PC image; the browser only where it was asked for
-    [ -f "${ROOT}/usr/lib/systemd/system/${unit}" ] && [ -x "${ROOT}/usr/bin/cage" ] || fail "this server has no local screen"
-    case "${1:-}" in
-        on) systemctl enable --now "${unit}" ;;
-        off) systemctl disable --now "${unit}" ;;
-        *) fail "screen is on or off" ;;
-    esac
-}
+# cmd_screen and cmd_rdp: the local screen and Remote Desktop
+# shellcheck source=packages/os-desktop/src/os-settings-screens
+source "${LIB}/${BRAND}-settings-screens"
 
 cmd_wifi_add() {
     local ssid="${1:-}" hidden="${2:-}" psk
@@ -290,7 +288,7 @@ main() {
         shift
     done
     case "${command}" in
-        hostname | timezone | ntp | ethernet | screen) "cmd_${command}" "${args[@]}" ;;
+        hostname | timezone | ntp | ethernet | screen | rdp) "cmd_${command}" "${args[@]}" ;;
         wifi-add | wifi-remove | network-confirm | network-revert | user-add | user-remove | user-admin | user-password)
             "cmd_${command//-/_}" "${args[@]}" ;;
         *) fail "unknown command" ;;

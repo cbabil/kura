@@ -17,8 +17,9 @@ JSON
     local tmp="${BATS_TEST_TMPDIR}/settings.sh"
     sed -e 's|__BRAND__|kura|g' -e '/^set -euo pipefail$/d' -e '/^main "\$@"$/d' \
         "${BATS_TEST_DIRNAME}/../../packages/os-desktop/src/os-settings" > "${tmp}"
+    branded settings-screens > /dev/null
     # shellcheck disable=SC1090
-    SETTINGS_ROOT="${ROOT}" source "${tmp}"
+    SETTINGS_ROOT="${ROOT}" SETTINGS_LIB="${BATS_TEST_TMPDIR}" source "${tmp}"
     mkdir -p "${ROOT}/home"
     hostname() { [ $# -gt 0 ] || jq -r .hostname "${ROOT}/etc/kura/config.json"; }
     pgrep() { return 1; }
@@ -103,6 +104,121 @@ secret() { printf '%s' "$1" > "${SECRET}"; }
     file_has "${CALLS}" "systemctl disable --now kura-kiosk.service"
     run main screen dim
     [ "$status" -ne 0 ]
+}
+
+# ---- Remote Desktop (ADR-035) ----
+
+# rdp_image: a server whose image has Remote Desktop, firewall library included
+rdp_image() {
+    mkdir -p "${ROOT}/usr/sbin" "${ROOT}/usr/lib/kura/security" "${ROOT}/etc/kura/security"
+    printf '#!/bin/sh\n' > "${ROOT}/usr/sbin/xrdp"
+    printf '#!/bin/sh\n' > "${ROOT}/usr/lib/kura/kura-rdp-session"
+    chmod +x "${ROOT}/usr/sbin/xrdp" "${ROOT}/usr/lib/kura/kura-rdp-session"
+    sed 's|__BRAND__|kura|g' "${BATS_TEST_DIRNAME}/../../packages/os-security/src/lib/firewall.sh" \
+        > "${ROOT}/usr/lib/kura/security/firewall.sh"
+    echo '{"network_security": {"firewall_preset": "strict", "mdns": true}}' > "${ROOT}/etc/kura/security/hardening.json"
+    chmod 0600 "${ROOT}/etc/kura/security/hardening.json"
+    fake_iptables
+    for tool in update-alternatives make-ssl-cert xrdp-keygen chgrp chmod pkill; do
+        eval "${tool}() { log_call ${tool} \"\$@\"; }"
+    done
+}
+
+rdp_flag() { jq -r '.network_security.rdp' "${ROOT}/etc/kura/security/hardening.json"; }
+
+@test "rdp: refused where the image has none" {
+    run main rdp on
+    [ "$status" -ne 0 ]
+    output_has "no Remote Desktop"
+    # every PC image has what a session shows; only one built for it has xrdp
+    mkdir -p "${ROOT}/usr/lib/kura"
+    printf '#!/bin/sh\n' > "${ROOT}/usr/lib/kura/kura-rdp-session"
+    chmod +x "${ROOT}/usr/lib/kura/kura-rdp-session"
+    run main rdp on
+    [ "$status" -ne 0 ]
+    [ ! -s "${CALLS}" ]
+}
+
+@test "rdp on: the port opens, the firewall remembers it, and the session starts" {
+    rdp_image
+    run main rdp on
+    [ "$status" -eq 0 ]
+    grep -qxF -- "INPUT -p tcp --dport 3389 -s 192.168.0.0/16 -j ACCEPT" "${RULES}"
+    file_has "${CALLS}" "systemctl enable --now xrdp-sesman.service xrdp.service"
+    file_has "${CALLS}" "update-alternatives --install /usr/bin/x-session-manager x-session-manager /usr/lib/kura/kura-rdp-session 90"
+    [ "$(rdp_flag)" = "true" ]
+    # the rest of the security settings is as it was, and still root's alone
+    [ "$(jq -r '.network_security.mdns' "${ROOT}/etc/kura/security/hardening.json")" = "true" ]
+    [ "$(file_mode "${ROOT}/etc/kura/security/hardening.json")" = "600" ]
+    [ "$(grep -c . "${RULES}")" -eq 8 ]
+    # the rules are in before anything listens, not after
+    [ "$(grep -n -- "-j ACCEPT" "${RULES}.calls" | wc -l)" -ge 4 ]
+    # this device's own keys, made here: the image has none (they would be every device's)
+    file_has "${CALLS}" "make-ssl-cert generate-default-snakeoil"
+    file_has "${CALLS}" "xrdp-keygen xrdp ${ROOT}/etc/xrdp/rsakeys.ini"
+    file_has "${CALLS}" "chgrp xrdp ${ROOT}/etc/xrdp/rsakeys.ini"
+}
+
+@test "rdp off: the session stops, the port closes, and stays closed after a restart" {
+    rdp_image
+    main rdp on
+    : > "${CALLS}"
+    run main rdp off
+    [ "$status" -eq 0 ]
+    # the session manager goes too, and the sessions with it
+    file_has "${CALLS}" "systemctl disable --now xrdp-sesman.service xrdp.service"
+    file_has "${CALLS}" "update-alternatives --remove x-session-manager /usr/lib/kura/kura-rdp-session"
+    # sessions that outlive the session manager end with their X server
+    file_has "${CALLS}" "pkill -f xrdp/xorg.conf"
+    [ ! -s "${RULES}" ]
+    [ "$(rdp_flag)" = "false" ]
+    run main rdp maybe
+    [ "$status" -ne 0 ]
+}
+
+@test "rdp on: a firewall that refuses leaves everything off" {
+    rdp_image
+    iptables() { return 1; }
+    run main rdp on
+    [ "$status" -ne 0 ]
+    output_has "firewall did not open"
+    [ "$(rdp_flag)" = "false" ]
+    run grep "systemctl enable" "${CALLS}"
+    [ "$status" -ne 0 ]
+}
+
+@test "rdp on: a session that does not start closes the port again" {
+    rdp_image
+    systemctl() { log_call systemctl "$@"; [ "$1" != "enable" ]; }
+    run main rdp on
+    [ "$status" -ne 0 ]
+    output_has "did not start"
+    [ "$(rdp_flag)" = "false" ]
+    file_has "${CALLS}" "systemctl disable --now xrdp-sesman.service xrdp.service"
+    # the port is closed again
+    [ ! -s "${RULES}" ]
+}
+
+@test "rdp on: keys the device already has are kept" {
+    rdp_image
+    mkdir -p "${ROOT}/etc/ssl/private" "${ROOT}/etc/xrdp"
+    echo k > "${ROOT}/etc/ssl/private/ssl-cert-snakeoil.key"
+    echo k > "${ROOT}/etc/xrdp/rsakeys.ini"
+    run main rdp on
+    [ "$status" -eq 0 ]
+    run grep -E "make-ssl-cert|xrdp-keygen" "${CALLS}"
+    [ "$status" -ne 0 ]
+}
+
+@test "rdp off: a port that cannot be closed is said, and the firewall still told to keep it closed" {
+    rdp_image
+    main rdp on
+    eval "real_$(declare -f iptables)"
+    iptables() { [ "$2" != "-D" ] && real_iptables "$@"; }
+    run main rdp off
+    [ "$status" -ne 0 ]
+    output_has "did not close"
+    [ "$(rdp_flag)" = "false" ]
 }
 
 # ---- Wi-Fi ----

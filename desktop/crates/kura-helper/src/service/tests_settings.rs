@@ -30,6 +30,21 @@ async fn administrators_read_the_settings_and_passwords_are_never_in_them() {
     assert_eq!(again["screen"], false);
     rig.service.ask(&anna, "change-setting", r#"{"what":"screen","on":true}"#).await.unwrap();
     assert_eq!(rig.system.commands.lock().unwrap().last().map(String::as_str), Some("screen on"));
+    // Remote Desktop (ADR-035) is read the same way, from its own unit and program.
+    assert!(again["rdp"].is_null(), "an image without xrdp");
+    std::fs::write(units.join("xrdp.service"), "").unwrap();
+    std::fs::create_dir_all(rig.dir.path().join("usr/sbin")).unwrap();
+    std::fs::write(rig.dir.path().join("usr/sbin/xrdp"), "").unwrap();
+    let with_rdp = rig.service.ask(&anna, "read-settings", "").await.unwrap();
+    assert!(with_rdp.contains(r#""rdp":false"#), "there, and off");
+    assert_eq!(rig.service.ask(&bob, "change-setting", r#"{"what":"rdp","on":true}"#).await, Err(Refusal::Admin));
+    rig.service.ask(&anna, "change-setting", r#"{"what":"rdp","on":true}"#).await.unwrap();
+    assert_eq!(rig.system.commands.lock().unwrap().last().map(String::as_str), Some("rdp on"));
+    let wanted = rig.dir.path().join("etc/systemd/system/multi-user.target.wants");
+    std::fs::create_dir_all(&wanted).unwrap();
+    std::fs::write(wanted.join("xrdp.service"), "").unwrap();
+    let on = rig.service.ask(&anna, "read-settings", "").await.unwrap();
+    assert!(on.contains(r#""rdp":true"#) && on.contains(r#""screen":false"#), "its own unit, not the screen's");
     assert_eq!(seen["network"]["wifi"], serde_json::json!(["Home"]));
     let device = &seen["network"]["devices"][0];
     assert_eq!((device["name"].as_str(), seen["network"]["pending"].as_bool()), (Some("enp1s0"), Some(false)));

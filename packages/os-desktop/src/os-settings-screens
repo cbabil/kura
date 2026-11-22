@@ -1,0 +1,82 @@
+#!/bin/bash
+# __BRAND__-settings-screens — the two ways to see Kura Desktop without a
+# browser of your own: the local screen (ADR-033) and Remote Desktop
+# (ADR-035). Sourced by __BRAND__-settings, whose ROOT, BRAND and fail it
+# uses; it defines functions only.
+
+SECURITY_LIB="${ROOT}/usr/lib/${BRAND}/security"
+HARDENING="${ROOT}/etc/${BRAND}/security/hardening.json"
+
+# The local screen, where the image has it
+cmd_screen() {
+    local unit="${BRAND}-kiosk.service"
+    # the unit is in every PC image, the browser only in one built for it (OS_KIOSK)
+    [ -f "${ROOT}/usr/lib/systemd/system/${unit}" ] && [ -x "${ROOT}/usr/bin/cage" ] || fail "this server has no local screen"
+    case "${1:-}" in
+        on) systemctl enable --now "${unit}" ;;
+        off) systemctl disable --now "${unit}" ;;
+        *) fail "screen is on or off" ;;
+    esac
+}
+
+# set_rdp_flag true|false: what the firewall does with the port at every
+# start (lib/firewall.sh reads it)
+set_rdp_flag() {
+    [ -f "${HARDENING}" ] || fail "this server's security settings are missing"
+    edit_json "${HARDENING}" '.network_security.rdp = $on' --argjson on "$1"
+}
+
+# Debian's xrdp: the session manager, then the server that takes connections
+RDP_UNITS=("xrdp-sesman.service" "xrdp.service")
+RDP_SESSION="/usr/lib/${BRAND}/${BRAND}-rdp-session"
+
+# rdp_keys: this device's own keys for xrdp, where it has none yet. The
+# image has none: made while building, they would be every device's.
+rdp_keys() {
+    local keys="${ROOT}/etc/xrdp/rsakeys.ini"
+    [ -s "${ROOT}/etc/ssl/private/ssl-cert-snakeoil.key" ] || make-ssl-cert generate-default-snakeoil --force-overwrite || return 1
+    [ -s "${keys}" ] && return 0
+    # readable by xrdp, which does not run as root, and by nobody else
+    xrdp-keygen xrdp "${keys}" > /dev/null && chgrp xrdp "${keys}" && chmod 0640 "${keys}"
+}
+
+# rdp_off: no server and no sessions, Debian's X session no longer Kura's
+# browser, the port closed, and the firewall told to keep it closed
+rdp_off() {
+    systemctl disable --now "${RDP_UNITS[@]}" || true
+    # a session may outlive the session manager; it ends with its X server
+    pkill -f xrdp/xorg.conf || true
+    update-alternatives --remove x-session-manager "${RDP_SESSION}" || true
+    # the rules whatever becomes of the flag, and the flag whatever became of them
+    local closed=true
+    set_rdp_rules off || closed=false
+    set_rdp_flag false
+    "${closed}" || fail "the firewall did not close Remote Desktop's port"
+}
+
+# rdp_undo <why>: all off again after a step of "on" failed
+rdp_undo() {
+    rdp_off
+    fail "$1"
+}
+
+# Remote Desktop, where the image has it (xrdp, and what its sessions
+# show). On: the firewall first, so that nothing listens before its rules
+# are in; whatever fails, all is off again.
+cmd_rdp() {
+    [ -x "${ROOT}/usr/sbin/xrdp" ] && [ -x "${ROOT}${RDP_SESSION}" ] || fail "this server has no Remote Desktop"
+    # shellcheck disable=SC1091
+    source "${SECURITY_LIB}/firewall.sh"
+    case "${1:-}" in
+        on)
+            set_rdp_flag true
+            set_rdp_rules on || rdp_undo "the firewall did not open Remote Desktop's port"
+            rdp_keys || rdp_undo "Remote Desktop's keys could not be made"
+            # what Debian's Xsession starts for a session: the browser
+            update-alternatives --install /usr/bin/x-session-manager x-session-manager "${RDP_SESSION}" 90 ||
+                rdp_undo "Remote Desktop's session could not be set"
+            systemctl enable --now "${RDP_UNITS[@]}" || rdp_undo "Remote Desktop did not start" ;;
+        off) rdp_off ;;
+        *) fail "rdp is on or off" ;;
+    esac
+}
