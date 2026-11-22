@@ -110,7 +110,11 @@ terminal_units() { systemctl list-units --no-legend --plain 'kura-terminal-*.ser
 until_units() {
     local want="$1" deadline=$((SECONDS + 15))
     while [ "$([ -n "$(terminal_units)" ] && echo open || echo empty)" != "${want}" ]; do
-        [ "${SECONDS}" -lt "${deadline}" ] || fail "$2"
+        if [ "${SECONDS}" -ge "${deadline}" ]; then
+            # what systemd knows of them, for whoever reads this failure
+            systemctl status --no-pager --lines=5 'kura-terminal-*.service' >&2 || true
+            fail "$2"
+        fi
         sleep 1
     done
 }

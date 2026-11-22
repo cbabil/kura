@@ -21,6 +21,8 @@ const UNITS: [&str; 2] = ["kura-terminal-*.service", "kura-files-*.service"];
 /// The most memory and tasks one agent may take.
 const AGENT_MEMORY_MAX: u64 = 256 * 1024 * 1024;
 const AGENT_TASKS_MAX: u64 = 16;
+/// How long a closed terminal's shell has to end by itself.
+const STOP_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
 /// The file agent, in the image.
 const AGENT: &str = "/usr/lib/kura/kura-agent";
 
@@ -62,6 +64,11 @@ impl SystemdShell {
             ("StandardError", Value::from("tty")),
             ("TTYPath", Value::from(tty)),
             ("SendSIGHUP", Value::from(true)),
+            // An interactive shell ignores the stop signal, and its login
+            // session may hold it outside this unit, where the hang-up above
+            // does not reach: a closed terminal's shell is killed after this
+            // long instead of systemd's minute and a half.
+            ("TimeoutStopUSec", Value::from(STOP_GRACE.as_micros() as u64)),
             ("CollectMode", Value::from("inactive-or-failed")),
             ("ExecStart", Value::from(exec)),
         ];
