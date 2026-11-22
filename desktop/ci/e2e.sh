@@ -16,16 +16,18 @@ user="${1:?Usage: KURA_PAM_PASSWORD=<password> $0 <administrator> [<other user>]
 guest="${2:-}"
 password="${KURA_PAM_PASSWORD:?set KURA_PAM_PASSWORD to the password of the user}"
 bin="target/release"
-state="$(mktemp -d)"
+state="$(mktemp -d)"   # desktopd's own: handed to its user below
+out="$(mktemp -d)"     # this script's own files
 base="https://localhost:8443"
 policy=/etc/dbus-1/system.d/io.kura.Helper.conf
 
 cleanup() {
     [ -z "${work:-}" ] || sudo rm -rf "${work}"
+    sudo rm -rf "${state}" "${out}"
     docker rm -f kura-e2e >/dev/null 2>&1 || true
     sudo systemctl stop kura-job-update.service >/dev/null 2>&1 || true
     sudo userdel -r kura-e2e-new >/dev/null 2>&1 || true
-    sudo rm -rf /usr/lib/kura/kura-settings /usr/lib/kura/kura-apps /usr/lib/kura/catalog /usr/lib/kura/kura-agent /run/kura-helper
+    sudo rm -rf /usr/lib/kura/kura-settings /usr/lib/kura/kura-settings-screens /usr/lib/kura/kura-apps /usr/lib/kura/catalog /usr/lib/kura/kura-agent /run/kura-helper
     sudo systemctl reset-failed kura-job-update.service >/dev/null 2>&1 || true
     sudo pkill -f "${bin}/kura-helper" || true
     sudo pkill -f "${bin}/kura-desktopd" || true
@@ -47,6 +49,7 @@ sudo systemctl reload dbus
 # The root command behind Settings and the helper's folder for password
 # files, where the image has them
 sed -e 's/__BRAND__/kura/g' ../packages/os-desktop/src/os-settings | sudo install -D -m 0755 /dev/stdin /usr/lib/kura/kura-settings
+sed -e 's/__BRAND__/kura/g' ../packages/os-desktop/src/os-settings-screens | sudo install -D -m 0644 /dev/stdin /usr/lib/kura/kura-settings-screens
 sudo install -d -m 0700 /run/kura-helper
 # The App Catalog: its root command and templates
 sed -e 's/__BRAND__/kura/g' ../packages/os-desktop/src/os-apps | sudo install -D -m 0755 /dev/stdin /usr/lib/kura/kura-apps
@@ -112,7 +115,7 @@ until_units() {
     done
 }
 
-upgrade 8 '/api/terminal?cols=100&rows=30' > "${state}/terminal.out" &
+upgrade 8 '/api/terminal?cols=100&rows=30' > "${out}/terminal.out" &
 terminal=$!
 until_units open "no kura-terminal unit while a terminal is open"
 unit="$(terminal_units | head -1)"
@@ -123,9 +126,9 @@ shell_user="$(ps -o user= -p "${shell_pid}" | tr -d ' ')"
 [ "$(ps -o tty= -p "${shell_pid}" | tr -d ' ')" != '?' ] || fail "the terminal's shell has no terminal"
 # only the terminal: the helper and desktopd are background jobs too
 wait "${terminal}"
-grep -q ' 101 ' "${state}/terminal.out" || fail "terminal WebSocket was not accepted"
+grep -q ' 101 ' "${out}/terminal.out" || fail "terminal WebSocket was not accepted"
 # bash's prompt for this user, after the upgrade's own headers
-grep -aq "${user}@" "${state}/terminal.out" || fail "the shell printed no prompt"
+grep -aq "${user}@" "${out}/terminal.out" || fail "the shell printed no prompt"
 until_units empty "${unit} outlived its terminal"
 upgrade 3 '/api/terminal?cols=0' | grep -q ' 400 ' || fail "a terminal of no width was not refused"
 
@@ -209,26 +212,28 @@ echo '{"what":"user-remove","name":"kura-e2e-new"}' | post_json 204 "${jar}" /ap
 # root's own folder stays shut.
 home="$(curl -sk -b "${jar}" "${base}/api/files" | jq -r .home)"
 [ "${home}" = "$(getent passwd "${user}" | cut -d: -f6)" ] || fail "Files does not start in the home folder: ${home}"
+# The home folder is closed to the runner's own user, so the checks on what
+# is in it are made as root.
 # A name of this run's own, so an earlier run that failed leaves nothing in
 # the way (in the folder or in the trash); cleanup removes the folder.
 work="${home}/kura-e2e-files-$$"
 files_op() { status "$1" -b "${jar}" "${DESKTOP_CHANGE[@]}" "${DESKTOP_POST[@]}" "${base}/api/files"; }
 jq -nc --arg p "${work}" '{op: "make-dir", path: $p}' | files_op 204
-head -c 700000 /dev/urandom > "${state}/sent-$$.bin"
-status 204 -b "${jar}" "${DESKTOP_CHANGE[@]}" -X PUT --data-binary "@${state}/sent-$$.bin" \
+head -c 700000 /dev/urandom > "${out}/sent-$$.bin"
+status 204 -b "${jar}" "${DESKTOP_CHANGE[@]}" -X PUT --data-binary "@${out}/sent-$$.bin" \
     -H 'content-type: application/octet-stream' "${base}/api/files/content?path=${work}/sent-$$.bin"
-[ "$(stat -c '%U' "${work}/sent-$$.bin")" = "${user}" ] || fail "the uploaded file is not the user's own"
-curl -sk -b "${jar}" -o "${state}/back.bin" "${base}/api/files/content?path=${work}/sent-$$.bin"
-cmp -s "${state}/sent-$$.bin" "${state}/back.bin" || fail "the file did not come back as it went up"
-status 409 -b "${jar}" "${DESKTOP_CHANGE[@]}" -X PUT --data-binary "@${state}/sent-$$.bin" "${base}/api/files/content?path=${work}/sent-$$.bin"
+[ "$(sudo stat -c '%U' "${work}/sent-$$.bin")" = "${user}" ] || fail "the uploaded file is not the user's own"
+curl -sk -b "${jar}" -o "${out}/back.bin" "${base}/api/files/content?path=${work}/sent-$$.bin"
+cmp -s "${out}/sent-$$.bin" "${out}/back.bin" || fail "the file did not come back as it went up"
+status 409 -b "${jar}" "${DESKTOP_CHANGE[@]}" -X PUT --data-binary "@${out}/sent-$$.bin" "${base}/api/files/content?path=${work}/sent-$$.bin"
 jq -nc --arg p "${work}/sent-$$.bin" '{op: "trash", path: $p}' | files_op 204
-[ ! -e "${work}/sent-$$.bin" ] || fail "the file was not moved to the trash"
+! sudo test -e "${work}/sent-$$.bin" || fail "the file was not moved to the trash"
 curl -sk -b "${jar}" "${base}/api/files/trash" | jq -e --arg p "${work}/sent-$$.bin" 'any(.items[]; .path == $p)' >/dev/null ||
     fail "the trash does not list the file"
 jq -nc --arg n "sent-$$.bin" '{op: "restore", name: $n}' | files_op 204
-[ -f "${work}/sent-$$.bin" ] || fail "the file was not put back"
+sudo test -f "${work}/sent-$$.bin" || fail "the file was not put back"
 jq -nc --arg p "${work}" '{op: "delete", path: $p}' | files_op 204
-[ ! -e "${work}" ] || fail "the folder was not deleted"
+! sudo test -e "${work}" || fail "the folder was not deleted"
 status 403 -b "${jar}" "${base}/api/files?path=/root"
 status 400 -b "${jar}" "${base}/api/files?path=/home/../root"
 echo '{"op":"read","path":"/etc/shadow","offset":0}' | files_op 400
