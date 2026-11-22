@@ -55,7 +55,10 @@ impl Drop for Closer {
             (self.helper.clone(), std::mem::take(&mut self.ticket), std::mem::take(&mut self.id));
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             // An already ended shell is "not found", which is fine.
-            runtime.spawn(async move { helper.close_terminal(&ticket, &id).await });
+            runtime.spawn(async move {
+                let closed = helper.close_terminal(&ticket, &id).await;
+                tracing::info!(ok = closed.is_ok(), "terminal closed");
+            });
         }
     }
 }

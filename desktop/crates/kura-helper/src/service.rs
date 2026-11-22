@@ -171,7 +171,9 @@ impl Service {
     /// # Errors
     /// [`Refusal::NotFound`] for any other.
     pub async fn close_terminal(&self, ticket: &str, id: &str) -> Result<(), Refusal> {
-        self.terminals.close(ticket, id).await
+        let closed = self.terminals.close(ticket, id).await;
+        tracing::info!(ok = closed.is_ok(), "close terminal");
+        closed
     }
 }
 
