@@ -50,7 +50,11 @@ function WindowFrame({ win, def, focused, bounds, z, view, actions }: Props) {
   const { compact } = bounds
   const drag = useRef<Drag | null>(null)
   const [slot, setSlot] = useState<HTMLElement | null>(null)
-  const body = useMemo<AppProps>(() => ({ view, setView: (v) => actions.setView(app, v), compact }), [view, actions, app, compact])
+  const { minimized } = win
+  const body = useMemo<AppProps>(
+    () => ({ view, setView: (v) => actions.setView(app, v), compact, minimized }),
+    [view, actions, app, compact, minimized],
+  )
 
   /** Starts a move or resize; the handle says which in data-drag. */
   const start = (e: PointerEvent<HTMLElement>) => {

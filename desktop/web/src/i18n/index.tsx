@@ -1,30 +1,38 @@
 /**
- * Kura Desktop's languages. Each catalogue has every key of en.ts; the
- * language is the user's choice, or the browser's first one Kura has, or
- * English. Numbers, sizes, dates and plurals follow the language.
- * Adding a language: a catalogue file and one line in CATALOGUES and NAMES.
+ * Kura Desktop's languages. English and French are part of the page; the
+ * others (locales/<code>.json, translated by machine: see languages.ts) are
+ * fetched when chosen. Each catalogue has every key of en.ts; the language
+ * is the user's choice, or the browser's first one Kura has, or English.
+ * Numbers, sizes, dates and plurals follow the language.
  */
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
-import { en, type MessageKey, type Messages, type PluralKey } from './en'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { en, type MessageKey, type PluralKey } from './en'
 import { makeFormat, type Format } from './format'
-import { fr } from './fr'
+import { catalogueOf, isLang, loadCatalogue, NAMES, type Lang } from './languages'
 
-export const CATALOGUES = { en, fr } satisfies Record<string, Messages>
-export type Lang = keyof typeof CATALOGUES
+export { NAMES, loadCatalogue }
+export type { Lang }
 /** What a user can choose: a language code, or 'auto' for the browser's. */
 export type LanguageChoice = 'auto' | Lang
 
-/** Each language named in itself, for the language menu. */
-export const NAMES: Record<Lang, string> = { en: 'English', fr: 'Français' }
+/** Browser tags that mean a catalogue under another name. */
+const ALIASES: Record<string, Lang> = { 'zh-hant': 'zh-TW', 'zh-hk': 'zh-TW', 'zh-mo': 'zh-TW', 'zh-hans': 'zh', 'zh-cn': 'zh', 'zh-sg': 'zh' }
 
-const isLang = (code: string): code is Lang => code in CATALOGUES
+/** The catalogue for one browser tag: itself, its alias, or its main part ("pt-PT" is "pt", "pt-BR" its own). */
+function langOf(tag: string): Lang | null {
+  const lower = tag.toLowerCase()
+  const exact = Object.keys(NAMES).find((code) => code.toLowerCase() === lower)
+  const alias = Object.entries(ALIASES).find(([prefix]) => lower === prefix || lower.startsWith(`${prefix}-`))?.[1]
+  const main = lower.split('-')[0]
+  return (exact as Lang | undefined) ?? alias ?? (isLang(main) ? main : null)
+}
 
 /** The language to show: a valid stored choice, else the browser's first one Kura has, else English. */
 export function pickLanguage(choice: string, browser: readonly string[]): Lang {
   if (isLang(choice)) return choice
   for (const tag of browser) {
-    const main = tag.toLowerCase().split('-')[0]
-    if (isLang(main)) return main
+    const lang = langOf(tag)
+    if (lang) return lang
   }
   return 'en'
 }
@@ -41,8 +49,8 @@ export interface I18n {
 
 const UNITS = ['unit.b', 'unit.kb', 'unit.mb', 'unit.gb', 'unit.tb', 'unit.pb'] as const
 
-export function makeI18n(lang: Lang): I18n {
-  const messages: Record<string, string> = CATALOGUES[lang]
+/** `messages` is the language's catalogue; without it (not fetched yet) the words are English. */
+export function makeI18n(lang: Lang, messages: Record<string, string> = catalogueOf(lang) ?? en): I18n {
   const plural = new Intl.PluralRules(lang)
   // A key the language lacks falls back to English, then to the key itself
   const t = (key: string, vars?: Vars) => {
@@ -64,7 +72,18 @@ export function makeI18n(lang: Lang): I18n {
 const I18nContext = createContext<I18n>(makeI18n('en'))
 
 export function I18nProvider({ lang, children }: { lang: Lang; children: ReactNode }) {
-  const value = useMemo(() => makeI18n(lang), [lang])
+  // Counts the catalogues that arrived, so the words follow once theirs has.
+  const [arrived, setArrived] = useState(0)
+  useEffect(() => {
+    let live = true
+    // A catalogue that cannot be fetched leaves the desktop in English.
+    if (!catalogueOf(lang)) loadCatalogue(lang).then(() => live && setArrived((n) => n + 1), () => {})
+    return () => {
+      live = false
+    }
+  }, [lang])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `arrived` says the catalogue is there now
+  const value = useMemo(() => makeI18n(lang), [lang, arrived])
   useEffect(() => {
     document.documentElement.lang = lang
   }, [lang])

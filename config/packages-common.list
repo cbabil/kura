@@ -49,3 +49,5 @@ nano
 curl
 less
 ncurses-term
+# kura.local on the local network (ADR-030)
+avahi-daemon

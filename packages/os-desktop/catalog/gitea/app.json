@@ -1,0 +1,9 @@
+{
+  "id": "gitea",
+  "name": "Gitea",
+  "version": "1.23.1",
+  "port": 3003,
+  "fixedPorts": [],
+  "shared": [],
+  "homepage": "https://about.gitea.com"
+}

@@ -92,6 +92,13 @@ fi
 LOGIN_RESTART=""
 [ ! -f "${KURA_REBOOT_REQUIRED:-/run/reboot-required}" ] || LOGIN_RESTART="yes"
 LOGIN_COLS="${LOGIN_COLS:-$(console_cols)}"
+# <host>.local is answered while avahi runs and the firewall lets mDNS in
+# (ADR-030): after an upgrade, or with mdns switched off, it may not
+LOGIN_MDNS=""
+if systemctl is-active --quiet avahi-daemon.service 2>/dev/null &&
+    iptables -S INPUT 2>/dev/null | grep -q -- '--dport 5353 .*-j ACCEPT'; then
+    LOGIN_MDNS="yes"
+fi
 # Kura Desktop's certificate (os-desktop-cert), once made
 LOGIN_DESKTOP_FP=""
 [ -f "${DESKTOP_FINGERPRINT}" ] && read -r LOGIN_DESKTOP_FP < "${DESKTOP_FINGERPRINT}"

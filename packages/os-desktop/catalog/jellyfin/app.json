@@ -1,0 +1,11 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "version": "10.10.7",
+  "port": 8096,
+  "fixedPorts": [],
+  "shared": [
+    "media"
+  ],
+  "homepage": "https://jellyfin.org"
+}

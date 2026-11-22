@@ -174,7 +174,10 @@ issue_panel_lines() {
         issue_row Address "${ISSUE_AMBER}" "none yet" "${w}"
     fi
     if [ -n "${LOGIN_DESKTOP_FP:-}" ]; then   # Kura Desktop (ADR-023)
-        [ -z "${address}" ] || issue_row Desktop "${ISSUE_LIGHT}" "https://${address}" "${w}"
+        # By name where the device answers to it: the certificate names <host>.local
+        local desktop="${address}"
+        [ -z "${LOGIN_MDNS:-}" ] || [ -z "${LOGIN_HOST:-}" ] || desktop="${LOGIN_HOST}.local"
+        [ -z "${desktop}" ] || issue_row Desktop "${ISSUE_LIGHT}" "https://${desktop}" "${w}"
         issue_row Cert "${ISSUE_TEXT}" "SHA-256 $(issue_short_fp "${LOGIN_DESKTOP_FP}")" "${w}"
     fi
     [ -z "${LOGIN_PASSWORD:-}" ] ||

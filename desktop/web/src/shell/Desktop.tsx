@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Box } from '@mui/material'
-import type { Api, Prefs, User } from '../api'
+import type { Api, PowerKind, Prefs, User } from '../api'
 import { APP_BY_ID, appText, launcherEntries } from '../apps/registry'
 import type { AppMenu, MenuCtx, MenuItem } from '../apps/types'
 import { useI18n } from '../i18n'
@@ -16,8 +16,9 @@ import { LanguageDialog } from './LanguageDialog'
 import { Launcher } from './Launcher'
 import { MenuBar } from './MenuBar'
 import { About, Wallpaper } from './Panels'
+import { PowerDialog } from './PowerDialog'
 import { useDesktop } from './useDesktop'
-import { DesktopDataProvider, useSystem } from './useStats'
+import { DesktopDataProvider, useSystem } from './DesktopData'
 import { Window } from './Window'
 
 interface Props {
@@ -37,6 +38,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
   const { t } = useI18n()
   const [about, setAbout] = useState(false)
   const [language, setLanguage] = useState(false)
+  const [power, setPower] = useState<PowerKind | null>(null)
   const { actions, state, bounds } = d
 
   useEffect(() => actions.open(FIRST_APP), [actions])
@@ -47,9 +49,13 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
     items: [
       { label: 'menu.about', run: () => setAbout(true) },
       { label: 'menu.language', run: () => setLanguage(true) },
+      // Switching the server off is for administrators (the server checks too)
+      ...(user.admin
+        ? [{ label: 'menu.restart' as const, run: () => setPower('restart') }, { label: 'menu.shutdown' as const, run: () => setPower('shutdown') }]
+        : []),
       { label: 'menu.signOut', vars: { name: user.name }, run: onSignOut },
     ],
-  }), [user.name, onSignOut])
+  }), [user.name, user.admin, onSignOut])
   const entries = useMemo(() => launcherEntries(t), [t])
   const run = (item: MenuItem) => {
     const app = d.focused?.app ?? ''
@@ -70,7 +76,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
       <Wallpaper hostname={system?.hostname ?? 'kura'} />
       <MenuBar appName={focused ? appText(t, focused.id, 'name') : 'Kura'} kuraMenu={kuraMenu} menus={focused?.menus ?? []} compact={bounds.compact}
         mode={mode} onRun={run} onToggleTheme={() => onPrefs({ theme: mode === 'dark' ? 'light' : 'dark' })}
-        onLauncher={() => d.setLauncher(true)} />
+        onLauncher={() => d.setLauncher(true)} onUpdates={() => actions.open('settings', 'Updates')} />
       {state.order.map((app, i) => {
         const isFocused = d.focused?.app === app
         // On a phone only the front window shows.
@@ -91,6 +97,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
           }} />
       )}
       <About open={about} system={system} onClose={() => setAbout(false)} />
+      <PowerDialog how={power} onClose={() => setPower(null)} />
       <LanguageDialog open={language} choice={prefs.language} onClose={() => setLanguage(false)}
         onChoose={(choice) => onPrefs({ language: choice })} />
     </Box>
@@ -99,7 +106,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
 
 export function Desktop({ api, ...rest }: Props) {
   return (
-    <DesktopDataProvider api={api}>
+    <DesktopDataProvider api={api} user={rest.user}>
       <DesktopView {...rest} />
     </DesktopDataProvider>
   )

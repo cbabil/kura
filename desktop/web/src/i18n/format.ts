@@ -17,6 +17,8 @@ export interface Format {
   date(d: Date): string
   /** Hours and minutes. */
   time(d: Date): string
+  /** Hours, minutes and seconds, for log lines. */
+  clock(d: Date): string
 }
 
 const TIME_STEPS: [unit: 'day' | 'hour' | 'minute' | 'second', seconds: number][] = [
@@ -39,6 +41,7 @@ export function makeFormat(lang: string, units: readonly string[]): Format {
   )
   const dateFmt = new Intl.DateTimeFormat(lang, { weekday: 'short', day: 'numeric', month: 'short' })
   const timeFmt = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit' })
+  const clockFmt = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
 
   const bytes = (n: number | null): string => {
     if (n === null) return '—'
@@ -63,5 +66,6 @@ export function makeFormat(lang: string, units: readonly string[]): Format {
     },
     date: (d) => dateFmt.format(d),
     time: (d) => timeFmt.format(d),
+    clock: (d) => clockFmt.format(d),
   }
 }

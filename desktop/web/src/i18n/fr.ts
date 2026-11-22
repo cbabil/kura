@@ -1,6 +1,11 @@
 /** Français. Même clés et mêmes {variables} que en.ts. */
 import type { Messages } from './en'
 
+import { apps } from './fr.apps'
+import { catalog } from './fr.catalog'
+import { files } from './fr.files'
+import { settings } from './fr.settings'
+
 export const fr: Messages = {
   'brand.kicker': 'LA RÉSERVE',
   'brand.tagline': 'Le système léger pour votre serveur maison.',
@@ -21,6 +26,8 @@ export const fr: Messages = {
   'menu.kura': 'Menu Kura',
   'menu.about': 'À propos de Kura',
   'menu.language': 'Langue…',
+  'menu.restart': 'Redémarrer…',
+  'menu.shutdown': 'Éteindre…',
   'menu.signOut': 'Déconnecter {name}',
   'menu.file': 'Fichier',
   'menu.view': 'Présentation',
@@ -37,6 +44,20 @@ export const fr: Messages = {
   'status.offline': 'Hors ligne',
   'status.light': 'Thème clair',
   'status.dark': 'Thème sombre',
+  'status.update': 'Kura {version} est disponible',
+  'status.restartDue': 'Un redémarrage est nécessaire pour terminer une mise à jour',
+  'status.updateShort': 'Mise à jour {version}',
+  'status.restartShort': 'Redémarrage requis',
+  'power.restart.title': 'Redémarrer ce serveur ?',
+  'power.shutdown.title': 'Éteindre ce serveur ?',
+  'power.restart.text': "Tout ce qui tourne dessus s'arrête un instant. Les conteneurs réglés pour redémarrer reviennent d'eux-mêmes.",
+  'power.shutdown.text': "Tout ce qui tourne dessus s'arrête. Pour le rallumer, il faudra être devant la machine.",
+  'power.restart.confirm': 'Redémarrer',
+  'power.shutdown.confirm': 'Éteindre',
+  'power.cancel': 'Annuler',
+  'power.restart.going': "Le serveur redémarre. Cette page revient d'elle-même quand c'est fait.",
+  'power.shutdown.going': "Le serveur s'éteint. Vous pouvez fermer cette page.",
+  'power.failed': "Le serveur ne l'a pas fait. Réessayez, ou utilisez la console.",
   'status.search': 'Rechercher (Ctrl K)',
 
   'window.close': 'Fermer',
@@ -135,6 +156,11 @@ export const fr: Messages = {
   'state.failed': 'en échec',
   'state.activating': 'démarrage',
   'state.deactivating': 'arrêt',
+
+  ...apps,
+  ...catalog,
+  ...files,
+  ...settings,
 
   'unit.b': 'o',
   'unit.kb': 'Ko',

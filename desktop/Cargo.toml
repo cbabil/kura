@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/kura-desktop-core", "crates/kura-desktopd", "crates/kura-helper"]
+members = ["crates/kura-agent", "crates/kura-desktop-core", "crates/kura-desktopd", "crates/kura-helper"]
 
 [workspace.package]
 version = "0.1.0"

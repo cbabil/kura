@@ -2,7 +2,8 @@
 # tests/boot/desktop-checks.sh — Kura Desktop on a booted PC image (ADR-023):
 # HTTPS on 443 (forwarded to HTTPS_PORT), the device's own certificate as the
 # login screen shows it, sign-in through PAM with the login user's password,
-# the CSRF rule, the server's memory, "desktop": false, and screenshots.
+# the CSRF rule, the server's memory, "desktop": false, the helper's Docker
+# and journal answers (ADR-027), and screenshots, of a terminal too.
 # Sourced by boot-test.sh after boot-checks.sh; defines functions only. The
 # HTTP contract (body, headers, budget) is desktop/ci/api.sh's, shared with
 # the server's own end-to-end test.
@@ -60,10 +61,60 @@ desktop_off() {
         ! curl -sk --max-time 10 -o /dev/null "${DESKTOP_URL}/"
 }
 
-# signin.png and desktop.png through a real browser (Playwright's Chromium)
+# The helper asks Docker for the containers: a list, empty on a fresh image
+# (uses the cookie desktop_signin kept)
+desktop_containers() { [ "$(curl -sk --max-time 10 -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/containers" | jq -r type)" = array ]; }
+
+# ...and reads the journal for an administrator
+desktop_journal() {
+    local entries
+    entries=$(curl -sk --max-time 20 -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/journal?lines=5" | jq '.entries | length')
+    report_facts "${entries:-no} journal entries"
+    [ "${entries:-0}" -ge 1 ]
+}
+
+# The desktop knows the version it runs, as the login screen does
+desktop_version() {
+    local shown
+    shown=$(curl -sk --max-time 20 -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/updates" | jq -r .current)
+    report_facts "desktop says Kura ${shown:-?}"
+    [ -n "${shown}" ] && ssh_run "grep -qF 'BRAND_VERSION=\"${shown}\"' /usr/lib/${BRAND}/release"
+}
+
+# Settings come from the helper: the host name, the login user as an
+# administrator, the clock's zone
+desktop_settings() {
+    curl -sk --max-time 20 -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/settings" | jq -e --arg u "${LOGIN_USER}" \
+        '(.hostname | length > 0) and (.time.zone | length > 0) and any(.users[]; .name == $u and .admin)' >/dev/null
+}
+
+# ...and a change runs through the root command: the zone is set to the one it has
+desktop_setting_changes() {
+    local zone
+    zone=$(curl -sk --max-time 20 -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/settings" | jq -r .time.zone)
+    [ -n "${zone}" ] && [ "$(jq -nc --arg z "${zone}" '{what: "timezone", zone: $z}' |
+        desktop_code "${DESKTOP_URL}" -b "${OUT}/desktop-cookies" "${DESKTOP_CHANGE[@]}" "${DESKTOP_POST[@]}" "${DESKTOP_URL}/api/settings")" = 204 ]
+}
+
+# Files are served by the user's own agent: the home folder is listed, and
+# root's is not theirs to see
+desktop_files() {
+    local home
+    home=$(curl -sk --max-time 20 -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/files" | jq -r .home)
+    [ "${home}" = "/home/${LOGIN_USER}" ] &&
+        [ "$(desktop_code "${DESKTOP_URL}" -b "${OUT}/desktop-cookies" "${DESKTOP_URL}/api/files?path=/root")" = 403 ]
+}
+
+# No shell started for a terminal is left running once its window is closed
+desktop_terminals_closed() { [ -z "$(ssh_run "systemctl list-units --no-legend 'kura-terminal-*'")" ]; }
+
+# signin.png and desktop.png through a real browser (Playwright's Chromium),
+# then a terminal (its shell must be the login user's), the containers and
+# the journal: terminal.png, containers.png, console.png
 desktop_screens() {
     (cd "${DESKTOP_WEB}" &&
         KURA_DEVICE_URL="${DESKTOP_URL}" KURA_DEVICE_USER="${LOGIN_USER}" KURA_DEVICE_PASS="${LOGIN_PASS}" \
         KURA_DEVICE_SHOTS="${OUT}" bunx playwright test -c playwright.device.config.ts) > "${OUT}/desktop-screens.log" 2>&1 &&
-        [ -s "${OUT}/signin.png" ] && [ -s "${OUT}/desktop.png" ]
+        [ -s "${OUT}/signin.png" ] && [ -s "${OUT}/desktop.png" ] &&
+        [ -s "${OUT}/terminal.png" ] && [ -s "${OUT}/containers.png" ] && [ -s "${OUT}/console.png" ]
 }

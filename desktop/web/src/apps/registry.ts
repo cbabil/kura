@@ -1,12 +1,18 @@
 /**
  * The built-in apps. Each declares its window, menus, sections and catalogue
  * keys here, and the dock, the menu bar and the launcher derive from this
- * list. Apps without a Body show what is coming (ADR-023: D2 Containers,
- * Terminal, Console; D3 Files, Settings; D4 App Catalog).
+ * list. An app without a Body would show that it is coming; all have one now.
  */
 import type { I18n, MessageKey } from '../i18n'
 import type { Entry } from '../shell/search'
 import { ACTIVITY_VIEWS, ActivityMonitor, VIEW_LABELS } from './activity/ActivityMonitor'
+import { Catalog } from './catalog/Catalog'
+import { Console } from './console/Console'
+import { Containers } from './containers/Containers'
+import { Files } from './files/Files'
+import { Trash } from './files/Trash'
+import { SETTINGS_LABELS, SETTINGS_VIEWS, Settings } from './settings/Settings'
+import { Terminal } from './terminal/Terminal'
 import type { AppDef, AppMenu } from './types'
 
 const FILE: AppMenu = { title: 'menu.file', items: [{ label: 'menu.closeWindow', run: (c) => c.close() }] }
@@ -18,6 +24,15 @@ const HELP: AppMenu = { title: 'menu.help', items: [{ label: 'menu.desktopHelp',
 const STANDARD = [FILE, WINDOW, HELP]
 
 const ACTIVITY = ACTIVITY_VIEWS.map((id) => ({ id, label: VIEW_LABELS[id] }))
+const SETTINGS = SETTINGS_VIEWS.map((id) => ({ id, label: SETTINGS_LABELS[id] }))
+
+/** The standard menus with a View menu of the app's sections. */
+const withViews = (views: { id: string; label: MessageKey }[]): AppMenu[] => [
+  FILE,
+  { title: 'menu.view', items: views.map((v) => ({ label: v.label, run: (c) => c.setView(v.id) })) },
+  WINDOW,
+  HELP,
+]
 
 /** Ids that have a name in the catalogue: an app without one does not compile. */
 type AppId = { [K in MessageKey]: K extends `app.${infer I}.name` ? I : never }[MessageKey]
@@ -32,20 +47,15 @@ export const APPS: AppDef[] = [
   app('activity', 980, 640, {
     Body: ActivityMonitor,
     views: ACTIVITY,
-    menus: [
-      FILE,
-      { title: 'menu.view', items: ACTIVITY.map((v) => ({ label: v.label, run: (c) => c.setView(v.id) })) },
-      WINDOW,
-      HELP,
-    ],
+    menus: withViews(ACTIVITY),
   }),
-  app('containers', 760, 600),
-  app('terminal', 760, 480),
-  app('files', 860, 560),
-  app('console', 860, 560),
-  app('settings', 760, 560),
-  app('catalog', 860, 600),
-  app('trash', 640, 440, { placement: 'end' }),
+  app('containers', 760, 600, { Body: Containers }),
+  app('terminal', 760, 480, { Body: Terminal }),
+  app('files', 860, 560, { Body: Files }),
+  app('console', 860, 560, { Body: Console }),
+  app('settings', 760, 560, { Body: Settings, views: SETTINGS, menus: withViews(SETTINGS) }),
+  app('catalog', 860, 600, { Body: Catalog }),
+  app('trash', 640, 440, { placement: 'end', Body: Trash }),
 ]
 
 export const APP_BY_ID: Record<string, AppDef> = Object.fromEntries(APPS.map((a) => [a.id, a]))

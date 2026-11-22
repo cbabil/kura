@@ -1,7 +1,18 @@
 /**
- * The JSON contract between the interface and kura-desktopd (ADR-023, D1).
- * kura-desktopd's Go handlers follow these shapes; keep both sides in step.
+ * The JSON contract between the interface and kura-desktopd (ADR-023,
+ * ADR-027). kura-desktopd's handlers follow these shapes; keep both sides
+ * in step. The shapes of the D2 apps (containers, journal, terminal) are in
+ * appTypes.ts and re-exported here.
  */
+import type { AppChange, Catalog } from './catalogTypes'
+import type { FileChange, Folder, Trashed } from './filesTypes'
+import type { SettingChange, Settings } from './settingsTypes'
+import type { Container, ContainerAction, JournalFilter, JournalPage, LogLine, PowerKind, TerminalHandlers, TerminalSession, UpdateKind, UpdateStatus } from './appTypes'
+
+export * from './appTypes'
+export * from './catalogTypes'
+export * from './filesTypes'
+export * from './settingsTypes'
 
 /** The signed-in user, from GET /api/session and POST /api/login. */
 export interface User {
@@ -116,4 +127,33 @@ export interface Api {
   savePrefs(prefs: Prefs): Promise<void>
   /** Opens the stats stream; returns a function that closes it. */
   stats(onMessage: (m: StatsMessage) => void): () => void
+  /** The requests below reject with an ApiError. */
+  containers(): Promise<Container[]>
+  containerAction(id: string, action: ContainerAction): Promise<void>
+  containerLogs(id: string, lines: number): Promise<LogLine[]>
+  journal(filter: JournalFilter): Promise<JournalPage>
+  updates(): Promise<UpdateStatus>
+  startUpdate(what: UpdateKind): Promise<void>
+  /** Restarts or shuts down the server; the connection goes soon after. */
+  power(how: PowerKind): Promise<void>
+  settings(): Promise<Settings>
+  changeSetting(change: SettingChange): Promise<void>
+  /** One's own password; the current one proves who asks. */
+  changePassword(current: string, password: string): Promise<void>
+  /** The apps Kura ships and the last job (administrators). */
+  catalog(): Promise<Catalog>
+  /** Starts installing, updating or removing one app. */
+  changeApp(change: AppChange): Promise<void>
+  /** A folder of the signed-in user's own view of the disk; their home when no path is given. */
+  files(path?: string): Promise<Folder>
+  fileChange(change: FileChange): Promise<void>
+  trash(): Promise<Trashed[]>
+  /** Where a file's bytes are: a download, or shown in the page when `inline` and it is a picture or plain text. */
+  fileUrl(path: string, inline?: boolean): string
+  /** A text file's content, for a preview. */
+  fileText(path: string): Promise<string>
+  /** A new file at `path`; refused when something is there. */
+  upload(path: string, data: Blob): Promise<void>
+  /** Opens a shell of `size` for the signed-in user. */
+  terminal(size: { cols: number; rows: number }, handlers: TerminalHandlers): TerminalSession
 }

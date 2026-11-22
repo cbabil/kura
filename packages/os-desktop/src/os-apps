@@ -1,0 +1,145 @@
+#!/bin/bash
+# __BRAND__-apps — what Kura Desktop's App Catalog does (ADR-032). Run as
+# root by __BRAND__-helper, as a systemd unit of its own, with arguments the
+# helper has already checked; everything is checked again here.
+#
+# An app is one of the templates in /usr/lib/__BRAND__/catalog/<id>/ (a
+# compose file and its facts), installed into /srv/apps/<id>/: the compose
+# file, a .env with the port chosen, and data/ for what the app keeps.
+#
+# Usage: __BRAND__-apps install <id> <port> | update <id> | remove <id> [data]
+
+set -euo pipefail
+
+ROOT="${APPS_ROOT:-}"   # a test's root folder; empty on a device
+BRAND="__BRAND__"
+CATALOG="${ROOT}/usr/lib/${BRAND}/catalog"
+APPS="${ROOT}/srv/apps"
+ADMIN_GROUP="sudo"
+ID_RE='^[a-z][a-z0-9-]{1,30}$'
+ZONE_RE='^[A-Za-z0-9][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'
+
+fail() { echo "$*" >&2; exit 1; }
+
+# app_id <id>: fails for what is not an app's name
+app_id() { [[ "$1" =~ ${ID_RE} ]] || fail "not an app's name"; }
+
+# template <id>: the app's folder in the catalog; fails for anything else
+template() {
+    app_id "$1"
+    [ -f "${CATALOG}/$1/compose.yaml" ] && [ -f "${CATALOG}/$1/app.json" ] || fail "no such app in the catalog"
+    echo "${CATALOG}/$1"
+}
+
+# installed <id>: Kura installed it (its .env names the port); the same
+# rule the desktop reads the folder by
+installed() { grep -Eqs '^KURA_PORT=[0-9]+$' "${APPS}/$1/.env"; }
+
+# port_free <port>: nothing listens on it, over TCP or UDP
+port_free() { [ -z "$(ss -Hltnu "sport = :$1" 2>/dev/null)" ]; }
+
+# compose <id> <arguments>: docker compose for the app, under its own name
+compose() {
+    local id="$1"
+    shift
+    docker compose --project-name "${BRAND}-${id}" --project-directory "${APPS}/${id}" \
+        --file "${APPS}/${id}/compose.yaml" --env-file "${APPS}/${id}/.env" "$@"
+}
+
+# write_env <id> <port>: the values the compose file takes
+write_env() {
+    local id="$1" zone=""
+    read -r zone < "${ROOT}/etc/timezone" 2>/dev/null || true
+    [[ "${zone}" =~ ${ZONE_RE} ]] || zone="UTC"
+    {
+        echo "KURA_PORT=$2"
+        echo "KURA_DATA=/srv/apps/${id}/data"
+        echo "KURA_TZ=${zone}"
+        echo "KURA_VERSION=$(jq -r .version "${CATALOG}/${id}/app.json")"
+    } > "${APPS}/${id}/.env.new"
+    mv "${APPS}/${id}/.env.new" "${APPS}/${id}/.env"
+}
+
+# forget <id>: takes the app's own two files away; its data stays
+forget() { rm -f "${APPS:?}/${1:?}/compose.yaml" "${APPS:?}/${1:?}/.env"; }
+
+cmd_install() {
+    local id="${1:-}" port="${2:-}" from fixed folder
+    from="$(template "${id}")" || exit 1
+    ! installed "${id}" || fail "already installed"
+    # A project of the owner's own under that name is not Kura's to replace
+    [ ! -e "${APPS}/${id}/compose.yaml" ] && [ ! -e "${APPS}/${id}/.env" ] || fail "something else is in /srv/apps/${id}"
+    [[ "${port}" =~ ^[0-9]{4,5}$ ]] && [ "${port}" -ge 1024 ] && [ "${port}" -le 65535 ] || fail "not a port from 1024 to 65535"
+    port_free "${port}" || fail "port ${port} is in use"
+    for fixed in $(jq -r '.fixedPorts[]' "${from}/app.json"); do
+        [ "${fixed}" != "${port}" ] || fail "port ${port} is one this app needs for something else"
+        port_free "${fixed}" || fail "port ${fixed}, which this app needs, is in use"
+    done
+    # What an app keeps (its database, its secrets) is for root and the
+    # administrators, not for every account on the server
+    install -d -m 0755 "${APPS}/${id}"
+    install -d -m 0750 -g "${ADMIN_GROUP}" "${APPS}/${id}/data"
+    # Folders the administrators fill themselves (films, music)
+    for folder in $(jq -r '.shared[]' "${from}/app.json"); do
+        [[ "${folder}" =~ ^[a-z]+$ ]] || fail "not a folder name in the template"
+        install -d -m 2775 -g "${ADMIN_GROUP}" "${APPS}/${id}/data/${folder}"
+    done
+    install -m 0644 "${from}/compose.yaml" "${APPS}/${id}/compose.yaml"
+    write_env "${id}" "${port}"
+    if ! { compose "${id}" pull && compose "${id}" up --detach; }; then
+        # Nothing half-installed is left; data that was already there stays
+        compose "${id}" down --remove-orphans || true
+        forget "${id}"
+        fail "the app did not start"
+    fi
+    echo "Installed ${id} on port ${port}."
+}
+
+cmd_update() {
+    local id="${1:-}" from port dir
+    from="$(template "${id}")" || exit 1
+    installed "${id}" || fail "not installed"
+    dir="${APPS}/${id}"
+    port="$(sed -n 's/^KURA_PORT=//p' "${dir}/.env")"
+    # The app as it is, kept until the new version runs
+    cp -p "${dir}/compose.yaml" "${dir}/compose.yaml.before"
+    cp -p "${dir}/.env" "${dir}/.env.before"
+    install -m 0644 "${from}/compose.yaml" "${dir}/compose.yaml"
+    write_env "${id}" "${port}"
+    if ! { compose "${id}" pull && compose "${id}" up --detach; }; then
+        # Back to what was running: the version shown stays the one installed
+        mv "${dir}/compose.yaml.before" "${dir}/compose.yaml"
+        mv "${dir}/.env.before" "${dir}/.env"
+        compose "${id}" up --detach || true
+        fail "the app was not updated"
+    fi
+    rm -f "${dir:?}/compose.yaml.before" "${dir:?}/.env.before"
+    echo "Updated ${id}."
+}
+
+cmd_remove() {
+    local id="${1:-}" data="${2:-}"
+    # Not asked of the catalog: an app a later Kura no longer ships can go too
+    app_id "${id}"
+    installed "${id}" || fail "not installed"
+    [ -z "${data}" ] || [ "${data}" = "data" ] || fail "remove takes 'data' or nothing"
+    [ ! -f "${APPS}/${id}/compose.yaml" ] || compose "${id}" down --remove-orphans || fail "the app did not stop"
+    forget "${id}"
+    if [ "${data}" = "data" ]; then
+        rm -rf "${APPS:?}/${id:?}"
+        echo "Removed ${id} and its data."
+    else
+        echo "Removed ${id}. Its data stays in /srv/apps/${id}/data."
+    fi
+}
+
+main() {
+    local command="${1:-}"
+    shift || true
+    case "${command}" in
+        install | update | remove) "cmd_${command}" "$@" ;;
+        *) fail "Usage: ${BRAND}-apps install <id> <port> | update <id> | remove <id> [data]" ;;
+    esac
+}
+
+main "$@"

@@ -1,6 +1,7 @@
 #!/bin/bash
 # __BRAND__-config — device configuration manager
-# Reads /etc/__BRAND__/config.json and applies network + hostname settings.
+# Reads /etc/__BRAND__/config.json and applies network + hostname settings:
+# Wi-Fi networks, a static Ethernet address, the host name.
 
 set -euo pipefail
 
@@ -89,6 +90,53 @@ method=auto
 NMEOF
 }
 
+# The Ethernet address (Settings, ADR-029): once config.json has asked for a
+# "manual" one, Kura keeps one NetworkManager connection for any Ethernet
+# device, with that address or, back on "auto", the network's. One Ethernet
+# port is assumed; with two, NetworkManager picks.
+IPV4_RE='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
+setup_ethernet() {
+    local conn="${NM_CONN_DIR}/__BRAND__-ethernet.nmconnection" method address gateway dns ipv4 tmp
+    method=$(jq -r '.networkConfig.ethernet.ipv4.method // "auto"' "${CONFIG_PATH}")
+    if [[ "${method}" != "manual" ]]; then
+        # Never given an address by Kura: NetworkManager's own connection stays.
+        # Given one before: Kura's connection stays and asks the network, since
+        # NetworkManager makes its own only for a device that has none.
+        [[ -e "${conn}" ]] || return 0
+        ipv4="method=auto"
+    else
+        address=$(jq -r '.networkConfig.ethernet.ipv4.address // empty' "${CONFIG_PATH}")
+        gateway=$(jq -r '.networkConfig.ethernet.ipv4.gateway // empty' "${CONFIG_PATH}")
+        dns=$(jq -r '(.networkConfig.ethernet.ipv4.dns // []) | map(. + ";") | join("")' "${CONFIG_PATH}")
+        if ! [[ "${address%/*}" =~ ${IPV4_RE} ]] || ! [[ "${address##*/}" =~ ^[0-9]{1,2}$ ]] ||
+            ! [[ "${gateway}" =~ ${IPV4_RE} ]] || ! [[ "${dns}" =~ ^([0-9.]+\;)*$ ]]; then
+            log_warning "Skipping an Ethernet address that is not one"
+            return 0
+        fi
+        ipv4="method=manual"$'\n'"address1=${address},${gateway}"$'\n'"dns=${dns}"
+    fi
+    tmp="${conn}.new"
+    (umask 077 && cat > "${tmp}") <<NMEOF
+[connection]
+id=__BRAND__-ethernet
+type=ethernet
+autoconnect-priority=10
+
+[ipv4]
+${ipv4}
+
+[ipv6]
+method=auto
+NMEOF
+    if cmp -s "${tmp}" "${conn}"; then
+        rm -f "${tmp}"
+    else
+        mv "${tmp}" "${conn}"
+        nmcli connection reload || log_warning "NetworkManager did not reload its connections"
+        nmcli connection up __BRAND__-ethernet || log_warning "The Ethernet address was not applied yet"
+    fi
+}
+
 apply_hostname() {
     local desired current
     desired=$(jq -r '.hostname // empty' "${CONFIG_PATH}")
@@ -102,6 +150,8 @@ apply_hostname() {
         return 0
     fi
     log_info "Hostname set to ${desired}"
+    # <host>.local follows (ADR-030); without avahi this does nothing
+    systemctl try-restart avahi-daemon.service 2>/dev/null || true
     # The name resolves to this machine through its 127.0.1.1 entry
     local hosts
     hosts=$(awk -v h="${desired}" '$1 == "127.0.1.1" { print "127.0.1.1\t" h; next } { print }' \
@@ -116,6 +166,7 @@ apply_config() {
     fi
 
     setup_wifi
+    setup_ethernet
     apply_hostname
 }
 

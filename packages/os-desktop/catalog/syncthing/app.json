@@ -1,0 +1,12 @@
+{
+  "id": "syncthing",
+  "name": "Syncthing",
+  "version": "1.29.2",
+  "port": 8384,
+  "fixedPorts": [
+    21027,
+    22000
+  ],
+  "shared": [],
+  "homepage": "https://syncthing.net"
+}

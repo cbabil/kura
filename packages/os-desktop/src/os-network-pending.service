@@ -1,0 +1,16 @@
+# An Ethernet address changed in Settings goes back unless it is kept
+# (ADR-029). The timer for that does not survive a restart, and a restart is
+# what people do when a server stops answering: so the address goes back at
+# boot too, while the record of the earlier one is still there.
+[Unit]
+Description=__BRAND_NAME__ undoes an unconfirmed network change
+After=__BRAND__-firstboot.service
+Before=__BRAND__-config.service
+ConditionPathExists=/var/lib/__BRAND__/network-previous.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/__BRAND__/__BRAND__-settings network-revert
+
+[Install]
+WantedBy=multi-user.target

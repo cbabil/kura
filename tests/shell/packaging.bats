@@ -87,6 +87,9 @@ fake_rootfs() {
     file_has "${control}" "Version: 0.6.0"
     file_has "${control}" "Architecture: arm64"
     file_has "${control}" "Maintainer: "
+    # what Kura needs from Debian, from the list in the repo, so an upgraded
+    # device gets a package a later version added (ADR-030)
+    file_has "${control}" "Depends: bash, jq, systemd, avahi-daemon"
     [ -x "${STAGE}/DEBIAN/postinst" ]
     file_has "${STAGE}/DEBIAN/postinst" "/usr/lib/kura/pkg-hooks.sh"
     run grep -c "__BRAND" "${STAGE}/DEBIAN/postinst"
@@ -171,6 +174,8 @@ link() { echo "${PKG_ROOT}/etc/systemd/system/$1.wants/$2"; }
     [ "$status" -eq 0 ]
     file_has "${BATS_TEST_TMPDIR}/systemctl" "systemctl daemon-reload"
     file_has "${BATS_TEST_TMPDIR}/systemctl" "systemctl try-restart kura-helper.service kura-desktopd.service kura-issue.service"
+    # avahi takes Kura's settings (its drop-in came with this package)
+    file_has "${BATS_TEST_TMPDIR}/systemctl" "systemctl try-restart avahi-daemon.service"
     # the rest (hardening, new units) takes effect at the next start: say so
     [ -e "${PKG_ROOT}/run/reboot-required" ]
 }

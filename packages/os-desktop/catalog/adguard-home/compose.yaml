@@ -1,0 +1,19 @@
+# AdGuard Home, as Kura's App Catalog installs it (ADR-032). KURA_PORT and
+# KURA_DATA come from the .env beside this file; the image is pinned and
+# moves with Kura's releases.
+services:
+  adguard-home:
+    image: adguard/adguardhome:v0.107.56
+    container_name: kura-adguard-home
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: ${KURA_TZ}
+    ports:
+      - "${KURA_PORT}:3000/tcp"
+      - "53:53/tcp"
+      - "53:53/udp"
+    volumes:
+      - ${KURA_DATA}/work:/opt/adguardhome/work
+      - ${KURA_DATA}/conf:/opt/adguardhome/conf

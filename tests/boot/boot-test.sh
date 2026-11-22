@@ -142,6 +142,7 @@ check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
 check "core services active" services_active
 check "Docker answers" docker_answers
+check "answers to <host>.local on the local network" mdns_answers
 # Kura Desktop (ADR-023)
 if [ "${DESKTOP}" = false ]; then
     check "desktop: off as the setup file asked, nothing on 443" desktop_off
@@ -153,8 +154,16 @@ else
     check "desktop: a wrong password is refused" desktop_wrong_password_refused
     check "desktop: a request without X-Kura-Request is refused" desktop_csrf_refused
     check "desktop: server under 40 MB resident" desktop_rss
-    [ "${KURA_TEST_SCREENSHOTS:-}" != 1 ] ||
-        check "desktop: sign-in and desktop screenshots (signin.png, desktop.png)" desktop_screens
+    check "desktop: the helper lists Docker's containers" desktop_containers
+    check "desktop: the helper reads the journal" desktop_journal
+    check "desktop: shows the installed version" desktop_version
+    check "desktop: the helper reads the settings" desktop_settings
+    check "desktop: a setting is changed by the root command" desktop_setting_changes
+    check "desktop: files are the user's own, through their agent" desktop_files
+    if [ "${KURA_TEST_SCREENSHOTS:-}" = 1 ]; then
+        check "desktop: sign-in, desktop, terminal, containers and console screenshots" desktop_screens
+        check "desktop: no terminal's shell outlives its window" wait_for "terminals closed" desktop_terminals_closed
+    fi
 fi
 if [ -n "${SETUP}" ]; then
     check "login screen says the setup was applied" wait_for "kura-issue" setup_shown

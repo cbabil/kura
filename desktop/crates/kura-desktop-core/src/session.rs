@@ -1,5 +1,6 @@
 //! In-memory sign-in sessions: 256-bit random ids that end after 12 hours
-//! idle, at sign-out, or when desktopd restarts.
+//! idle, at sign-out, or when desktopd restarts. The helper keeps its
+//! tickets in the same kind of store ([`IdleStore`]).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -15,19 +16,39 @@ pub const MAX_SESSIONS: usize = 256;
 pub struct SessionUser {
     pub name: String,
     pub uid: u32,
-    /// Member of `sudo`; kept for D2, where admin actions arrive.
+    /// Member of `sudo` at sign-in, for what the interface offers. The
+    /// helper checks membership again on every action.
     pub admin: bool,
 }
 
-struct Entry {
-    user: SessionUser,
+/// A sign-in as desktopd keeps it: the user, and the helper's ticket that
+/// proves the sign-in to the helper (never sent to the browser).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Session {
+    pub user: SessionUser,
+    pub ticket: String,
+}
+
+struct Entry<T> {
+    value: T,
+    created: Instant,
     last_seen: Instant,
 }
 
-/// Thread-safe store of live sessions.
-#[derive(Default)]
-pub struct SessionStore {
-    inner: Mutex<HashMap<String, Entry>>,
+/// Thread-safe store of values under random ids, each dropped after
+/// [`IDLE_TIMEOUT`] without use, and at a maximum age when one is set.
+pub struct IdleStore<T> {
+    inner: Mutex<HashMap<String, Entry<T>>>,
+    max_age: Option<Duration>,
+}
+
+/// desktopd's live sessions.
+pub type SessionStore = IdleStore<Session>;
+
+impl<T> Default for IdleStore<T> {
+    fn default() -> Self {
+        Self { inner: Mutex::new(HashMap::new()), max_age: None }
+    }
 }
 
 /// A new random session id: 32 bytes from the OS, hex encoded.
@@ -40,53 +61,94 @@ pub fn new_session_id() -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-impl SessionStore {
+impl<T: Clone> IdleStore<T> {
     /// Creates an empty store.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Starts a session for `user` and returns its id.
-    pub fn create(&self, user: SessionUser, now: Instant) -> String {
+    /// A store whose values also end `max_age` after they were created,
+    /// used or not.
+    pub fn with_max_age(max_age: Duration) -> Self {
+        Self { max_age: Some(max_age), ..Self::default() }
+    }
+
+    fn live(&self, e: &Entry<T>, now: Instant) -> bool {
+        now.duration_since(e.last_seen) < IDLE_TIMEOUT
+            && self.max_age.is_none_or(|max| now.duration_since(e.created) < max)
+    }
+
+    /// Keeps `value` under a new random id and returns the id.
+    pub fn create(&self, value: T, now: Instant) -> String {
+        self.create_capped(value, now, usize::MAX, |_| false)
+    }
+
+    /// As [`IdleStore::create`], keeping at most `max` values that are
+    /// `same` (one user's, say): the oldest of those go first, so one owner
+    /// cannot push the others out.
+    pub fn create_capped(&self, value: T, now: Instant, max: usize, same: impl Fn(&T) -> bool) -> String {
         let id = new_session_id();
         let mut map = self.lock();
-        map.retain(|_, e| now.duration_since(e.last_seen) < IDLE_TIMEOUT);
+        map.retain(|_, e| self.live(e, now));
+        loop {
+            let mut own: Vec<(&String, Instant)> =
+                map.iter().filter(|(_, e)| same(&e.value)).map(|(k, e)| (k, e.last_seen)).collect();
+            if own.len() < max {
+                break;
+            }
+            own.sort_by_key(|(_, seen)| *seen);
+            let oldest = own[0].0.clone();
+            map.remove(&oldest);
+        }
         if map.len() >= MAX_SESSIONS {
             let oldest = map.iter().min_by_key(|(_, e)| e.last_seen).map(|(k, _)| k.clone());
             if let Some(k) = oldest {
                 map.remove(&k);
             }
         }
-        map.insert(id.clone(), Entry { user, last_seen: now });
+        map.insert(id.clone(), Entry { value, created: now, last_seen: now });
         id
     }
 
-    /// Returns the session's user and marks it used, or `None` when the id is
+    /// Returns the value and marks it used, or `None` when the id is
     /// unknown or has been idle too long (it is then removed).
-    pub fn touch(&self, id: &str, now: Instant) -> Option<SessionUser> {
-        self.with_live(id, now, SessionUser::clone)
+    pub fn touch(&self, id: &str, now: Instant) -> Option<T> {
+        self.with_live(id, now, T::clone)
     }
 
-    /// Marks a session used without copying its user; false when it has
+    /// Marks a session used without copying its value; false when it has
     /// ended (and it is then removed).
     pub fn keep_alive(&self, id: &str, now: Instant) -> bool {
         self.with_live(id, now, |_| ()).is_some()
     }
 
-    fn with_live<T>(&self, id: &str, now: Instant, f: impl FnOnce(&SessionUser) -> T) -> Option<T> {
+    fn with_live<R>(&self, id: &str, now: Instant, f: impl FnOnce(&T) -> R) -> Option<R> {
         let mut map = self.lock();
-        let entry = map.get_mut(id)?;
-        if now.duration_since(entry.last_seen) >= IDLE_TIMEOUT {
+        if !self.live(map.get(id)?, now) {
             map.remove(id);
             return None;
         }
+        let entry = map.get_mut(id)?;
         entry.last_seen = now;
-        Some(f(&entry.user))
+        Some(f(&entry.value))
     }
 
-    /// Ends a session; unknown ids are ignored.
-    pub fn remove(&self, id: &str) {
-        self.lock().remove(id);
+    /// Ends a session and returns its value; unknown ids give `None`.
+    pub fn remove(&self, id: &str) -> Option<T> {
+        self.lock().remove(id).map(|e| e.value)
+    }
+
+    /// Puts `value` back under the id it had (see [`IdleStore::remove`]).
+    pub fn restore(&self, id: &str, value: T, now: Instant) {
+        self.lock().insert(id.to_owned(), Entry { value, created: now, last_seen: now });
+    }
+
+    /// Ends every session whose value is `gone`; how many there were.
+    pub fn remove_where(&self, gone: impl Fn(&T) -> bool) -> usize {
+        let mut map = self.lock();
+        let before = map.len();
+        map.retain(|_, e| !gone(&e.value));
+        before - map.len()
     }
 
     /// The number of sessions held, live or not yet pruned.
@@ -99,73 +161,11 @@ impl SessionStore {
         self.len() == 0
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Entry>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Entry<T>>> {
         // A panic while holding the lock cannot leave the map inconsistent.
         self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn user(name: &str) -> SessionUser {
-        SessionUser { name: name.into(), uid: 1000, admin: false }
-    }
-
-    #[test]
-    fn ids_are_256_bit_hex_and_unique() {
-        let a = new_session_id();
-        assert_eq!(a.len(), 64);
-        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_ne!(a, new_session_id());
-    }
-
-    #[test]
-    fn touch_keeps_a_session_alive_until_idle_timeout() {
-        let store = SessionStore::new();
-        let t0 = Instant::now();
-        let id = store.create(user("kura"), t0);
-        let cases = [(Duration::from_secs(60), true), (IDLE_TIMEOUT - Duration::from_secs(1), true)];
-        let mut now = t0;
-        for (step, alive) in cases {
-            now += step;
-            assert_eq!(store.touch(&id, now).is_some(), alive);
-        }
-        assert!(store.keep_alive(&id, now));
-        assert!(!store.keep_alive(&id, now + IDLE_TIMEOUT));
-        assert!(store.is_empty(), "expired session is removed");
-        assert!(store.touch("unknown", now).is_none());
-    }
-
-    #[test]
-    fn remove_ends_a_session() {
-        let store = SessionStore::new();
-        let now = Instant::now();
-        let id = store.create(user("kura"), now);
-        store.remove(&id);
-        store.remove("unknown");
-        assert!(store.touch(&id, now).is_none());
-    }
-
-    #[test]
-    fn the_store_is_bounded_and_drops_the_oldest() {
-        let store = SessionStore::new();
-        let t0 = Instant::now();
-        let first = store.create(user("first"), t0);
-        for i in 1..=MAX_SESSIONS {
-            store.create(user("x"), t0 + Duration::from_secs(i as u64));
-        }
-        assert_eq!(store.len(), MAX_SESSIONS);
-        assert!(store.touch(&first, t0 + Duration::from_secs(999)).is_none());
-    }
-
-    #[test]
-    fn create_prunes_expired_sessions() {
-        let store = SessionStore::new();
-        let t0 = Instant::now();
-        store.create(user("old"), t0);
-        store.create(user("new"), t0 + IDLE_TIMEOUT);
-        assert_eq!(store.len(), 1);
-    }
-}
+mod tests;

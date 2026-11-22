@@ -15,6 +15,20 @@ const PATHS = {
   offline: 'M5 4h14v11H5zM7 18h10M4 20L20 2',
   sun: 'M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5',
+  play: 'M8 5v14l11-7z',
+  stop: 'M7 7h10v10H7z',
+  restart: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
+  log: 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5',
+  back: 'M15 5l-7 7 7 7',
+  update: 'M12 4v10M8 10l4 4 4-4M5 19h14',
+  power: 'M12 3v9M7 6.5a8 8 0 1 0 10 0',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 20c0-4 4-6 8-6s8 2 8 6',
+  clock: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16M12 8v4l3 2',
+  folder: 'M3 6h6l2 2h10v11H3z',
+  file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
+  home: 'M3 11l9-7 9 7M5 10v10h14V10',
+  gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1',
 } as const
 
 export type GlyphName = keyof typeof PATHS

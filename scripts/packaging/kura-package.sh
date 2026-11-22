@@ -20,8 +20,12 @@ kura_owned() {
     ( cd "$1" && find \
         "usr/bin/${b}-config" "usr/bin/${b}-security" "usr/lib/${b}" \
         usr/lib/systemd/system/"${b}"-*.service usr/lib/systemd/system/"${b}"-*.timer \
+        "usr/lib/systemd/system/xrdp.service.d/10-${b}.conf" \
+        "usr/lib/systemd/system/avahi-daemon.service.d/10-${b}.conf" \
         usr/share/dbus-1/system.d/io.kura.Helper.conf \
         "usr/lib/sysusers.d/${b}-desktop.conf" "usr/lib/tmpfiles.d/${b}-desktop.conf" \
+        "usr/lib/sysusers.d/${b}-kiosk.conf" \
+        "etc/avahi/services/${b}-desktop.service" \
         etc/update-motd.d "etc/NetworkManager/conf.d/00-${b}-network.conf" "etc/profile.d/${b}.sh" \
         "etc/apt/apt.conf.d/52${b}-upgrades" \
         etc/apt/apt.conf.d/53"${b}"-*-upgrades "etc/apt/apt.conf.d/90${b}-efi" \
@@ -30,6 +34,12 @@ kura_owned() {
         "etc/apt/preferences.d/${b}-archive" \
         "usr/share/plymouth/themes/${b}" usr/share/grub/themes/kura \
         \( -type f -o -type l \) -print 2>/dev/null ) | sort
+}
+
+# kura_depends <list-file>: the package's Depends line, from one package a
+# line (comments and blank lines aside)
+kura_depends() {
+    grep -vE '^[[:space:]]*(#|$)' "$1" | paste -sd, - | sed 's/,/, /g'
 }
 
 # kura_units <rootfs> <brand>: "<target> <unit>" for each Kura unit the image
@@ -69,7 +79,7 @@ Architecture: ${arch}
 Maintainer: Kura (https://github.com/cbabil/kura)
 Section: admin
 Priority: optional
-Depends: bash, jq, systemd
+Depends: $(kura_depends "${here}/../../config/package-depends.list")
 Description: Kura's own programs, units and settings
  The parts of the Kura home-server OS that Debian's packages do not
  provide. Installing a newer version moves the device to that Kura version.

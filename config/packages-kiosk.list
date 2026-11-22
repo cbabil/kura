@@ -1,0 +1,17 @@
+# The local screen (ADR-033): Kura Desktop on the machine's own display.
+# Only in a PC image built with OS_KIOSK="true"; never on the Raspberry Pi.
+# cage is a compositor for one full-screen program; cog is a small browser.
+cage
+cog
+# Remote Desktop (ADR-035): Debian's RDP server, the X server its sessions
+# run in, a small browser for X (cog has no X version in Debian), and a
+# window manager that keeps it full screen
+xrdp
+xorgxrdp
+xserver-xorg-core
+x11-common
+surf
+matchbox-window-manager
+# Drivers for the screen, and a font for the browser's own pages
+libgl1-mesa-dri
+fonts-inter

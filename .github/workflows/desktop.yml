@@ -2,8 +2,9 @@ name: Desktop
 
 # Kura Desktop's Rust server (ADR-023, ADR-024). The Mac runs the unit tests
 # with fakes; this workflow proves the Linux parts: the real /proc and /sys,
-# systemd over D-Bus, PAM in kura-helper, an end-to-end sign-in, and the
-# x86_64 and aarch64 binaries for the images.
+# systemd over D-Bus, PAM in kura-helper, an end-to-end sign-in, the helper's
+# terminal, Docker and journal actions (ADR-027), and the x86_64 and aarch64
+# binaries for the images.
 
 on:
   push:
@@ -71,11 +72,13 @@ jobs:
           password="$(openssl rand -hex 16)"
           echo "::add-mask::${password}"
           echo "KURA_PAM_PASSWORD=${password}" >> "$GITHUB_ENV"
-          for u in kura-ci kura-ci-old; do
-            sudo useradd -m "$u"
+          for u in kura-ci kura-ci-old kura-ci-guest; do
+            sudo useradd -m -s /bin/bash "$u"
             echo "$u:${password}" | sudo chpasswd
           done
           sudo chage -d 0 kura-ci-old
+          # kura-ci is the administrator of the end-to-end test, kura-ci-guest is not
+          sudo usermod -aG sudo kura-ci
 
       - name: Linux tests against the runner (/proc, /sys, systemd)
         run: make test-live
@@ -87,7 +90,7 @@ jobs:
           KURA_PAM_EXPIRED_USER: kura-ci-old
 
       - name: End to end
-        run: make e2e E2E_USER=kura-ci
+        run: make e2e E2E_USER=kura-ci E2E_GUEST=kura-ci-guest
 
   # Both architectures. On a push, images.yml builds them for the images
   # already, so only pull requests and manual runs build them here.

@@ -8,4 +8,4 @@ import type { Api } from './types'
 
 export const api: Api = import.meta.env.VITE_MOCK === '1' ? createMockApi() : httpApi
 export type * from './types'
-export { DAY_POINTS, DAY_STEP_MS, HOUR_POINTS } from './types'
+export { ApiError, DAY_POINTS, DAY_STEP_MS, HOUR_POINTS } from './types'

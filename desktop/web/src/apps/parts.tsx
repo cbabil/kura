@@ -1,7 +1,8 @@
-/** Building blocks shared by Activity Monitor's views: cards, tiles, tables, dots. */
+/** Building blocks shared by the apps: cards, tiles, tables, dots, notices and monospaced text. */
 import type { ReactNode } from 'react'
-import { Box, Paper, Table, TableBody, TableCell, TableHead, TableRow, type SxProps } from '@mui/material'
-import { colors } from '../../theme'
+import { Box, List, ListItemButton, ListItemIcon, ListItemText, Paper, Table, TableBody, TableCell, TableHead, TableRow, type SxProps } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import { Glyph, type GlyphName } from '../icons/Glyph'
 
 /** An outlined card (radius and border from the theme's Paper "outlined"). */
 export function Card({ children, sx }: { children: ReactNode; sx?: SxProps }) {
@@ -44,9 +45,8 @@ export function Legend({ items }: { items: { color: string; label: string }[] })
   )
 }
 
-export const STATE_COLORS: Record<string, string> = {
-  active: colors.success, failed: colors.error, activating: colors.warning, deactivating: colors.warning,
-}
+/** A systemd unit's name as people say it: without ".service". */
+export const unitName = (name: string) => name.replace(/\.service$/, '')
 
 export interface Column<T> {
   label: string
@@ -84,7 +84,50 @@ export function DataTable<T>(p: { rows: T[]; columns: Column<T>[]; rowKey(r: T):
   )
 }
 
+/** The stack for anything that must line up: logs, images, the terminal. */
+export const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'
+
+/** A message in the middle of a window: nothing to show, not allowed, or not answering. */
+export function Notice({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <Box role="status" sx={{ flex: 1, display: 'grid', placeItems: 'center', p: 3, textAlign: 'center', color: 'text.secondary' }}>
+      <Box>
+        {children}
+        {action && <Box sx={{ mt: 1.5 }}>{action}</Box>}
+      </Box>
+    </Box>
+  )
+}
+
 /** A view's scrolling body: the window stays put, the content scrolls. */
 export function ViewBody({ children }: { children: ReactNode }) {
   return <Box className="no-scrollbar" sx={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto', p: '18px 20px' }}>{children}</Box>
+}
+
+/** The sections of an app, down its side (along its top on a phone). */
+export function Sidebar<V extends string>(p: {
+  label: string
+  views: readonly V[]
+  current: V
+  compact: boolean
+  glyph(view: V): GlyphName
+  name(view: V): string
+  onChoose(view: V): void
+}) {
+  const k = useTheme().kura
+  return (
+    <List component="nav" aria-label={p.label} dense disablePadding sx={{
+      width: p.compact ? 'auto' : 186, flexShrink: 0, p: p.compact ? 1 : '12px 8px', bgcolor: k.chrome,
+      borderRight: p.compact ? 0 : 1, borderBottom: p.compact ? 1 : 0, borderColor: 'divider',
+      display: 'flex', flexDirection: p.compact ? 'row' : 'column', overflowX: 'auto', gap: '2px',
+    }}>
+      {p.views.map((v) => (
+        <ListItemButton key={v} selected={v === p.current} aria-current={v === p.current ? 'page' : undefined} onClick={() => p.onChoose(v)}
+          sx={{ borderRadius: '7px', flexGrow: 0, py: '4px', px: 1, '&.Mui-selected': { color: k.selected } }}>
+          <ListItemIcon sx={{ minWidth: 25, color: 'inherit' }}><Glyph name={p.glyph(v)} /></ListItemIcon>
+          <ListItemText primary={p.name(v)} slotProps={{ primary: { noWrap: true, sx: { fontSize: 13 } } }} />
+        </ListItemButton>
+      ))}
+    </List>
+  )
 }

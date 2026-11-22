@@ -1,0 +1,16 @@
+# Home Assistant, as Kura's App Catalog installs it (ADR-032). KURA_PORT and
+# KURA_DATA come from the .env beside this file; the image is pinned and
+# moves with Kura's releases.
+services:
+  home-assistant:
+    image: ghcr.io/home-assistant/home-assistant:2025.1.4
+    container_name: kura-home-assistant
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: ${KURA_TZ}
+    ports:
+      - "${KURA_PORT}:8123/tcp"
+    volumes:
+      - ${KURA_DATA}/config:/config

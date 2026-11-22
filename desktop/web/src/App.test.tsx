@@ -1,7 +1,7 @@
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMockApi, MOCK_PASSWORD } from './api/mock'
-import type { Api } from './api'
+import { ApiError, type Api } from './api'
 import { App } from './App'
 
 async function signIn(api: Api) {
@@ -26,7 +26,7 @@ describe('App', () => {
     const dock = screen.getByRole('navigation', { name: 'Dock' })
     await userEvent.click(within(dock).getByLabelText('Files'))
     const files = await screen.findByRole('dialog', { name: 'Files' })
-    expect(within(files).getByText('Arrives in a coming update of Kura.')).toBeInTheDocument()
+    expect(await within(files).findByRole('navigation', { name: 'Places' })).toBeInTheDocument()
     await userEvent.click(within(files).getByLabelText('Minimize'))
     await userEvent.click(within(dock).getByLabelText('Files (minimised)'))
     expect(screen.getByRole('dialog', { name: 'Files' })).toBeVisible()
@@ -47,6 +47,47 @@ describe('App', () => {
     await act(() => vi.advanceTimersByTimeAsync(500))
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ theme: expect.stringMatching(/light|dark/) }))
     vi.useRealTimers()
+  })
+
+  it('leaves Ctrl K to the shell inside a terminal, where only ⌘K opens the launcher', async () => {
+    await signIn(createMockApi())
+    const terminal = document.body.appendChild(document.createElement('div'))
+    terminal.dataset.keys = 'app'
+    const press = (init: KeyboardEventInit) => terminal.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true, ...init }))
+    act(() => void press({ ctrlKey: true }))
+    expect(screen.queryByRole('combobox', { name: 'Search' })).toBeNull()
+    act(() => void press({ metaKey: true }))
+    expect(screen.getByRole('combobox', { name: 'Search' })).toBeInTheDocument()
+    terminal.remove()
+  })
+
+  it('returns to the sign-in page when the server says the session has ended', async () => {
+    const api = createMockApi()
+    api.containers = () => Promise.reject(new ApiError('signed_out'))
+    await signIn(api)
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Dock' })).getByLabelText('Containers'))
+    expect(await screen.findByLabelText('User name')).toBeInTheDocument()
+  })
+
+  it('offers Restart and Shut Down to administrators only, and opens Settings from the update notice', async () => {
+    const api = createMockApi()
+    api.power = vi.fn(() => Promise.resolve())
+    await signIn(api)
+    await userEvent.click(screen.getByRole('button', { name: 'Kura menu' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Shut Down…' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Shut down this server?' })).getByRole('button', { name: 'Shut Down' }))
+    expect(api.power).toHaveBeenCalledWith('shutdown')
+  })
+
+  it('opens Settings on Updates from the notice, and hides the power items from others', async () => {
+    render(<App api={createMockApi()} />)
+    await userEvent.type(await screen.findByLabelText('User name'), 'guest')
+    await userEvent.type(screen.getByLabelText('Password'), `${MOCK_PASSWORD}{Enter}`)
+    await userEvent.click(await screen.findByRole('button', { name: 'Kura 0.6.2 is available' }))
+    expect(within(await screen.findByRole('dialog', { name: 'Settings' })).getByText('Kura 0.6.2 is available.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Kura menu' }))
+    expect(await screen.findByRole('menuitem', { name: 'Sign Out guest' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Restart…' })).toBeNull()
   })
 
   it('tells the user when the layout cannot be saved', async () => {

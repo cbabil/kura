@@ -19,6 +19,8 @@ source "$(dirname "$0")/systemd-units.sh"
 source "$(dirname "$0")/install-firstboot.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/auto-updates.sh"
+# shellcheck source=scripts/common/mdns.sh
+source "$(dirname "$0")/mdns.sh"
 # shellcheck disable=SC1091
 source "$(dirname "$0")/kura-repo.sh"
 
@@ -121,6 +123,7 @@ enable_unit "${ROOTFS}" sysinit.target "/usr/lib/systemd/system/${BRAND}-securit
 
 # ---- Security updates install themselves; the clock stays in sync ----
 install_auto_updates "${ROOTFS}" "${BRAND}"
+install_mdns "${ROOTFS}" "${BRAND}"
 # ...and Kura's own versions come from its repository, when the owner asks
 install_kura_repo "${ROOTFS}" "${BRAND}" "${OS_RELEASE_REPO:-cbabil/kura}"
 

@@ -7,7 +7,7 @@ use crate::helper::DevHelper;
 
 fn app() -> (Router, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
-    let state = AppState::new(Arc::new(DevHelper), StatsHub::new(), SysRoot::new(dir.path()), dir.path());
+    let state = AppState::new(Arc::new(DevHelper::default()), StatsHub::new(), SysRoot::new(dir.path()), dir.path());
     (router(Arc::new(state)), dir)
 }
 

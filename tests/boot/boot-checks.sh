@@ -369,6 +369,15 @@ services_active() {
     [ "$(echo "${states}" | grep -cx active)" -eq "${#units[@]}" ]
 }
 
+# kura.local (ADR-030): avahi runs, listens for mDNS, and the firewall lets
+# the local network ask
+mdns_answers() {
+    ssh_run "systemctl is-active --quiet avahi-daemon.service" &&
+        ssh_run "systemctl show -p ExecStart avahi-daemon.service" | grep -q -- '-f /usr/lib/[a-z]*/avahi-daemon.conf' &&
+        sudo_run "ss -Hlun 'sport = :5353'" | grep -q 5353 &&
+        sudo_run "iptables -S INPUT" | grep -q -- '-p udp .*--dport 5353 .*-j ACCEPT'
+}
+
 docker_answers() { sudo_run "docker info --format '{{.ServerVersion}}'" | grep -q .; }
 
 record_identity() {

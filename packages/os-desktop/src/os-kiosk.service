@@ -1,0 +1,48 @@
+# __BRAND_NAME__ Desktop on the machine's own screen (ADR-033). A browser
+# that fills the display, run as its own user with no rights, on the
+# seventh console; the first stays the login prompt (Ctrl+Alt+F1). Nothing
+# starts on a machine without a display, or without the browser (an image
+# built without OS_KIOSK has this unit and not the programs).
+[Unit]
+Description=__BRAND_NAME__ Desktop on this machine's screen
+Documentation=https://github.com/cbabil/kura
+# After the desktop's server, but not bringing it up: an owner who turned
+# the desktop off keeps it off
+After=__BRAND__-desktopd.service systemd-user-sessions.service plymouth-quit-wait.service systemd-logind.service dbus.socket
+Wants=systemd-logind.service dbus.socket
+Conflicts=getty@tty7.service
+ConditionPathExists=/usr/bin/cage
+
+[Service]
+User=__BRAND__-kiosk
+# A session of its own: logind gives it the screen and the keyboard, so the
+# user needs no group for either
+PAMName=login
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+UtmpIdentifier=tty7
+UtmpMode=user
+# What the browser keeps (a signed-in session) is gone with a restart
+RuntimeDirectory=__BRAND__-kiosk
+RuntimeDirectoryMode=0700
+Environment=HOME=/run/__BRAND__-kiosk
+ExecCondition=/usr/lib/__BRAND__/__BRAND__-kiosk display
+ExecStart=/usr/lib/__BRAND__/__BRAND__-kiosk run
+# Turned off, the screen goes back to the console's login
+ExecStopPost=+-/usr/bin/chvt 1
+# A browser that was closed comes back: the screen is never left blank
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+# Not "strict", and not ProtectHome (which hides /run/user): the session's
+# own folder under /run must stay writable
+ProtectSystem=full
+InaccessiblePaths=-/home -/root
+PrivateTmp=yes
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

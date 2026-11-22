@@ -4,15 +4,14 @@
  * the stats itself, so the rest of the desktop does not re-render with them.
  */
 import { memo, useState } from 'react'
-import { Box, List, ListItemButton, ListItemIcon, ListItemText, ToggleButton, ToggleButtonGroup } from '@mui/material'
-import { useTheme } from '@mui/material/styles'
+import { Box, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import type { Range } from '../../api'
-import { Glyph, type GlyphName } from '../../icons/Glyph'
+import type { GlyphName } from '../../icons/Glyph'
 import { useI18n, type MessageKey } from '../../i18n'
-import { useStats, useSystem } from '../../shell/useStats'
+import { useStats, useSystem } from '../../shell/DesktopData'
 import { WindowToolbar } from '../../shell/WindowToolbar'
 import type { AppProps } from '../types'
-import { ViewBody } from './parts'
+import { Sidebar, ViewBody } from '../parts'
 import { CpuView, MemoryView, NetworkView, ServicesView, StorageView, SummaryView, type ViewProps } from './views'
 
 export const ACTIVITY_VIEWS = ['Summary', 'CPU', 'Memory', 'Storage', 'Network', 'Services'] as const
@@ -53,7 +52,6 @@ export function RangeSwitch({ range, onRange }: { range: Range; onRange(r: Range
 const isView = (v: string): v is ActivityView => v in VIEWS
 
 function ActivityMonitorBody({ view: requested, setView, compact }: AppProps) {
-  const k = useTheme().kura
   const { t } = useI18n()
   const stats = useStats()
   const system = useSystem()
@@ -65,19 +63,8 @@ function ActivityMonitorBody({ view: requested, setView, compact }: AppProps) {
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: compact ? 'column' : 'row', minWidth: 0, minHeight: 0 }}>
       <WindowToolbar><RangeSwitch range={range} onRange={setRange} /></WindowToolbar>
-      <List component="nav" aria-label={t('activity.sections')} dense disablePadding sx={{
-        width: compact ? 'auto' : 186, flexShrink: 0, p: compact ? 1 : '12px 8px', bgcolor: k.chrome,
-        borderRight: compact ? 0 : 1, borderBottom: compact ? 1 : 0, borderColor: 'divider',
-        display: 'flex', flexDirection: compact ? 'row' : 'column', overflowX: 'auto', gap: '2px',
-      }}>
-        {ACTIVITY_VIEWS.map((v) => (
-          <ListItemButton key={v} selected={v === view} aria-current={v === view ? 'page' : undefined} onClick={() => setView(v)}
-            sx={{ borderRadius: '7px', flexGrow: 0, py: '4px', px: 1, '&.Mui-selected': { color: k.selected } }}>
-            <ListItemIcon sx={{ minWidth: 25, color: 'inherit' }}><Glyph name={VIEWS[v].glyph} /></ListItemIcon>
-            <ListItemText primary={t(VIEW_LABELS[v])} slotProps={{ primary: { noWrap: true, sx: { fontSize: 13 } } }} />
-          </ListItemButton>
-        ))}
-      </List>
+      <Sidebar<ActivityView> label={t('activity.sections')} views={ACTIVITY_VIEWS} current={view} compact={compact}
+        glyph={(v) => VIEWS[v].glyph} name={(v) => t(VIEW_LABELS[v])} onChoose={setView} />
       {waiting ? (
         <ViewBody><Box sx={{ color: 'text.secondary' }}>{t('activity.waiting')}</Box></ViewBody>
       ) : (

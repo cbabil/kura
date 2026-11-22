@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CssBaseline, Snackbar, useMediaQuery } from '@mui/material'
 import { ThemeProvider } from '@mui/material/styles'
 import type { Api, User } from './api'
+import { watchSession } from './api/watchSession'
 import { I18nProvider, pickLanguage, useI18n } from './i18n'
 import { Desktop } from './shell/Desktop'
 import { SignIn } from './signin/SignIn'
@@ -32,6 +33,9 @@ export function App({ api }: { api: Api }) {
     api.session().then(setUser, () => setUser(null))
   }, [api])
 
+  // A request refused because the session ended brings the sign-in page back
+  const watched = useMemo(() => watchSession(api, () => setUser(null)), [api])
+
   const signOut = async () => {
     await api.logout().catch(() => undefined) // signed out locally either way
     setUser(null)
@@ -42,7 +46,7 @@ export function App({ api }: { api: Api }) {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         {user === null && <SignIn api={api} onSignedIn={setUser} />}
-        {user && <Desktop api={api} user={user} prefs={prefs} mode={mode} onPrefs={update} onSignOut={signOut} />}
+        {user && <Desktop api={watched} user={user} prefs={prefs} mode={mode} onPrefs={update} onSignOut={signOut} />}
         <SaveFailed open={saveFailed} onClose={dismissSaveError} />
       </ThemeProvider>
     </I18nProvider>

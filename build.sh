@@ -336,6 +336,13 @@ install_packages() {
         PACKAGES="${PACKAGES} ${TARGET_PKGS}"
     fi
 
+    # The local screen (ADR-033): a browser and its drivers, PC image only
+    if [ "${OS_KIOSK:-false}" = "true" ] && [ "${TARGET}" = "x86_64" ]; then
+        local KIOSK_PKGS
+        KIOSK_PKGS=$(grep -v '^#' "${CONFIG_DIR}/packages-kiosk.list" | grep -v '^$' | tr '\n' ' ')
+        PACKAGES="${PACKAGES} ${KIOSK_PKGS}"
+    fi
+
     # Suppress debconf dialog warnings inside chroot
     export DEBIAN_FRONTEND=noninteractive
 
@@ -412,7 +419,11 @@ install_os_pkgs() {
     local ARCH="$2"
 
     "${SCRIPTS_DIR}/common/install-os-pkgs.sh" "${ROOTFS}" "${PACKAGES_DIR}"
-    "${SCRIPTS_DIR}/common/install-desktop.sh" "${ROOTFS}" "${PACKAGES_DIR}" "$(build_desktop "${ARCH}")"
+    # The local screen is for the PC image only (ADR-033), whatever .env says
+    local kiosk="false" kiosk_files="false"
+    [ "${ARCH}" != "amd64" ] || { kiosk="${OS_KIOSK:-false}"; kiosk_files="true"; }
+    OS_KIOSK="${kiosk}" OS_KIOSK_FILES="${kiosk_files}" \
+        "${SCRIPTS_DIR}/common/install-desktop.sh" "${ROOTFS}" "${PACKAGES_DIR}" "$(build_desktop "${ARCH}")"
 }
 
 # ============================================================================
@@ -434,8 +445,8 @@ build_desktop() {
     if [ -n "${OS_DESKTOP_DIST:-}" ]; then
         local given="${OS_DESKTOP_DIST}/${machine}"
         if [ "${OS_DESKTOP:-true}" != "false" ] && \
-           { [ ! -f "${given}/kura-desktopd" ] || [ ! -f "${given}/kura-helper" ]; }; then
-            print_error "Kura Desktop: ${given} lacks kura-desktopd or kura-helper (OS_DESKTOP_DIST)"
+           { [ ! -f "${given}/kura-desktopd" ] || [ ! -f "${given}/kura-helper" ] || [ ! -f "${given}/kura-agent" ]; }; then
+            print_error "Kura Desktop: ${given} lacks kura-desktopd, kura-helper or kura-agent (OS_DESKTOP_DIST)"
             exit 1
         fi
         echo "${given}"
@@ -443,7 +454,7 @@ build_desktop() {
     fi
     local dist="${PROJECT_DIR}/desktop/dist/${machine}"
     if [ "${OS_DESKTOP:-true}" != "false" ] && \
-       { [ ! -f "${dist}/kura-desktopd" ] || [ ! -f "${dist}/kura-helper" ]; }; then
+       { [ ! -f "${dist}/kura-desktopd" ] || [ ! -f "${dist}/kura-helper" ] || [ ! -f "${dist}/kura-agent" ]; }; then
         print_status "  Building Kura Desktop for ${machine}..." >&2
         make -C "${PROJECT_DIR}/desktop" dist ARCH="${machine}" >&2
     fi

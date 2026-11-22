@@ -7,7 +7,7 @@ import { ActivityMonitor, RangeSwitch } from './ActivityMonitor'
 
 function show(view: string, api: Api = createMockApi(), compact = false) {
   const setView = vi.fn()
-  renderWithTheme(<ActivityMonitor view={view} setView={setView} compact={compact} />, { api })
+  renderWithTheme(<ActivityMonitor view={view} setView={setView} compact={compact} minimized={false} />, { api })
   return setView
 }
 
@@ -40,7 +40,7 @@ describe('ActivityMonitor', () => {
   })
 
   it('speaks the desktop’s language, plurals included', async () => {
-    renderWithTheme(<ActivityMonitor view="Summary" setView={() => {}} compact={false} />, { api: createMockApi(), lang: 'fr' })
+    renderWithTheme(<ActivityMonitor view="Summary" setView={() => {}} compact={false} minimized={false} />, { api: createMockApi(), lang: 'fr' })
     expect(await screen.findByText('Processeur · 4 cœurs')).toBeInTheDocument()
     expect(screen.getByText('4 volumes')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Résumé' })).toHaveAttribute('aria-current', 'page')

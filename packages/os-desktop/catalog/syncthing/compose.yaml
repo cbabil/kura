@@ -1,0 +1,19 @@
+# Syncthing, as Kura's App Catalog installs it (ADR-032). KURA_PORT and
+# KURA_DATA come from the .env beside this file; the image is pinned and
+# moves with Kura's releases.
+services:
+  syncthing:
+    image: syncthing/syncthing:1.29.2
+    container_name: kura-syncthing
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: ${KURA_TZ}
+    ports:
+      - "${KURA_PORT}:8384/tcp"
+      - "22000:22000/tcp"
+      - "22000:22000/udp"
+      - "21027:21027/udp"
+    volumes:
+      - ${KURA_DATA}/config:/var/syncthing

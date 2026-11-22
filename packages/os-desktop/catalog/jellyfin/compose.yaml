@@ -1,0 +1,18 @@
+# Jellyfin, as Kura's App Catalog installs it (ADR-032). KURA_PORT and
+# KURA_DATA come from the .env beside this file; the image is pinned and
+# moves with Kura's releases.
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.10.7
+    container_name: kura-jellyfin
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: ${KURA_TZ}
+    ports:
+      - "${KURA_PORT}:8096/tcp"
+    volumes:
+      - ${KURA_DATA}/config:/config
+      - ${KURA_DATA}/cache:/cache
+      - ${KURA_DATA}/media:/media:ro

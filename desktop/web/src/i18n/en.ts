@@ -5,6 +5,11 @@
  * a language with more plural forms (few, many, two, zero) adds those keys
  * too. Keys are grouped by where they appear.
  */
+import { apps } from './en.apps'
+import { catalog } from './en.catalog'
+import { files } from './en.files'
+import { settings } from './en.settings'
+
 export const en = {
   // Brand (the name and the kanji stay as they are in every language)
   'brand.kicker': 'THE STOREHOUSE',
@@ -29,6 +34,8 @@ export const en = {
   'menu.about': 'About Kura',
   'menu.language': 'Language…',
   'menu.signOut': 'Sign Out {name}',
+  'menu.restart': 'Restart…',
+  'menu.shutdown': 'Shut Down…',
   'menu.file': 'File',
   'menu.view': 'View',
   'menu.window': 'Window',
@@ -45,6 +52,22 @@ export const en = {
   'status.light': 'Use light theme',
   'status.dark': 'Use dark theme',
   'status.search': 'Search (Ctrl K)',
+  'status.update': 'Kura {version} is available',
+  'status.restartDue': 'A restart is needed to finish an update',
+  'status.updateShort': 'Update {version}',
+  'status.restartShort': 'Restart needed',
+
+  // Restart and shut down
+  'power.restart.title': 'Restart this server?',
+  'power.shutdown.title': 'Shut down this server?',
+  'power.restart.text': 'Everything running on it stops for a moment. Containers set to restart come back by themselves.',
+  'power.shutdown.text': 'Everything running on it stops. To start it again you will need to be at the machine.',
+  'power.restart.confirm': 'Restart',
+  'power.shutdown.confirm': 'Shut Down',
+  'power.cancel': 'Cancel',
+  'power.restart.going': 'The server is restarting. This page comes back by itself when it has.',
+  'power.shutdown.going': 'The server is shutting down. You can close this page.',
+  'power.failed': 'The server did not do it. Try again, or use the console.',
 
   // Windows and dock
   'window.close': 'Close',
@@ -147,6 +170,11 @@ export const en = {
   'state.failed': 'failed',
   'state.activating': 'starting',
   'state.deactivating': 'stopping',
+
+  ...apps,
+  ...catalog,
+  ...files,
+  ...settings,
 
   // Size units, smallest first (binary multiples)
   'unit.b': 'B',

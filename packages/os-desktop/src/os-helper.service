@@ -1,6 +1,10 @@
-# __BRAND_NAME__ Desktop helper (ADR-023): the root side of the desktop. In D1 it
-# only checks passwords through PAM; the D-Bus policy lets only the
-# __BRAND__-desktop user call it. No network.
+# __BRAND_NAME__ Desktop helper (ADR-023, ADR-027): the root side of the desktop.
+# It checks passwords through PAM, asks systemd to start a terminal's shell as
+# the signed-in user (the shell runs in a unit of its own, outside this
+# sandbox), talks to Docker on its socket, reads the journal, and has
+# settings changed and updates installed by units of their own. The D-Bus
+# policy lets only the __BRAND__-desktop user call it. No network: Docker's
+# socket and the system bus are unix sockets.
 [Unit]
 Description=__BRAND_NAME__ Desktop helper
 After=dbus.service
@@ -24,6 +28,17 @@ RestrictNamespaces=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
+ProtectKernelLogs=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+# It reads what Docker and the journal answer: bounded, so a flood cannot
+# take the machine's memory.
+MemoryMax=128M
+TasksMax=64
+# Passwords for the settings command wait here for a moment, in files only
+# root can read (/run/__BRAND__-helper, 0700).
+RuntimeDirectory=__BRAND__-helper
+RuntimeDirectoryMode=0700
 # pam_faillock and the login records
 ReadWritePaths=-/run/faillock -/var/log
 

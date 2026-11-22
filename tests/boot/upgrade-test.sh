@@ -129,9 +129,12 @@ upgrade() {
     local url="http://10.0.2.2:${HTTP_PORT}/kura-adopt.sh"
     if ssh_run "dpkg-query -W -f='\${Status}' ${BRAND} 2>/dev/null" | grep -q "install ok installed"; then
         report "  path: apt (the release has the ${BRAND} package)"
-        # the test repository in place of the release's, with the adopt script's own steps
+        # the test repository in place of the release's, put there by the
+        # adopt script's own step. Then as an owner upgrades: every list is
+        # refreshed, Debian's too, since the package may need something new
+        # from Debian (avahi, for one: ADR-030).
         sudo_run "bash -c 'curl -fsSL ${url} > /run/adopt.sh && ADOPT_SOURCED=1 . /run/adopt.sh &&
-            adopt_files && adopt_refresh &&
+            adopt_files && apt-get update -o DPkg::Lock::Timeout=120 &&
             DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade ${BRAND}'"
     else
         report "  path: kura-adopt.sh (the release has no ${BRAND} package)"

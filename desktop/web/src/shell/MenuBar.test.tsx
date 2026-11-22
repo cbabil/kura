@@ -15,7 +15,7 @@ const menus: AppMenu[] = [
 const kuraMenu: AppMenu = { title: '蔵', items: [{ label: 'menu.about', run: about }] }
 
 function setup(over: Partial<Parameters<typeof MenuBar>[0]> = {}, api: Api = createMockApi()) {
-  const h = { onRun: vi.fn((item) => item.run({})), onToggleTheme: vi.fn(), onLauncher: vi.fn() }
+  const h = { onRun: vi.fn((item) => item.run({})), onToggleTheme: vi.fn(), onLauncher: vi.fn(), onUpdates: vi.fn() }
   renderWithTheme(
     <MenuBar appName="Activity Monitor" kuraMenu={kuraMenu} menus={menus} compact={false} mode="dark" {...h} {...over} />,
     { api },
@@ -52,6 +52,28 @@ describe('MenuBar', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Search (Ctrl K)' }))
     expect(h.onToggleTheme).toHaveBeenCalled()
     expect(h.onLauncher).toHaveBeenCalled()
+  })
+})
+
+describe('the update notice', () => {
+  const status = { current: '0.6.1', available: null, restartRequired: false, job: null }
+
+  it('appears when an update waits, and opens where it is installed', async () => {
+    const h = setup()
+    const notice = await screen.findByRole('button', { name: 'Kura 0.6.2 is available' })
+    expect(notice).toHaveTextContent('Update 0.6.2')
+    // right beside the date and time
+    expect(notice.parentElement?.lastElementChild?.previousElementSibling).toBe(notice)
+    await userEvent.click(notice)
+    expect(h.onUpdates).toHaveBeenCalled()
+  })
+
+  it('says when a restart is due, and stays away when there is nothing to do', async () => {
+    setup({}, { ...createMockApi(), updates: () => Promise.resolve({ ...status, restartRequired: true }) })
+    expect(await screen.findByRole('button', { name: 'A restart is needed to finish an update' })).toHaveTextContent('Restart needed')
+    setup({}, { ...createMockApi(), updates: () => Promise.resolve(status) })
+    await act(async () => {})
+    expect(screen.getAllByRole('button', { name: /restart is needed|is available/ })).toHaveLength(1)
   })
 })
 

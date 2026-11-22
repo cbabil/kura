@@ -1,14 +1,21 @@
 //! The D-Bus object `/io/kura/Helper` with interface `io.kura.Helper1` (the 1
 //! versions the interface), owned as `io.kura.Helper`. The bus policy lets
-//! only `kura-desktop` call it, and the helper checks the caller's uid again.
+//! only `kura-desktop` call it, and the helper checks the caller's uid again
+//! on every call. Sign-in and terminals have methods of their own; every
+//! other action of [`crate::policy::Action`] goes through `Ask` by name.
+//! All are done by [`Service`]; refusals travel as the helper's own D-Bus errors
+//! ([`crate::refusal::HelperError`]).
 
 use std::sync::Arc;
 
-use kura_desktop_core::auth::{AuthOutcome, valid_user_name};
+use zbus::OwnedFd;
 use zbus::message::Header;
 use zeroize::Zeroizing;
 
-use crate::authenticate::Authenticator;
+use crate::refusal::HelperError;
+use crate::service::Service;
+
+type Result<T> = std::result::Result<T, HelperError>;
 
 /// The helper's well-known name on the system bus.
 pub const BUS_NAME: &str = "io.kura.Helper";
@@ -17,31 +24,31 @@ pub const OBJECT_PATH: &str = "/io/kura/Helper";
 
 /// The served object.
 pub struct HelperIface {
-    auth: Arc<Authenticator>,
+    service: Arc<Service>,
     /// The only uid allowed to call, checked with the bus on every call on
     /// top of the bus policy; `None` on a private peer-to-peer connection.
     caller: Option<u32>,
 }
 
 impl HelperIface {
-    /// Serves `auth` over D-Bus to callers running as `caller`.
-    pub fn new(auth: Arc<Authenticator>, caller: Option<u32>) -> Self {
-        Self { auth, caller }
+    /// Serves `service` over D-Bus to callers running as `caller`.
+    pub fn new(service: Arc<Service>, caller: Option<u32>) -> Self {
+        Self { service, caller }
     }
 
-    /// True when the message's sender runs as the allowed uid.
-    async fn caller_allowed(&self, conn: &zbus::Connection, hdr: &Header<'_>) -> bool {
-        let Some(allowed) = self.caller else { return true };
+    /// Refuses a message whose sender does not run as the allowed uid.
+    async fn admit(&self, conn: &zbus::Connection, hdr: &Header<'_>) -> Result<()> {
+        let Some(allowed) = self.caller else { return Ok(()) };
         let uid = async {
             let sender = hdr.sender().ok_or(zbus::Error::MissingField)?.to_owned();
             let bus = zbus::fdo::DBusProxy::new(conn).await?;
             Ok::<u32, zbus::Error>(bus.get_connection_unix_user(sender.into()).await?)
         };
         match uid.await {
-            Ok(uid) if uid == allowed => true,
+            Ok(uid) if uid == allowed => Ok(()),
             other => {
-                tracing::warn!("refused Authenticate from {other:?}");
-                false
+                tracing::warn!(member = ?hdr.member(), "refused a call from {other:?}");
+                Err(HelperError::Caller("only kura-desktopd may call this".into()))
             }
         }
     }
@@ -49,78 +56,100 @@ impl HelperIface {
 
 #[zbus::interface(name = "io.kura.Helper1")]
 impl HelperIface {
-    /// Checks a password: `(ok, reason, admin)`, where reason is "", "wrong"
-    /// or "expired". The password is wiped from memory afterwards.
+    /// Checks a password: `(ok, reason, admin, ticket)`, where reason is "",
+    /// "wrong" or "expired" and the ticket is what every other method needs.
     async fn authenticate(
         &self,
         #[zbus(header)] hdr: Header<'_>,
         #[zbus(connection)] conn: &zbus::Connection,
         user: String,
         password: String,
-    ) -> zbus::fdo::Result<(bool, String, bool)> {
+    ) -> Result<(bool, String, bool, String)> {
         let password = Zeroizing::new(password);
-        if !self.caller_allowed(conn, &hdr).await {
-            return Err(zbus::fdo::Error::AccessDenied("only kura-desktopd may call this".into()));
-        }
-        let auth = self.auth.clone();
-        let check = move || {
-            let outcome = auth.authenticate(&user, &password);
-            let shown = if valid_user_name(&user) { user.as_str() } else { "(invalid)" };
-            tracing::info!(user = shown, ok = matches!(outcome, AuthOutcome::Ok { .. }), "authenticate");
-            outcome
-        };
-        let outcome = tokio::task::spawn_blocking(check).await.unwrap_or_else(|e| {
-            tracing::error!("password check failed: {e}");
-            AuthOutcome::Wrong
-        });
-        Ok(outcome.to_wire())
+        self.admit(conn, &hdr).await?;
+        let (outcome, ticket) = self.service.authenticate(user, password).await;
+        let (ok, reason, admin) = outcome.to_wire();
+        Ok((ok, reason, admin, ticket))
+    }
+
+    /// Marks a ticket used, for a session that is open but asks nothing.
+    async fn keep_alive(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+    ) -> Result<()> {
+        self.admit(conn, &hdr).await?;
+        Ok(self.service.keep_alive(&ticket)?)
+    }
+
+    /// Ends a ticket and the terminals it opened.
+    async fn sign_out(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+    ) -> Result<()> {
+        self.admit(conn, &hdr).await?;
+        self.service.sign_out(&ticket).await;
+        Ok(())
+    }
+
+    /// Starts the ticket's user a login shell: the terminal's id and the
+    /// master end of its pseudo-terminal.
+    async fn open_terminal(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(String, OwnedFd)> {
+        self.admit(conn, &hdr).await?;
+        let (id, master) = self.service.open_terminal(&ticket, cols, rows).await?;
+        Ok((id, master.into()))
+    }
+
+    /// Starts the ticket's user their file agent: its id (which
+    /// `CloseTerminal` takes) and the socket to it.
+    async fn open_files(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+    ) -> Result<(String, OwnedFd)> {
+        self.admit(conn, &hdr).await?;
+        let (id, socket) = self.service.open_files(&ticket).await?;
+        Ok((id, socket.into()))
+    }
+
+    /// Stops a terminal or a file agent the ticket opened.
+    async fn close_terminal(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+        id: String,
+    ) -> Result<()> {
+        self.admit(conn, &hdr).await?;
+        Ok(self.service.close_terminal(&ticket, &id).await?)
+    }
+
+    /// Does the action called `action` (`kura_desktop_core::actions`) with
+    /// its JSON arguments: containers, the journal, updates, power. The
+    /// answer is JSON, or empty.
+    async fn ask(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+        action: String,
+        args: String,
+    ) -> Result<String> {
+        self.admit(conn, &hdr).await?;
+        Ok(self.service.ask(&ticket, &action, &args).await?)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::authenticate::tests::authenticator;
-
-    #[zbus::proxy(interface = "io.kura.Helper1", default_path = "/io/kura/Helper")]
-    trait Helper {
-        fn authenticate(&self, user: &str, password: &str) -> zbus::Result<(bool, String, bool)>;
-    }
-
-    /// A helper and a client over a socket pair; `caller` as in production.
-    async fn peer(caller: Option<u32>) -> (HelperProxy<'static>, zbus::Connection, tempfile::TempDir) {
-        let (auth, dir) = authenticator();
-        let (a, b) = std::os::unix::net::UnixStream::pair().unwrap();
-        let server = zbus::connection::Builder::unix_stream(a)
-            .server(zbus::Guid::generate())
-            .p2p()
-            .serve_at(OBJECT_PATH, HelperIface::new(Arc::new(auth), caller))
-            .build();
-        let client = zbus::connection::Builder::unix_stream(b).p2p().build();
-        let (server, client) = tokio::try_join!(server, client).unwrap();
-        let proxy = HelperProxy::builder(&client).destination(BUS_NAME).build().await.unwrap();
-        (proxy, server, dir)
-    }
-
-    #[tokio::test]
-    async fn answers_over_a_peer_to_peer_bus() {
-        let (proxy, _server, _dir) = peer(None).await;
-        let cases = [
-            ("anna", "kura", (true, "", true)),
-            ("bob", "x", (false, "wrong", false)),
-            ("old", "kura", (false, "expired", false)),
-        ];
-        for (user, password, (ok, reason, admin)) in cases {
-            assert_eq!(proxy.authenticate(user, password).await.unwrap(), (ok, reason.to_owned(), admin), "{user}");
-        }
-    }
-
-    /// Without a bus to vouch for the caller, a helper limited to one uid
-    /// refuses.
-    #[tokio::test]
-    async fn refuses_a_caller_it_cannot_verify() {
-        let (proxy, _server, _dir) = peer(Some(990)).await;
-        let err = proxy.authenticate("anna", "kura").await.unwrap_err();
-        assert!(err.to_string().contains("AccessDenied"), "{err}");
-    }
-}
+mod tests;
