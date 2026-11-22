@@ -244,7 +244,7 @@ The image is built with `admin`/`admin`, but first boot replaces it with a rando
 
 ### Etchwise
 
-Etchwise (a multi-device imager based on Raspberry Pi Imager) lists Kura under Raspberry Pi 5 and Intel NUC (from each release's `etchwise.json`). The entries are:
+[Etchwise](https://github.com/cbabil/etchwise) (a multi-device imager based on Raspberry Pi Imager) lists Kura under Raspberry Pi 5 and Intel NUC (from each release's `etchwise.json`). Download it from [its latest release](https://github.com/cbabil/etchwise/releases/latest). The entries are:
 
 | Device in Etchwise | Image | Download |
 |---|---|---|
