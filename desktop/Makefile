@@ -33,13 +33,15 @@ test-pam:
 e2e: build
 	ci/e2e.sh $(E2E_USER) $(E2E_GUEST)
 
-# Unit coverage. Left out: what only talks to the real system (systemd over
-# D-Bus, PAM). It is Linux-only code with no fakes of its own, so it counts
-# as 0% on Linux and is not compiled at all on a Mac; `test-live`, `test-pam`
-# and `e2e` prove it, against the real thing.
+# Unit coverage. Left out, by exact path: the modules that only talk to
+# systemd over D-Bus. They are Linux-only code with no fakes of their own, so
+# they count as 0% on Linux and are not compiled at all on a Mac;
+# `test-live` and `e2e` prove them, against the real thing. Anything new
+# that is privileged is counted unless it is added to this list on purpose.
+SYSTEM_ONLY := kura-helper/src/(systemd|job)\.rs$$|kura-helper/src/(system|machine|apps|terminal)/systemd\.rs$$
 coverage:
 	$(CARGO) llvm-cov --workspace --fail-under-lines 90 \
-		--ignore-filename-regex '(main\.rs|/tests/|tests\.rs|/systemd\.rs|/job\.rs|/pam\.rs)'
+		--ignore-filename-regex '(main\.rs|/tests/|tests\.rs|$(SYSTEM_ONLY))'
 
 lint:
 	$(CARGO) fmt --all --check
