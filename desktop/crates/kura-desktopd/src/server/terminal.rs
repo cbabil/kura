@@ -56,9 +56,9 @@ impl Drop for Closer {
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             // An already ended shell is "not found", which is fine.
             runtime.spawn(async move {
-                tracing::info!("terminal: asking the helper to close it");
-                let closed = helper.close_terminal(&ticket, &id).await;
-                tracing::info!(ok = closed.is_ok(), "terminal closed");
+                if let Err(e) = helper.close_terminal(&ticket, &id).await {
+                    tracing::debug!("closing a terminal: {e}");
+                }
             });
         }
     }
@@ -102,7 +102,7 @@ pub(super) async fn terminal(
             () = shell_to_browser(&pty, sink) => "the shell ended",
             () = browser_to_shell(&pty, stream, &state, &authed.id) => "the browser left",
         };
-        tracing::info!("terminal: {ended}");
+        tracing::info!(user = %authed.user.name, "terminal closed: {ended}");
         drop(closer);
     })
 }

@@ -142,9 +142,8 @@ impl ShellLauncher for SystemdShell {
     fn close<'a>(&'a self, handle: &'a str) -> Fut<'a, ()> {
         Box::pin(async move {
             // "No such unit" is the usual answer: the shell had already ended.
-            match self.manager.stop_unit(handle, "replace").await {
-                Ok(_) => tracing::info!("stopping {handle}"),
-                Err(e) => tracing::info!("stopping {handle}: {e}"),
+            if let Err(e) = self.manager.stop_unit(handle, "replace").await {
+                tracing::debug!("stopping {handle}: {e}");
             }
         })
     }
