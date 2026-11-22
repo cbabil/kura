@@ -33,8 +33,13 @@ test-pam:
 e2e: build
 	ci/e2e.sh $(E2E_USER) $(E2E_GUEST)
 
+# Unit coverage. Left out: what only talks to the real system (systemd over
+# D-Bus, PAM). It is Linux-only code with no fakes of its own, so it counts
+# as 0% on Linux and is not compiled at all on a Mac; `test-live`, `test-pam`
+# and `e2e` prove it, against the real thing.
 coverage:
-	$(CARGO) llvm-cov --workspace --fail-under-lines 90 --ignore-filename-regex '(main\.rs|/tests/|tests\.rs)'
+	$(CARGO) llvm-cov --workspace --fail-under-lines 90 \
+		--ignore-filename-regex '(main\.rs|/tests/|tests\.rs|/systemd\.rs|/job\.rs|/pam\.rs)'
 
 lint:
 	$(CARGO) fmt --all --check
