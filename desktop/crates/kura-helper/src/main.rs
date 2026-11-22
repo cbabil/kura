@@ -10,7 +10,12 @@ async fn main() -> std::process::ExitCode {
 
     /// The user kura-desktopd runs as: the only caller allowed.
     const CALLER: &str = "kura-desktop";
-    use kura_helper::{Authenticator, BUS_NAME, HelperIface, OBJECT_PATH, pam::LinuxPam};
+    use kura_helper::docker::EngineDocker;
+    use kura_helper::journal::Journalctl;
+    use kura_helper::machine::systemd::SystemdMachine;
+    use kura_helper::system::systemd::SystemdSystem;
+    use kura_helper::terminal::systemd::SystemdShell;
+    use kura_helper::{Authenticator, BUS_NAME, Backends, HelperIface, OBJECT_PATH, Service, pam::LinuxPam};
 
     tracing_subscriber::fmt()
         .with_env_filter("info")
@@ -22,12 +27,24 @@ async fn main() -> std::process::ExitCode {
         return std::process::ExitCode::FAILURE;
     };
     let auth = Arc::new(Authenticator::new(Box::new(LinuxPam), SysRoot::default()));
+    // The name is asked for only once the object is served, so no call can
+    // arrive before the helper can answer it.
     let conn = async {
-        zbus::connection::Builder::system()
-            .name(BUS_NAME)
-            .serve_at(OBJECT_PATH, HelperIface::new(auth, Some(caller)))
-            .build()
-            .await
+        let conn = zbus::Connection::system().await?;
+        let backends = Backends {
+            docker: Arc::new(EngineDocker::default()),
+            journal: Arc::new(Journalctl::default()),
+            shells: Arc::new(SystemdShell::new(&conn).await?),
+            machine: Arc::new(SystemdMachine::new(&conn).await?),
+            system: Arc::new(SystemdSystem::new(&conn).await?),
+            apps: Arc::new(kura_helper::apps::systemd::SystemdApps::new(&conn).await?),
+        };
+        // No terminal can be open yet: the tickets of an earlier helper are gone.
+        backends.shells.sweep().await;
+        let service = Arc::new(Service::new(auth, SysRoot::default(), backends));
+        conn.object_server().at(OBJECT_PATH, HelperIface::new(service, Some(caller))).await?;
+        conn.request_name(BUS_NAME).await?;
+        Ok::<_, zbus::Error>(conn)
     };
     let _conn = match conn.await {
         Ok(c) => c,

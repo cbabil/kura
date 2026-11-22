@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react'
-import { applyMessage, createStatsStore, DesktopDataProvider, emptyStats, useStats, useSystem } from './useStats'
+import { applyMessage, createStatsStore, emptyStats } from './useStats'
+import { DesktopDataProvider, useApi, useStats, useSystem, useUser } from './DesktopData'
 import { createMockApi } from '../api/mock'
 import type { Api, Sample, StatsMessage } from '../api'
 
@@ -61,21 +62,24 @@ describe('stats store', () => {
   })
 })
 
+const anna = { name: 'anna', uid: 1000, admin: true }
+
 function Probe() {
   const t = useStats((st) => st.latest?.t ?? 0)
   const host = useSystem()?.hostname ?? 'none'
-  return <p>{`${host} ${t > 0 ? 'live' : 'idle'}`}</p>
+  const who = `${useUser().name} ${typeof useApi().containers}`
+  return <p title={who}>{`${host} ${t > 0 ? 'live' : 'idle'}`}</p>
 }
 
 describe('DesktopDataProvider', () => {
   it('provides live stats and the system facts', async () => {
-    render(<DesktopDataProvider api={createMockApi()}><Probe /></DesktopDataProvider>)
-    expect(await screen.findByText('kura-nuc live')).toBeInTheDocument()
+    render(<DesktopDataProvider api={createMockApi()} user={anna}><Probe /></DesktopDataProvider>)
+    expect(await screen.findByText('kura-nuc live')).toHaveAttribute('title', 'anna function')
   })
 
   it('keeps going without system facts', async () => {
     const api = { ...createMockApi(), system: () => Promise.reject(new Error('down')) }
-    render(<DesktopDataProvider api={api}><Probe /></DesktopDataProvider>)
+    render(<DesktopDataProvider api={api} user={anna}><Probe /></DesktopDataProvider>)
     await act(async () => {})
     expect(screen.getByText('none live')).toBeInTheDocument()
   })

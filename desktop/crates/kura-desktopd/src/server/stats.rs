@@ -34,13 +34,18 @@ pub(super) async fn stats(
     // The client only sends pings and the close frame.
     ws.max_message_size(MAX_INCOMING)
         .max_frame_size(MAX_INCOMING)
-        .on_upgrade(move |socket| stream(socket, state, authed.id))
+        .on_upgrade(move |socket| stream(socket, state, authed.id, authed.ticket))
 }
+
+/// How often an open desktop tells the helper its ticket is still in use.
+const TICKET_PERIOD: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// Sends until the client leaves or its session ends (sign-out or idle),
 /// checked every sampling period even when no sample comes. Watching keeps
-/// the session alive, as watching is using.
-async fn stream(mut socket: WebSocket, state: Arc<AppState>, id: String) {
+/// the session alive, as watching is using, and with it the helper's
+/// ticket, so both end together.
+async fn stream(mut socket: WebSocket, state: Arc<AppState>, id: String, ticket: String) {
+    let mut ticket_check = tokio::time::interval(TICKET_PERIOD);
     let (snapshot, mut rx) = state.hub.subscribe();
     if socket.send(Message::Text(snapshot.into())).await.is_err() {
         return;
@@ -50,6 +55,13 @@ async fn stream(mut socket: WebSocket, state: Arc<AppState>, id: String) {
         tokio::select! {
             _ = check.tick() => {
                 if !state.sessions.keep_alive(&id, Instant::now()) {
+                    let _ = socket.send(Message::Close(None)).await;
+                    return;
+                }
+            }
+            _ = ticket_check.tick() => {
+                if state.helper.keep_alive(&ticket).await == Err(crate::helper::HelperError::SignedOut) {
+                    state.sessions.remove(&id);
                     let _ = socket.send(Message::Close(None)).await;
                     return;
                 }

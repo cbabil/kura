@@ -3,8 +3,15 @@
 
 mod api;
 mod auth;
+mod catalog;
+mod containers;
+mod files;
 pub mod guard;
+mod journal;
+mod machine;
+mod settings;
 mod stats;
+mod terminal;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -22,7 +29,7 @@ use kura_desktop_core::session::SessionStore;
 use kura_desktop_core::stats::sampler::StatsHub;
 
 use crate::assets::Files;
-use crate::helper::AuthHelper;
+use crate::helper::Helper;
 
 /// The largest sign-in body accepted.
 const MAX_LOGIN_BYTES: usize = 4096;
@@ -36,7 +43,7 @@ connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self';
 pub struct AppState {
     pub sessions: SessionStore,
     pub limiter: RateLimiter,
-    pub helper: Arc<dyn AuthHelper>,
+    pub helper: Arc<dyn Helper>,
     pub prefs: PrefsStore,
     pub hub: Arc<StatsHub>,
     pub root: SysRoot,
@@ -50,16 +57,27 @@ pub struct AppState {
     pub helper_slots: tokio::sync::Semaphore,
     /// How long a wrong password waits before its answer.
     pub fail_delay: std::time::Duration,
+    /// Terminals open at most, over all users; more are refused with 429.
+    pub terminal_slots: Arc<tokio::sync::Semaphore>,
+    /// The file agents of the sessions that use Files.
+    pub files: crate::files::Links,
 }
 
 /// Password checks that may wait on the helper at once.
 pub const HELPER_SLOTS: usize = 4;
 /// The wait after a wrong password (PAM's own delay is turned off).
 pub const FAIL_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+/// Log lines or journal entries sent when the interface names no number.
+pub const DEFAULT_LINES: u32 = 200;
+/// Sessions one user may have at once (one per signed-in browser); the
+/// oldest goes first, so one user cannot sign the others out by signing in.
+pub const MAX_SESSIONS_PER_USER: usize = 8;
+/// Terminals that may be open at once (the helper also counts per user).
+pub const MAX_TERMINALS: usize = 16;
 
 impl AppState {
     /// State with empty sessions and limits, preferences under `state_dir`.
-    pub fn new(helper: Arc<dyn AuthHelper>, hub: Arc<StatsHub>, root: SysRoot, state_dir: &Path) -> Self {
+    pub fn new(helper: Arc<dyn Helper>, hub: Arc<StatsHub>, root: SysRoot, state_dir: &Path) -> Self {
         Self {
             sessions: SessionStore::new(),
             limiter: RateLimiter::new(),
@@ -72,6 +90,8 @@ impl AppState {
             fallback_uid: None,
             helper_slots: tokio::sync::Semaphore::new(HELPER_SLOTS),
             fail_delay: FAIL_DELAY,
+            terminal_slots: Arc::new(tokio::sync::Semaphore::new(MAX_TERMINALS)),
+            files: crate::files::Links::default(),
         }
     }
 }
@@ -86,6 +106,27 @@ pub fn router(state: Arc<AppState>) -> Router {
         // Prefs::parse owns the size limit, so an oversized body gets the JSON 413.
         .route("/api/prefs", get(api::get_prefs).put(api::put_prefs))
         .route("/api/stats", get(stats::stats))
+        .route("/api/terminal", get(terminal::terminal))
+        .route("/api/containers", get(containers::list))
+        .route("/api/containers/{id}/logs", get(containers::logs))
+        .route("/api/containers/{id}/{action}", post(containers::act))
+        .route("/api/journal", get(journal::read))
+        .route("/api/updates", get(machine::status))
+        .route("/api/updates/{what}", post(machine::update))
+        .route("/api/power/{how}", post(machine::power))
+        .route(
+            "/api/settings",
+            get(settings::read).post(settings::change).layer(DefaultBodyLimit::max(settings::MAX_BYTES)),
+        )
+        .route("/api/password", post(settings::password).layer(DefaultBodyLimit::max(settings::MAX_BYTES)))
+        .route(
+            "/api/catalog",
+            get(catalog::read).post(catalog::change).layer(DefaultBodyLimit::max(catalog::MAX_BYTES)),
+        )
+        .route("/api/files", get(files::list).post(files::change).layer(DefaultBodyLimit::max(files::MAX_BYTES)))
+        .route("/api/files/trash", get(files::trash))
+        // An upload is as long as the file: the agent takes it in pieces.
+        .route("/api/files/content", get(files::download).put(files::upload).layer(DefaultBodyLimit::disable()))
         .route("/api/{*rest}", any(|| async { guard::error(StatusCode::NOT_FOUND, "not_found") }))
         .fallback(assets)
         .layer(middleware::from_fn_with_state(state.clone(), guard::csrf))
@@ -105,6 +146,8 @@ async fn security_headers(req: Request, next: Next) -> Response {
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    // Another port of this host is the same site: it must not embed what is here.
+    h.insert("cross-origin-resource-policy", HeaderValue::from_static("same-origin"));
     if api {
         h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     }

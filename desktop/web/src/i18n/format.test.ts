@@ -44,5 +44,6 @@ describe('format', () => {
     expect(en.date(d)).toBe('Tue, Nov 17')
     expect(fr.date(d)).toBe('mar. 17 nov.')
     expect(fr.time(d)).toBe('09:41')
+    expect(en.clock(new Date(2026, 10, 17, 21, 5, 9))).toBe('21:05:09')
   })
 })

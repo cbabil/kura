@@ -1,0 +1,16 @@
+# Uptime Kuma, as Kura's App Catalog installs it (ADR-032). KURA_PORT and
+# KURA_DATA come from the .env beside this file; the image is pinned and
+# moves with Kura's releases.
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1.23.16
+    container_name: kura-uptime-kuma
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      TZ: ${KURA_TZ}
+    ports:
+      - "${KURA_PORT}:3001/tcp"
+    volumes:
+      - ${KURA_DATA}/data:/app/data

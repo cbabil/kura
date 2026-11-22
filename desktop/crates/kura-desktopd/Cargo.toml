@@ -1,6 +1,6 @@
 [package]
 name = "kura-desktopd"
-description = "Kura Desktop's server: HTTPS, sign-in, stats over WebSocket and the embedded interface."
+description = "Kura Desktop's server: HTTPS, sign-in, stats, terminals, containers and the journal, and the embedded interface."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,14 +11,14 @@ build = "build.rs"
 [features]
 # A fake password check (any user, password "kura") and plain HTTP, for
 # development on a Mac. Never in release builds for the image.
-dev-auth = []
+dev-auth = ["dep:kura-helper", "dep:kura-agent", "dep:tempfile"]
 
 [dependencies]
 kura-desktop-core.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 rustls.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
@@ -26,15 +26,24 @@ tracing-subscriber.workspace = true
 zbus.workspace = true
 zeroize.workspace = true
 thiserror.workspace = true
+futures-util.workspace = true
+# The development helper is the real helper's rules over stand-in backends.
+kura-helper = { path = "../kura-helper", optional = true }
+# In development the file agent runs inside desktopd, on a thread.
+kura-agent = { path = "../kura-agent", optional = true }
+tempfile = { workspace = true, optional = true }
+rustix = { workspace = true, features = ["termios", "pty", "process"] }
 
 [dev-dependencies]
-kura-helper = { path = "../kura-helper" }
+# Paused clocks, for timeouts that would take real seconds.
+tokio = { workspace = true, features = ["test-util"] }
+kura-helper = { path = "../kura-helper", features = ["fakes"] }
+kura-agent = { path = "../kura-agent" }
 zbus = { workspace = true, features = ["p2p"] }
 tempfile.workspace = true
 kura-desktop-core = { workspace = true, features = ["fixtures"] }
 tower.workspace = true
 http-body-util.workspace = true
 tokio-tungstenite.workspace = true
-futures-util.workspace = true
 rcgen = { version = "0.14", default-features = false, features = ["ring", "pem", "crypto"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }

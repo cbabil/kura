@@ -6,7 +6,7 @@ use tokio_tungstenite::tungstenite::{self, Message, client::IntoClientRequest};
 
 use super::*;
 
-async fn serve(app: &TestApp) -> SocketAddr {
+pub(super) async fn serve(app: &TestApp) -> SocketAddr {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let service = router(app.state.clone()).into_make_service_with_connect_info::<SocketAddr>();
@@ -14,10 +14,20 @@ async fn serve(app: &TestApp) -> SocketAddr {
     addr
 }
 
-type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+pub(super) type Socket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn connect(addr: SocketAddr, origin: Option<&str>, cookie: Option<&str>) -> Result<Socket, u16> {
-    let mut req = format!("ws://{addr}/api/stats").into_client_request().unwrap();
+    connect_to(addr, "/api/stats", origin, cookie).await
+}
+
+/// Opens the WebSocket at `path`; a refused upgrade gives its status.
+pub(super) async fn connect_to(
+    addr: SocketAddr,
+    path: &str,
+    origin: Option<&str>,
+    cookie: Option<&str>,
+) -> Result<Socket, u16> {
+    let mut req = format!("ws://{addr}{path}").into_client_request().unwrap();
     if let Some(o) = origin {
         req.headers_mut().insert("origin", o.parse().unwrap());
     }

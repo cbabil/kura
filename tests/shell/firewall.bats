@@ -115,3 +115,60 @@ DESKTOP_V6="fe80::/10 fc00::/7"
     run grep -F -- "--dport 443" "${calls}.v4" "${calls}.v6"
     [ "$status" -ne 0 ]
 }
+
+# ---- kura.local (ADR-030): mDNS from the local network only ----
+
+@test "_build_iptables_rules: mDNS opens UDP 5353 to local networks only, in each family" {
+    run _build_iptables_rules 4 false true
+    [ "$status" -eq 0 ]
+    for net in ${DESKTOP_V4}; do
+        grep -qxF -- "-A INPUT -p udp --dport 5353 -s ${net} -j ACCEPT" <<< "$output"
+    done
+    run grep -F -- "--dport 443" <<< "$output"
+    [ "$status" -ne 0 ]
+}
+
+@test "_build_iptables_rules: mDNS is not answered to containers' networks, and not over IPv6" {
+    run _build_iptables_rules 4 false true
+    # Docker's bridges use private ranges too: they are refused first
+    local rules first_accept
+    rules="$(grep -- "--dport 5353" <<< "$output")"
+    [ "$(sed -n 1p <<< "${rules}")" = "-A INPUT -p udp --dport 5353 -i docker0 -j DROP" ]
+    [ "$(sed -n 2p <<< "${rules}")" = "-A INPUT -p udp --dport 5353 -i br-+ -j DROP" ]
+    [ "$(grep -c . <<< "${rules}")" -eq 6 ]
+    [ "$(tail -n 1 <<< "$output")" = "COMMIT" ]
+    # avahi publishes IPv4 addresses only (the ruleset lets no ICMPv6 in)
+    run _build_iptables_rules 6 true true
+    [ "$status" -eq 0 ]
+    run grep -F -- "-p udp" <<< "$output"
+    [ "$status" -ne 0 ]
+}
+
+@test "_build_iptables_rules: without mDNS, no UDP port is open" {
+    for family in 4 6; do
+        run _build_iptables_rules "${family}" true
+        run grep -F -- "-p udp" <<< "$output"
+        [ "$status" -ne 0 ]
+    done
+}
+
+@test "apply_firewall: opens mDNS only when the config says so" {
+    local config="${BATS_TEST_TMPDIR}/hardening.json" calls="${BATS_TEST_TMPDIR}/calls"
+    iptables-restore() { cat >> "${calls}.v4"; }
+    ip6tables-restore() { cat >> "${calls}.v6"; }
+    echo '{"network_security": {"firewall_preset": "strict", "mdns": true}}' > "${config}"
+    run apply_firewall "${config}"
+    [ "$status" -eq 0 ]
+    grep -qF -- "--dport 5353 -s 192.168.0.0/16" "${calls}.v4"
+    run grep -F -- "5353" "${calls}.v6"
+    [ "$status" -ne 0 ]
+    rm -f "${calls}".*
+    echo '{"network_security": {"firewall_preset": "strict", "mdns": false}}' > "${config}"
+    run apply_firewall "${config}"
+    run grep -F -- "5353" "${calls}.v4" "${calls}.v6"
+    [ "$status" -ne 0 ]
+}
+
+@test "the default hardening turns mDNS on" {
+    [ "$(jq -r '.network_security.mdns' "${BATS_TEST_DIRNAME}/../../packages/os-security/src/hardening.json")" = true ]
+}

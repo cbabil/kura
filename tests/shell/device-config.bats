@@ -24,7 +24,7 @@ setup() { load test_helper; }
 }
 
 @test "hardening.json holds only what os-security reads" {
-    run jq -e 'keys == ["network_security"] and (.network_security | keys) == ["firewall_preset"]' \
+    run jq -e 'keys == ["network_security"] and (.network_security | keys) == ["firewall_preset", "mdns"]' \
         "${REPO_ROOT}/packages/os-security/src/hardening.json"
     [ "$status" -eq 0 ]
 }

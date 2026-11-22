@@ -78,5 +78,7 @@ kura_configure() {
     systemd-tmpfiles --create 2>/dev/null || true
     systemctl try-restart "${PKG_BRAND}-helper.service" "${PKG_BRAND}-desktopd.service" \
         "${PKG_BRAND}-issue.service" || true
+    # avahi with Kura's settings, whose drop-in this package brought
+    systemctl try-restart avahi-daemon.service || true
     touch "${PKG_ROOT}/run/reboot-required"
 }

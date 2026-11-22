@@ -1,12 +1,12 @@
 /**
- * The live stats stream as a small store, opened once by the desktop. Only
- * the components that show stats subscribe (Activity Monitor, the menu bar's
- * status), so a sample every 2 s does not re-render the whole desktop.
+ * The live stats stream as a small store, opened once by the desktop
+ * (DesktopData.ts). Only the components that show stats subscribe (Activity
+ * Monitor, the menu bar's status, the Console's unit list), so a sample
+ * every 2 s does not re-render the whole desktop.
  * The server sends the 1 h and 24 h history in the snapshot; the 24 h series
  * gains one point a minute.
  */
-import { createContext, createElement, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { DAY_POINTS, DAY_STEP_MS, HOUR_POINTS, type Api, type Proc, type Range, type Sample, type StatsMessage, type SystemInfo, type Unit } from '../api'
+import { DAY_POINTS, DAY_STEP_MS, HOUR_POINTS, type Api, type Proc, type Range, type Sample, type StatsMessage, type Unit } from '../api'
 
 export interface Stats {
   latest: Sample | null
@@ -63,38 +63,3 @@ export function createStatsStore(api: Api): StatsStore {
       }),
   }
 }
-
-interface DesktopData {
-  store: StatsStore
-  system: SystemInfo | null
-}
-
-const DataContext = createContext<DesktopData | null>(null)
-
-/** Opens the stats stream and fetches the system facts for everything inside it. */
-export function DesktopDataProvider({ api, children }: { api: Api; children: ReactNode }) {
-  const store = useMemo(() => createStatsStore(api), [api])
-  const [system, setSystem] = useState<SystemInfo | null>(null)
-  useEffect(() => store.start(), [store])
-  useEffect(() => {
-    api.system().then(setSystem, () => setSystem(null))
-  }, [api])
-  const value = useMemo(() => ({ store, system }), [store, system])
-  return createElement(DataContext.Provider, { value }, children)
-}
-
-function useData(): DesktopData {
-  const data = useContext(DataContext)
-  if (!data) throw new Error('useStats and useSystem need a DesktopDataProvider')
-  return data
-}
-
-/** Subscribes to the stats; with a selector, re-renders only when the selected value changes. */
-export function useStats(): Stats
-export function useStats<T>(select: (s: Stats) => T): T
-export function useStats<T>(select?: (s: Stats) => T): T | Stats {
-  const { store } = useData()
-  return useSyncExternalStore(store.subscribe, () => (select ? select(store.get()) : store.get()))
-}
-
-export const useSystem = () => useData().system

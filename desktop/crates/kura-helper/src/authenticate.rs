@@ -26,11 +26,6 @@ pub trait Pam: Send + Sync {
 
 /// The group whose members are administrators.
 pub const ADMIN_GROUP: &str = "sudo";
-/// The lowest uid of a person's account (Debian's `FIRST_UID`); root and
-/// system accounts cannot sign in over the network.
-pub const MIN_UID: u32 = 1000;
-/// `nobody`, which is above [`MIN_UID`] but is not a person.
-const NOBODY: u32 = 65534;
 
 /// Checks passwords with a [`Pam`] and looks up `admin`.
 pub struct Authenticator {
@@ -46,11 +41,11 @@ impl Authenticator {
         Self { pam, root, one_at_a_time: Mutex::new(()) }
     }
 
-    /// Checks a sign-in. Blocking. Only people's accounts (uid from
-    /// [`MIN_UID`], not `nobody`) are checked at all.
+    /// Checks a sign-in. Blocking. Only people's accounts
+    /// ([`kura_desktop_core::accounts::Account::is_person`]) are checked at all.
     pub fn authenticate(&self, user: &str, password: &str) -> AuthOutcome {
         let accounts = Accounts::load(&self.root);
-        let person = accounts.by_name(user).is_some_and(|a| a.uid >= MIN_UID && a.uid != NOBODY);
+        let person = accounts.by_name(user).is_some_and(|a| a.is_person());
         if !person || !well_formed(user, password) {
             return AuthOutcome::Wrong;
         }
@@ -82,17 +77,26 @@ pub(crate) mod tests {
         }
     }
 
-    /// People anna, bob and old, plus root, a system account and nobody.
+    /// People anna, bob, old and carl (who has no login shell), plus root,
+    /// a system account and nobody.
     pub(crate) const PASSWD: &str = "root:x:0:0::/root:/bin/sh\ndaemon:x:1:1::/:/bin/sh\n\
-        anna:x:1000:1000::/home/anna:/bin/sh\nbob:x:1001:1001::/home/bob:/bin/sh\n\
-        old:x:1002:1002::/home/old:/bin/sh\nnobody:x:65534:65534::/:/bin/sh\n";
+        anna:x:1000:1000::/home/anna:/bin/sh\nbob:x:1001:1001::/home/bob:/bin/bash\n\
+        old:x:1002:1002::/home/old:/bin/sh\ncarl:x:1003:1003::/home/carl:/usr/sbin/nologin\n\
+        nobody:x:65534:65534::/:/bin/sh\n";
 
-    pub(crate) fn authenticator() -> (Authenticator, tempfile::TempDir) {
+    /// A root with [`PASSWD`], anna in `sudo`, and two login shells.
+    pub(crate) fn root() -> (SysRoot, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join("etc")).unwrap();
         std::fs::write(dir.path().join("etc/group"), "sudo:x:27:anna\n").unwrap();
         std::fs::write(dir.path().join("etc/passwd"), PASSWD).unwrap();
-        (Authenticator::new(Box::new(FakePam), SysRoot::new(dir.path())), dir)
+        std::fs::write(dir.path().join("etc/shells"), "# /etc/shells\n/bin/sh\n/bin/bash\n").unwrap();
+        (SysRoot::new(dir.path()), dir)
+    }
+
+    pub(crate) fn authenticator() -> (Authenticator, tempfile::TempDir) {
+        let (root, dir) = root();
+        (Authenticator::new(Box::new(FakePam), root), dir)
     }
 
     #[test]

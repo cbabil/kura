@@ -1,0 +1,10 @@
+# What the kura package needs from Debian (its Depends), one package a line.
+# A package added here reaches devices that upgrade, not only new images
+# (ADR-030). Keep it short: what is here cannot be removed without removing
+# kura. kura.local is switched off in hardening.json ("mdns": false), not by
+# removing avahi.
+bash
+jq
+systemd
+# kura.local on the local network
+avahi-daemon

@@ -12,6 +12,7 @@ setup() {
     echo '{"network_security": {"firewall_preset": "strict"}}' > "${ROOTFS}/etc/kura/security/hardening.json"
     printf '#!/bin/sh\necho desktopd\n' > "${DIST}/kura-desktopd"
     printf '#!/bin/sh\necho helper\n' > "${DIST}/kura-helper"
+    printf '#!/bin/sh\necho agent\n' > "${DIST}/kura-agent"
     export OS_BRAND=kura OS_NAME=Kura
     INSTALL="${REPO_ROOT}/scripts/common/install-desktop.sh"
     CERT="${REPO_ROOT}/packages/os-desktop/src/os-desktop-cert"
@@ -26,7 +27,34 @@ units() { echo "${ROOTFS}/usr/lib/systemd/system"; }
     [ "$status" -eq 0 ]
     [ -x "${ROOTFS}/usr/lib/kura/kura-desktopd" ]
     [ -x "${ROOTFS}/usr/lib/kura/kura-helper" ]
+    [ -x "${ROOTFS}/usr/lib/kura/kura-agent" ]
     [ -x "${ROOTFS}/usr/lib/kura/kura-desktop-cert" ]
+    [ -x "${ROOTFS}/usr/lib/kura/kura-settings" ]
+    [ -x "${ROOTFS}/usr/lib/kura/kura-apps" ]
+    run grep -c "__BRAND__" "${ROOTFS}/usr/lib/kura/kura-apps"
+    [ "$output" = "0" ]
+    # the catalog's templates, as the repository has them
+    cmp "${REPO_ROOT}/packages/os-desktop/catalog/jellyfin/compose.yaml" "${ROOTFS}/usr/lib/kura/catalog/jellyfin/compose.yaml"
+    [ "$(find "${ROOTFS}/usr/lib/kura/catalog" -name app.json | wc -l)" -ge 6 ]
+    ! grep -q '__BRAND' "${ROOTFS}/usr/lib/kura/kura-settings"
+}
+
+@test "install: an address change left unconfirmed by a restart is undone at boot" {
+    run "${INSTALL}" "${ROOTFS}" "${REPO_ROOT}/packages" "${DIST}"
+    [ "$status" -eq 0 ]
+    local unit="$(units)/kura-network-pending.service"
+    file_has "${unit}" "ConditionPathExists=/var/lib/kura/network-previous.json"
+    file_has "${unit}" "ExecStart=/usr/lib/kura/kura-settings network-revert"
+    [ -L "${ROOTFS}/etc/systemd/system/multi-user.target.wants/kura-network-pending.service" ]
+}
+
+@test "install: the desktop is announced on the local network as an HTTPS service" {
+    run "${INSTALL}" "${ROOTFS}" "${REPO_ROOT}/packages" "${DIST}"
+    [ "$status" -eq 0 ]
+    local service="${ROOTFS}/etc/avahi/services/kura-desktop.service"
+    file_has "${service}" "<type>_https._tcp</type>"
+    file_has "${service}" "<port>443</port>"
+    file_has "${service}" "Kura Desktop on %h"
 }
 
 @test "install: units, D-Bus policy, user and state folder, branded" {

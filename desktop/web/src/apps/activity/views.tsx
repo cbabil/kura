@@ -4,13 +4,13 @@
  * `stats.latest`.
  */
 import type { ReactNode } from 'react'
-import { Box } from '@mui/material'
 import type { Proc, Range, Sample, SystemInfo, Unit, UnitState } from '../../api'
 import { useI18n, type I18n, type MessageKey } from '../../i18n'
 import type { Stats } from '../../shell/useStats'
 import { colors } from '../../theme'
 import { AreaChart, Meter, seriesOf } from './Charts'
-import { Card, DataTable, Dot, Legend, SectionTitle, STATE_COLORS, Tile, TileGrid, ViewBody, type Column } from './parts'
+import { Volumes } from '../Volumes'
+import { Card, DataTable, Dot, Legend, SectionTitle, Tile, TileGrid, unitName, ViewBody, type Column } from '../parts'
 
 export interface ViewProps {
   stats: Stats
@@ -31,7 +31,9 @@ const latestOf = (stats: Stats) => stats.latest as Sample
 const cpuTitle = ({ t, tn }: I18n, system: SystemInfo | null) =>
   system ? tn('activity.cpu', system.cores) : t('activity.view.CPU')
 
-const unitName = (name: string) => name.replace(/\.service$/, '')
+const UNIT_COLORS: Record<string, string> = {
+  active: colors.success, failed: colors.error, activating: colors.warning, deactivating: colors.warning,
+}
 
 const STATE_LABELS: Record<UnitState, MessageKey> = {
   active: 'state.active',
@@ -150,29 +152,16 @@ export function NetworkView({ stats, range }: ViewProps) {
 }
 
 export function StorageView({ stats }: ViewProps) {
-  const { t, format } = useI18n()
   return (
     <ViewBody>
-      <SectionTitle>{t('activity.volumesTitle')}</SectionTitle>
-      {latestOf(stats).disks.map((d) => (
-        <Card key={d.mount} sx={{ mb: 1.25 }}>
-          <Box sx={{ display: 'flex', mb: 1 }}>
-            <Box component="span" sx={{ fontFamily: 'monospace' }}>{d.mount}</Box>
-            <Box component="span" sx={{ ml: 'auto', color: 'text.secondary' }}>
-              {t('activity.of', { used: format.bytes(d.used), size: format.bytes(d.size) })}
-            </Box>
-          </Box>
-          <Meter label={t('activity.used.meter', { mount: d.mount })} total={d.size}
-            parts={[{ value: d.used, color: d.used / d.size > 0.9 ? colors.error : colors.success }]} />
-        </Card>
-      ))}
+      <Volumes disks={latestOf(stats).disks} />
     </ViewBody>
   )
 }
 
 function unitColumns({ t, format }: I18n): Column<Unit>[] {
   return [
-    { label: t('activity.col.service'), cell: (u) => <><Dot color={STATE_COLORS[u.state] ?? colors.info} />{unitName(u.name)}</> },
+    { label: t('activity.col.service'), cell: (u) => <><Dot color={UNIT_COLORS[u.state] ?? colors.info} />{unitName(u.name)}</> },
     { label: t('activity.col.state'), cell: (u) => t(STATE_LABELS[u.state]) },
     { label: t('activity.col.for'), cell: (u) => format.since(u.since) },
     { label: t('activity.col.memory'), numeric: true, cell: (u) => format.bytes(u.mem) },

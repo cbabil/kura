@@ -1,0 +1,9 @@
+{
+  "id": "home-assistant",
+  "name": "Home Assistant",
+  "version": "2025.1.4",
+  "port": 8123,
+  "fixedPorts": [],
+  "shared": [],
+  "homepage": "https://www.home-assistant.io"
+}

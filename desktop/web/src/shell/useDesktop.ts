@@ -78,7 +78,10 @@ export function useDesktop(prefs: Prefs, onPrefs: (p: Partial<Prefs>) => void) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      // An app that takes the keyboard for itself (data-keys="app": the terminal, where
+      // Ctrl K cuts to the end of the line) keeps Ctrl K; ⌘K still opens the launcher.
+      const keptByApp = e.target instanceof Element && e.target.closest('[data-keys="app"]') !== null
+      if ((e.metaKey || (e.ctrlKey && !keptByApp)) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setLauncher((v) => !v)
       }

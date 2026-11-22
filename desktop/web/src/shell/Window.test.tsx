@@ -6,7 +6,7 @@ import { Window } from './Window'
 import type { WindowActions } from './useDesktop'
 import type { Win } from './windows'
 
-const win: Win = { app: 'files', x: 100, y: 80, w: 800, h: 500, minimized: false, maximized: false }
+const win: Win = { app: 'catalog', x: 100, y: 80, w: 800, h: 500, minimized: false, maximized: false }
 
 function setup(width = 1440) {
   const actions: WindowActions = {
@@ -14,22 +14,22 @@ function setup(width = 1440) {
     move: vi.fn(), resize: vi.fn(), settle: vi.fn(), setView: vi.fn(),
   }
   renderWithTheme(
-    <Window win={win} def={APP_BY_ID.files} focused={false} bounds={boundsFor(width, 900)} z={1} view="" actions={actions} />,
+    <Window win={win} def={{ ...APP_BY_ID.catalog, Body: undefined }} focused={false} bounds={boundsFor(width, 900)} z={1} view="" actions={actions} />,
   )
-  return { actions, bar: screen.getAllByText('Files')[0].parentElement as HTMLElement /* the title, before the body's name */ }
+  return { actions, bar: screen.getAllByText('App Catalog')[0].parentElement as HTMLElement /* the title, before the body's name */ }
 }
 
 describe('Window', () => {
   it('shows the app (or what is coming) and runs the three buttons', () => {
     const { actions } = setup()
-    expect(screen.getByRole('dialog', { name: 'Files' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'App Catalog' })).toBeInTheDocument()
     expect(screen.getByText('Arrives in a coming update of Kura.')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('Close'))
     fireEvent.click(screen.getByLabelText('Minimize'))
     fireEvent.click(screen.getByLabelText('Zoom'))
-    expect(actions.close).toHaveBeenCalledWith('files')
-    expect(actions.minimize).toHaveBeenCalledWith('files')
-    expect(actions.zoom).toHaveBeenCalledWith('files')
+    expect(actions.close).toHaveBeenCalledWith('catalog')
+    expect(actions.minimize).toHaveBeenCalledWith('catalog')
+    expect(actions.zoom).toHaveBeenCalledWith('catalog')
   })
 
   it('focuses on press, moves by the title bar and settles when released', () => {
@@ -37,8 +37,8 @@ describe('Window', () => {
     fireEvent.pointerDown(bar, { button: 0, clientX: 200, clientY: 100, pointerId: 1 })
     fireEvent.pointerMove(bar, { clientX: 260, clientY: 140, pointerId: 1 })
     fireEvent.pointerUp(bar, { pointerId: 1 })
-    expect(actions.focus).toHaveBeenCalledWith('files')
-    expect(actions.move).toHaveBeenCalledWith('files', 160, 120)
+    expect(actions.focus).toHaveBeenCalledWith('catalog')
+    expect(actions.move).toHaveBeenCalledWith('catalog', 160, 120)
     expect(actions.settle).toHaveBeenCalledTimes(1)
   })
 
@@ -51,7 +51,7 @@ describe('Window', () => {
       fireEvent.pointerDown(handle, { button: 0, clientX: 0, clientY: 0, pointerId: 2 })
       fireEvent.pointerMove(handle, { clientX: dx, clientY: dy, pointerId: 2 })
       fireEvent.pointerUp(handle, { pointerId: 2 })
-      expect(actions.resize).toHaveBeenLastCalledWith('files', w, h)
+      expect(actions.resize).toHaveBeenLastCalledWith('catalog', w, h)
     }
   })
 

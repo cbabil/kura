@@ -13,7 +13,7 @@ use kura_desktop_core::stats::sampler::{PERIOD, Sampler, StatsHub};
 use kura_desktop_core::units::{StaticUnits, UnitSource};
 
 use crate::config::Config;
-use crate::helper::AuthHelper;
+use crate::helper::Helper;
 use crate::server::{AppState, router};
 
 /// The time a client has to send its request headers.
@@ -75,20 +75,20 @@ fn bind(addr: SocketAddr) -> Result<TcpListener, StartError> {
 
 /// The fake helper in a dev-auth build.
 #[cfg(feature = "dev-auth")]
-async fn helper() -> Result<Arc<dyn AuthHelper>, StartError> {
-    tracing::warn!("dev-auth build: any user signs in with the development password");
-    Ok(Arc::new(crate::helper::DevHelper))
+async fn helper() -> Result<Arc<dyn Helper>, StartError> {
+    tracing::warn!("dev-auth build: the development accounts sign in with the development password and get YOUR shell");
+    Ok(Arc::new(crate::helper::DevHelper::default()))
 }
 
 /// kura-helper on the system bus.
 #[cfg(all(not(feature = "dev-auth"), target_os = "linux"))]
-async fn helper() -> Result<Arc<dyn AuthHelper>, StartError> {
+async fn helper() -> Result<Arc<dyn Helper>, StartError> {
     let helper = crate::helper::DbusHelper::system().await.map_err(|e| StartError::Helper(e.to_string()))?;
     Ok(Arc::new(helper))
 }
 
 #[cfg(all(not(feature = "dev-auth"), not(target_os = "linux")))]
-async fn helper() -> Result<Arc<dyn AuthHelper>, StartError> {
+async fn helper() -> Result<Arc<dyn Helper>, StartError> {
     Err(StartError::Helper("kura-helper needs Linux; build with --features dev-auth".into()))
 }
 

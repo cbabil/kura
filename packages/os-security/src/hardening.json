@@ -1,5 +1,6 @@
 {
     "network_security": {
-        "firewall_preset": "strict"
+        "firewall_preset": "strict",
+        "mdns": true
     }
 }

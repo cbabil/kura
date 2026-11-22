@@ -171,3 +171,14 @@ setup_nm() { NM_DIR="${BATS_TEST_TMPDIR}/nm"; mkdir -p "${NM_DIR}"; }
     file_has "${hosts}" "127.0.1.1	test-device"
     file_has "${hosts}" "127.0.0.1	localhost"
 }
+
+@test "apply_hostname: the new name is announced on the network at once" {
+    local hosts="${BATS_TEST_TMPDIR}/hosts" name_file="${BATS_TEST_TMPDIR}/hostname" cfg="${BATS_TEST_TMPDIR}/cfg.json"
+    printf '127.0.0.1\tlocalhost\n127.0.1.1\told\n' > "${hosts}"
+    echo '{"hostname":"attic"}' > "${cfg}"
+    load_os_config "${cfg}" "${BATS_TEST_TMPDIR}/nm" "${hosts}" "${name_file}"
+    hostname() { [ $# -eq 0 ] && echo old || echo "set $1" >> "${BATS_TEST_TMPDIR}/calls"; }
+    systemctl() { echo "systemctl $*" >> "${BATS_TEST_TMPDIR}/calls"; }
+    apply_hostname
+    grep -qxF "systemctl try-restart avahi-daemon.service" "${BATS_TEST_TMPDIR}/calls"
+}

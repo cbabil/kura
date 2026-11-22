@@ -1,23 +1,36 @@
 [package]
 name = "kura-helper"
-description = "Kura Desktop's privileged helper: checks passwords through PAM for kura-desktopd over D-Bus."
+description = "Kura Desktop's privileged helper: PAM sign-in, terminals, Docker and the journal for kura-desktopd over D-Bus."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# Stand-ins for Docker, the journal and systemd, for other crates' tests.
+fakes = []
+
 [dependencies]
 kura-desktop-core.workspace = true
 zbus.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["process", "io-util"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 zeroize.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+hyper = { version = "1", default-features = false, features = ["client", "http1"] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
+http-body-util.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc.workspace = true
+rustix = { workspace = true, features = ["pty", "termios", "net"] }
 
 [dev-dependencies]
 zbus = { workspace = true, features = ["p2p"] }
 tempfile.workspace = true
+axum.workspace = true
+futures-util.workspace = true

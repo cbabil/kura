@@ -1,0 +1,300 @@
+#!/bin/bash
+# __BRAND__-settings — the changes Kura Desktop's Settings makes (ADR-029).
+# Run as root by __BRAND__-helper, as a systemd unit of its own, with a
+# command and arguments the helper has already checked; everything is
+# checked again here. A password never comes as an argument: it is in the
+# file named by --secret-file (root only), which is removed once read.
+#
+# Hostname, Wi-Fi and the Ethernet address go to /etc/__BRAND__/config.json,
+# which __BRAND__-config applies and keeps applied.
+#
+# Usage: __BRAND__-settings <command> [arguments] [--secret-file <file>]
+#   hostname <name>
+#   timezone <Area/City>            ntp on|off          screen on|off
+#   wifi-add <ssid> <hidden:true|false> --secret-file F     wifi-remove <ssid>
+#   ethernet auto | ethernet static <address/prefix> <gateway> <dns[,dns]>
+#   network-confirm | network-revert
+#   user-add <name> <admin:true|false> --secret-file F      user-remove <name>
+#   user-admin <name> on|off        user-password <name> --secret-file F
+
+set -euo pipefail
+# config.json holds the Wi-Fi passwords: nothing written here is for others
+umask 077
+
+ROOT="${SETTINGS_ROOT:-}"   # a test's root folder; empty on a device
+BRAND="__BRAND__"
+CONFIG="${ROOT}/etc/${BRAND}/config.json"
+STATE="${ROOT}/var/lib/${BRAND}"
+PREVIOUS="${STATE}/network-previous.json"
+ADMIN_GROUP="sudo"
+MIN_UID=1000
+NOBODY=65534
+REVERT_AFTER=120            # seconds a network change waits to be confirmed
+ETHERNET_CONNECTION="${BRAND}-ethernet"   # os-config's own connection: not a Wi-Fi name
+SSID_RE='^[a-zA-Z0-9][a-zA-Z0-9 _.-]*$'   # os-config's SAFE_SSID_RE
+HOST_RE='^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'
+USER_RE='^[a-z_][a-z0-9_-]{0,31}$'
+ZONE_RE='^[A-Za-z0-9][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$'
+IP_RE='^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$'
+
+fail() { echo "$*" >&2; exit 1; }
+
+# ---- checks ----
+
+# ipv4 <text>: true for four numbers of 0 to 255
+ipv4() {
+    [[ "$1" =~ ${IP_RE} ]] || return 1
+    local part
+    for part in "${BASH_REMATCH[@]:1}"; do [ "${part}" -le 255 ] || return 1; done
+}
+
+# ipv4_cidr <text>: an address and a prefix of 1 to 32
+ipv4_cidr() {
+    local address="${1%/*}" prefix="${1##*/}"
+    [ "$1" != "${address}" ] && ipv4 "${address}" && [[ "${prefix}" =~ ^[0-9]{1,2}$ ]] &&
+        [ "${prefix}" -ge 1 ] && [ "${prefix}" -le 32 ]
+}
+
+# uid_of <name>: the account's uid, or nothing
+uid_of() { awk -F: -v n="$1" '$1 == n { print $3; exit }' "${ROOT}/etc/passwd"; }
+
+# person <name>: true for a person's account (not root, a system account or nobody)
+person() {
+    local uid
+    uid=$(uid_of "$1")
+    [ -n "${uid}" ] && [ "${uid}" -ge "${MIN_UID}" ] && [ "${uid}" -ne "${NOBODY}" ]
+}
+
+# admins: the people in the administrators' group, one a line
+admins() {
+    local name
+    awk -F: -v g="${ADMIN_GROUP}" '$1 == g { print $4 }' "${ROOT}/etc/group" | tr ',' '\n' |
+        while read -r name; do [ -z "${name}" ] || ! person "${name}" || echo "${name}"; done
+}
+
+# last_admin <name>: true when nobody else is an administrator
+last_admin() { [ "$(admins | grep -vxF -- "$1" | grep -c .)" -eq 0 ] && admins | grep -qxF -- "$1"; }
+
+# ---- helpers ----
+
+# secret_from <file>: the secret on stdout; the file is removed
+secret_from() {
+    [ -n "$1" ] && [ -f "$1" ] || fail "no secret file"
+    cat "$1"
+    rm -f "$1"
+}
+
+# one_line <text>: true for a password chpasswd reads as one (it takes
+# "name:password" lines, so a line break would name a second account)
+one_line() { [ -n "$1" ] && [[ "$1" != *$'\n'* ]] && [[ "$1" != *$'\r'* ]]; }
+
+# edit_config <jq-filter> [jq args...]: change config.json in one step, readable by root only
+edit_config() {
+    local filter="$1" out
+    shift
+    out=$(jq "$@" "${filter}" "${CONFIG}") || fail "config.json could not be changed"
+    printf '%s\n' "${out}" > "${CONFIG}.new"
+    chmod 0600 "${CONFIG}.new"
+    mv "${CONFIG}.new" "${CONFIG}"
+}
+
+apply_config() { systemctl restart "${BRAND}-config.service"; }
+
+# ---- commands ----
+
+cmd_hostname() {
+    [[ "${1:-}" =~ ${HOST_RE} ]] || fail "not a host name"
+    edit_config '.hostname = $h' --arg h "$1"
+    apply_config
+    # __BRAND__-config sets the name (with /etc/hosts, and <host>.local); the
+    # certificate must be made with the new one
+    local tries=0
+    until [ "$(hostname)" = "$1" ]; do
+        tries=$((tries + 1))
+        [ "${tries}" -lt 30 ] || fail "the name was recorded but is not applied yet"
+        sleep 0.5
+    done
+    # The certificate names the host: make a new one, then let the desktop
+    # take it. A moment later, so this command's answer still gets back.
+    rm -f "${STATE}/desktop/tls.crt" "${STATE}/desktop/tls.key" "${STATE}/desktop/fingerprint"
+    systemd-run --on-active=3 --collect /bin/sh -c \
+        "systemctl restart ${BRAND}-desktop-cert.service && systemctl try-restart ${BRAND}-desktopd.service"
+}
+
+cmd_timezone() {
+    [[ "${1:-}" =~ ${ZONE_RE} ]] && [[ "$1" != *..* ]] && [ -f "${ROOT}/usr/share/zoneinfo/$1" ] || fail "not a time zone"
+    timedatectl set-timezone "$1"
+}
+
+cmd_ntp() {
+    case "${1:-}" in
+        on) timedatectl set-ntp true ;;
+        off) timedatectl set-ntp false ;;
+        *) fail "ntp is on or off" ;;
+    esac
+}
+
+# The local screen (ADR-033), where the image has it
+cmd_screen() {
+    local unit="${BRAND}-kiosk.service"
+    # The unit is in every PC image; the browser only where it was asked for
+    [ -f "${ROOT}/usr/lib/systemd/system/${unit}" ] && [ -x "${ROOT}/usr/bin/cage" ] || fail "this server has no local screen"
+    case "${1:-}" in
+        on) systemctl enable --now "${unit}" ;;
+        off) systemctl disable --now "${unit}" ;;
+        *) fail "screen is on or off" ;;
+    esac
+}
+
+cmd_wifi_add() {
+    local ssid="${1:-}" hidden="${2:-}" psk
+    [[ "${ssid}" =~ ${SSID_RE} ]] && [ "${ssid}" != "${ETHERNET_CONNECTION}" ] || fail "not a network name Kura accepts"
+    [ "${hidden}" = true ] || [ "${hidden}" = false ] || fail "hidden is true or false"
+    [ -n "${SECRET_FILE}" ] && [ -f "${SECRET_FILE}" ] || fail "no secret file"
+    psk=$(cat "${SECRET_FILE}")
+    if [ "${#psk}" -lt 8 ] || [ "${#psk}" -gt 63 ] || ! one_line "${psk}"; then
+        rm -f "${SECRET_FILE}"
+        fail "a Wi-Fi password has 8 to 63 characters"
+    fi
+    # jq reads the password from the file: an argument would show in the
+    # list of running programs
+    edit_config '.networkConfig.wifi.enable = true
+        | .networkConfig.wifi.networks = ((.networkConfig.wifi.networks // []) | map(select(.ssid != $s)))
+            + [{ssid: $s, psk: $p, hidden: ($h == "true")}]' --arg s "${ssid}" --rawfile p "${SECRET_FILE}" --arg h "${hidden}"
+    rm -f "${SECRET_FILE}"
+    apply_config
+}
+
+cmd_wifi_remove() {
+    local ssid="${1:-}"
+    [[ "${ssid}" =~ ${SSID_RE} ]] && [ "${ssid}" != "${ETHERNET_CONNECTION}" ] || fail "not a network name Kura accepts"
+    edit_config '.networkConfig.wifi.networks = ((.networkConfig.wifi.networks // []) | map(select(.ssid != $s)))' --arg s "${ssid}"
+    # os-config named the connection file after the network
+    rm -f "${ROOT}/etc/NetworkManager/system-connections/${ssid}.nmconnection"
+    nmcli connection reload
+}
+
+# A wrong address can cut a server without a screen off for good, so every
+# change of it goes back by itself unless network-confirm arrives in time
+# (which only a browser that still reaches the server can send).
+cmd_ethernet() {
+    local filter
+    case "${1:-}" in
+        auto) filter='.networkConfig.ethernet.ipv4 = {method: "auto"}' ;;
+        static)
+            ipv4_cidr "${2:-}" || fail "not an address with a prefix, like 192.168.1.50/24"
+            ipv4 "${3:-}" || fail "not a gateway address"
+            local dns
+            [ -n "${4:-}" ] || fail "no DNS server"
+            for dns in ${4//,/ }; do ipv4 "${dns}" || fail "not a DNS server address"; done
+            filter='.networkConfig.ethernet.ipv4 = {method: "manual", address: $a, gateway: $g, dns: ($d | split(","))}'
+            ;;
+        *) fail "ethernet is auto or static" ;;
+    esac
+    install -d "${STATE}"
+    # The way back first: with none armed, nothing changes. The earliest
+    # unconfirmed state is the one to go back to.
+    systemctl stop "${BRAND}-network-revert.timer" 2>/dev/null || true
+    local saved=""
+    [ -f "${PREVIOUS}" ] || { jq '.networkConfig.ethernet // {}' "${CONFIG}" > "${PREVIOUS}"; saved=yes; }
+    if ! systemd-run --unit="${BRAND}-network-revert" --on-active="${REVERT_AFTER}" --collect \
+        "/usr/lib/${BRAND}/${BRAND}-settings" network-revert; then
+        [ -z "${saved}" ] || rm -f "${PREVIOUS}"
+        fail "the way back could not be armed, so nothing was changed"
+    fi
+    edit_config "${filter}" --arg a "${2:-}" --arg g "${3:-}" --arg d "${4:-}"
+    apply_config
+}
+
+cmd_network_confirm() {
+    systemctl stop "${BRAND}-network-revert.timer" 2>/dev/null || true
+    rm -f "${PREVIOUS}"
+}
+
+# Only the Ethernet address goes back: a name or a Wi-Fi network changed
+# meanwhile stays. Also run at boot (__BRAND__-network-pending.service), since
+# a restart loses the timer.
+cmd_network_revert() {
+    [ -f "${PREVIOUS}" ] || return 0
+    edit_config '.networkConfig.ethernet = $e[0]' --slurpfile e "${PREVIOUS}"
+    rm -f "${PREVIOUS}"
+    apply_config
+}
+
+cmd_user_add() {
+    local name="${1:-}" admin="${2:-}" password
+    [[ "${name}" =~ ${USER_RE} ]] || fail "not a user name"
+    [ -z "$(uid_of "${name}")" ] || fail "that user exists already"
+    [ "${admin}" = true ] || [ "${admin}" = false ] || fail "administrator is true or false"
+    # A removed person's files stay in their home; a new account must not get them
+    [ ! -e "${ROOT}/home/${name}" ] || fail "/home/${name} holds someone's files: move it away first"
+    password=$(secret_from "${SECRET_FILE}")
+    one_line "${password}" || fail "not a password"
+    useradd --create-home --shell /bin/bash "${name}"
+    if ! printf '%s:%s\n' "${name}" "${password}" | chpasswd ||
+        { [ "${admin}" = true ] && ! gpasswd --add "${name}" "${ADMIN_GROUP}"; }; then
+        userdel --remove "${name}" || true
+        fail "the account could not be finished and was taken out again"
+    fi
+}
+
+cmd_user_password() {
+    local name="${1:-}" password
+    person "${name}" || fail "not a person's account"
+    password=$(secret_from "${SECRET_FILE}")
+    one_line "${password}" || fail "not a password"
+    printf '%s:%s\n' "${name}" "${password}" | chpasswd
+}
+
+cmd_user_admin() {
+    local name="${1:-}"
+    person "${name}" || fail "not a person's account"
+    case "${2:-}" in
+        on) gpasswd --add "${name}" "${ADMIN_GROUP}" ;;
+        off)
+            ! last_admin "${name}" || fail "the last administrator stays one"
+            gpasswd --delete "${name}" "${ADMIN_GROUP}"
+            ;;
+        *) fail "administrator is on or off" ;;
+    esac
+}
+
+# The home folder stays: removing a person must not remove their files. It
+# goes to root and is closed, so whoever gets the freed uid next does not
+# get them either; an administrator hands them on.
+cmd_user_remove() {
+    local name="${1:-}" tries=0
+    person "${name}" || fail "not a person's account"
+    ! last_admin "${name}" || fail "the last administrator cannot be removed"
+    # Their programs first (terminals included): userdel refuses a user who runs any
+    pkill -KILL -u "${name}" 2>/dev/null || true
+    while pgrep -u "${name}" >/dev/null 2>&1 && [ "${tries}" -lt 20 ]; do
+        tries=$((tries + 1))
+        sleep 0.25
+    done
+    userdel "${name}"
+    if [ -d "${ROOT}/home/${name}" ]; then
+        chown -R root:root "${ROOT}/home/${name}"
+        chmod 0700 "${ROOT}/home/${name}"
+    fi
+}
+
+main() {
+    local command="${1:-}" args=() SECRET_FILE=""
+    shift || true
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --secret-file) SECRET_FILE="${2:-}"; shift ;;
+            *) args+=("$1") ;;
+        esac
+        shift
+    done
+    case "${command}" in
+        hostname | timezone | ntp | ethernet | screen) "cmd_${command}" "${args[@]}" ;;
+        wifi-add | wifi-remove | network-confirm | network-revert | user-add | user-remove | user-admin | user-password)
+            "cmd_${command//-/_}" "${args[@]}" ;;
+        *) fail "unknown command" ;;
+    esac
+}
+
+main "$@"

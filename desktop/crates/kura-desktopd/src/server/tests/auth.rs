@@ -124,6 +124,19 @@ async fn signed_out_requests_get_401() {
 }
 
 #[tokio::test]
+async fn one_user_signing_in_again_and_again_costs_nobody_else_their_session() {
+    let app = TestApp::with_guests();
+    let kura = app.sign_in("kura").await;
+    let first = app.sign_in("guest").await;
+    for _ in 0..crate::server::MAX_SESSIONS_PER_USER {
+        app.sign_in("guest").await;
+    }
+    assert_eq!(app.send(request("GET", "/api/session", Some(&first), None)).await.0.status(), 401, "guest's oldest");
+    assert_eq!(app.send(request("GET", "/api/session", Some(&kura), None)).await.0.status(), 200);
+    assert_eq!(app.send(request("GET", "/api/containers", Some(&kura), None)).await.0.status(), 200);
+}
+
+#[tokio::test]
 async fn a_full_helper_answers_429_without_counting() {
     let app = TestApp::with(|s| s.helper_slots = tokio::sync::Semaphore::new(0));
     for _ in 0..MAX_FAILURES + 1 {

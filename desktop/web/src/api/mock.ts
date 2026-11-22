@@ -1,9 +1,14 @@
 /**
  * An in-browser stand-in for kura-desktopd, used by `bun run dev` and the
  * Playwright tests (VITE_MOCK=1). Any user name signs in with MOCK_PASSWORD;
- * the user "expired" gets the expired-password refusal.
+ * the user "expired" gets the expired-password refusal and "guest" is not
+ * an administrator. Containers, the journal and the terminal: mockApps.ts.
  */
 import { DAY_POINTS, DAY_STEP_MS, HOUR_POINTS } from './types'
+import { createMockApps } from './mockApps'
+import { createMockCatalog } from './mockCatalog'
+import { createMockFiles } from './mockFiles'
+import { createMockSettings } from './mockSettings'
 import type { Api, Prefs, Proc, Sample, StatsMessage, SystemInfo, Unit, User } from './types'
 
 export const MOCK_PASSWORD = 'kura'
@@ -78,7 +83,7 @@ export function createMockApi(): Api {
     async login(name, password) {
       if (password !== MOCK_PASSWORD) return { ok: false, error: 'wrong' }
       if (name === 'expired') return { ok: false, error: 'expired' }
-      user = { name, uid: 1000, admin: true }
+      user = { name, uid: 1000, admin: name !== 'guest' }
       return { ok: true, user }
     },
     async logout() {
@@ -96,5 +101,9 @@ export function createMockApi(): Api {
       const timer = setInterval(() => onMessage({ type: 'sample', sample: sampleAt(Date.now()) }), SAMPLE_MS)
       return () => clearInterval(timer)
     },
+    ...createMockApps(() => user, system.hostname),
+    ...createMockSettings(() => user, system.hostname, MOCK_PASSWORD),
+    ...createMockFiles(),
+    ...createMockCatalog(() => user),
   }
 }

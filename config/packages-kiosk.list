@@ -1,0 +1,8 @@
+# The local screen (ADR-033): Kura Desktop on the machine's own display.
+# Only in a PC image built with OS_KIOSK="true"; never on the Raspberry Pi.
+# cage is a compositor for one full-screen program; cog is a small browser.
+cage
+cog
+# Drivers for the screen, and a font for the browser's own pages
+libgl1-mesa-dri
+fonts-inter

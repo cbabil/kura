@@ -1,7 +1,8 @@
 /**
  * What an app declares to the desktop: its window, menus, sections and where
- * it sits in the dock. Adding an app (D2: Containers, Terminal, Console)
- * means adding an AppDef; the shell itself does not change.
+ * it sits in the dock. Adding an app means adding an AppDef with a Body;
+ * the shell itself does not change. A Body gets the server and the
+ * signed-in user from useApi and useUser (shell/useStats).
  */
 import type { ComponentType } from 'react'
 import type { MessageKey, Vars } from '../i18n'
@@ -12,6 +13,8 @@ export interface AppProps {
   view: string
   setView(view: string): void
   compact: boolean
+  /** The window is in the dock: nothing shows, so nothing need be refreshed. */
+  minimized: boolean
 }
 
 /** Actions a menu item can take on the focused window. */

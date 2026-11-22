@@ -11,7 +11,7 @@ import { Glyph } from '../icons/Glyph'
 import { useI18n } from '../i18n'
 import { MINCHO, type Mode } from '../theme'
 import { MENU_BAR } from './layout'
-import { useStats } from './useStats'
+import { useStats, useUpdates } from './DesktopData'
 
 interface Props {
   appName: string
@@ -22,6 +22,8 @@ interface Props {
   onRun(item: MenuItem): void
   onToggleTheme(): void
   onLauncher(): void
+  /** Opens where updates are installed. */
+  onUpdates(): void
 }
 
 export function Clock() {
@@ -36,6 +38,32 @@ export function Clock() {
       <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{format.date(now)}&nbsp;&nbsp;</Box>
       {format.time(now)}
     </Box>
+  )
+}
+
+/**
+ * Beside the date and time, only when an update waits or a restart is due:
+ * says which in words (the icon alone on a phone) and opens Settings › Updates.
+ */
+export function UpdateNotice({ onOpen }: { onOpen(): void }) {
+  const { t } = useI18n()
+  const { status } = useUpdates()
+  if (!status?.available && !status?.restartRequired) return null
+  const restart = !status.available
+  const label = restart ? t('status.restartDue') : t('status.update', { version: status.available ?? '' })
+  return (
+    <Tooltip title={label}>
+      <Box component="button" aria-label={label} onClick={onOpen} sx={{
+        display: 'flex', alignItems: 'center', gap: '5px', height: 20, px: '8px', border: 0, borderRadius: '10px', cursor: 'pointer',
+        font: 'inherit', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', color: '#fff',
+        bgcolor: restart ? 'warning.main' : 'primary.main', '&:hover': { bgcolor: restart ? 'warning.dark' : 'primary.dark' },
+      }}>
+        <Glyph name="update" size={13} />
+        <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+          {restart ? t('status.restartShort') : t('status.updateShort', { version: status.available ?? '' })}
+        </Box>
+      </Box>
+    </Tooltip>
   )
 }
 
@@ -99,6 +127,7 @@ export function MenuBar(p: Props) {
           <Glyph name={p.mode === 'dark' ? 'sun' : 'moon'} size={15} />
         </IconButton>
         <IconButton size="small" aria-label={t('status.search')} onClick={p.onLauncher}><Glyph name="search" size={15} /></IconButton>
+        <UpdateNotice onOpen={p.onUpdates} />
         <Clock />
       </Box>
     </Box>

@@ -118,6 +118,24 @@ kura_issue_env() {
     file_has "${BATS_TEST_TMPDIR}/calls" "agetty --reload"
 }
 
+@test "kura-issue: the desktop goes by name only while the name is really answered" {
+    kura_issue_env
+    printf 'AA:BB\n' > "${BATS_TEST_TMPDIR}/fp"
+    export KURA_DESKTOP_FINGERPRINT="${BATS_TEST_TMPDIR}/fp"
+    hostname() { echo attic; }
+    # avahi runs (the stubbed systemctl says yes to everything), port closed
+    iptables() { echo "-A INPUT -p tcp --dport 22 -j ACCEPT"; }
+    export -f hostname iptables
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    [ "$status" -eq 0 ]
+    run grep -F "https://attic.local" "${KURA_ISSUE}"
+    [ "$status" -ne 0 ]
+    iptables() { echo "-A INPUT -s 192.168.0.0/16 -p udp -m udp --dport 5353 -j ACCEPT"; }
+    export -f iptables
+    run "${REPO_ROOT}/scripts/common/kura-issue"
+    file_has "${KURA_ISSUE}" "https://attic.local"
+}
+
 @test "one-time password: shown on the screen with what to do" {
     LOGIN_PASSWORD="abcd-efgh-jkmn"
     run kura_issue
@@ -232,6 +250,19 @@ FP="4F:9A:3B:10:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:7
     LOGIN_DESKTOP_FP=""
     run kura_issue
     ! output_has "https://"
+}
+
+@test "desktop: by name when the device answers to <host>.local, which the certificate names" {
+    LOGIN_DESKTOP_FP="${FP}"
+    LOGIN_HOST="attic"
+    LOGIN_ADDRESS="192.168.1.50"
+    LOGIN_MDNS="yes"
+    run kura_issue
+    output_has "https://attic.local"
+    ! output_has "https://192.168.1.50"
+    LOGIN_MDNS=""
+    run kura_issue
+    output_has "https://192.168.1.50"
 }
 
 @test "desktop: the panel still fits 120 columns with the desktop lines" {

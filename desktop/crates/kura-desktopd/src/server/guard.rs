@@ -10,9 +10,11 @@ use axum::http::request::Parts;
 use axum::http::{HeaderMap, Method, StatusCode, Uri, header};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
+use kura_desktop_core::actions::Action;
 use kura_desktop_core::session::SessionUser;
 
 use super::AppState;
+use crate::helper::HelperError;
 
 /// The session cookie's name; `__Host-` makes browsers demand Secure, no
 /// Domain and `Path=/`.
@@ -70,11 +72,42 @@ pub async fn csrf(State(state): State<Arc<AppState>>, req: Request, next: Next) 
     next.run(req).await
 }
 
-/// The signed-in user and their session id; extracting it fails with 401
-/// without a live session.
+/// The answer to a helper refusal. A dead ticket also ends the session
+/// `id`, so the interface asks to sign in again.
+pub fn refused(state: &AppState, id: &str, e: &HelperError) -> Response {
+    match e {
+        HelperError::SignedOut => {
+            state.sessions.remove(id);
+            error(StatusCode::UNAUTHORIZED, "signed_out")
+        }
+        HelperError::Admin => error(StatusCode::FORBIDDEN, "admin"),
+        HelperError::Invalid => error(StatusCode::BAD_REQUEST, "bad_request"),
+        HelperError::NotFound => error(StatusCode::NOT_FOUND, "not_found"),
+        HelperError::NoShell => error(StatusCode::FORBIDDEN, "no_shell"),
+        HelperError::Busy => error(StatusCode::TOO_MANY_REQUESTS, "busy"),
+        HelperError::Unavailable(why) => {
+            tracing::warn!("{e}: {why}");
+            error(StatusCode::SERVICE_UNAVAILABLE, "unavailable")
+        }
+    }
+}
+
+/// Asks the helper for `action` and answers with what it says: its JSON
+/// as it is, 204 when it only did something, or the answer to its refusal.
+pub async fn asked(state: &AppState, authed: &Authed, action: Action, args: &impl serde::Serialize) -> Response {
+    match crate::helper::ask(state.helper.as_ref(), &authed.ticket, action, args).await {
+        Ok(json) if json.is_empty() => StatusCode::NO_CONTENT.into_response(),
+        Ok(json) => ([(header::CONTENT_TYPE, "application/json")], json).into_response(),
+        Err(e) => refused(state, &authed.id, &e),
+    }
+}
+
+/// The signed-in user, their session id and the helper's ticket; extracting
+/// it fails with 401 without a live session.
 pub struct Authed {
     pub id: String,
     pub user: SessionUser,
+    pub ticket: String,
 }
 
 impl FromRequestParts<Arc<AppState>> for Authed {
@@ -82,7 +115,10 @@ impl FromRequestParts<Arc<AppState>> for Authed {
 
     async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Response> {
         session_id(&parts.headers)
-            .and_then(|id| Some(Authed { id: id.to_owned(), user: state.sessions.touch(id, Instant::now())? }))
+            .and_then(|id| {
+                let session = state.sessions.touch(id, Instant::now())?;
+                Some(Authed { id: id.to_owned(), user: session.user, ticket: session.ticket })
+            })
             .ok_or_else(|| error(StatusCode::UNAUTHORIZED, "signed_out"))
     }
 }

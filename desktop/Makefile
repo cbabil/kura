@@ -28,9 +28,10 @@ test-pam:
 	  | jq -r 'select(.profile.test == true and .executable != null) | .executable')"; \
 	sudo --preserve-env=KURA_PAM_USER,KURA_PAM_EXPIRED_USER,KURA_PAM_PASSWORD "$$bin" --ignored pam::
 
-# Linux only: both binaries end to end; KURA_PAM_PASSWORD is E2E_USER's.
+# Linux only: both binaries end to end. E2E_USER is an administrator (in
+# sudo), E2E_GUEST is not; KURA_PAM_PASSWORD is the password of both.
 e2e: build
-	ci/e2e.sh $(E2E_USER)
+	ci/e2e.sh $(E2E_USER) $(E2E_GUEST)
 
 coverage:
 	$(CARGO) llvm-cov --workspace --fail-under-lines 90 --ignore-filename-regex '(main\.rs|/tests/|tests\.rs)'
@@ -48,26 +49,29 @@ web:
 	$(MAKE) -C web install build
 
 # desktopd with the fake password check over plain HTTP, serving web/dist and
-# reading the fixture tree in dev/root (a Mac has no /proc). Sign in with any
-# user name and the password "kura".
+# reading the fixture tree in dev/root (a Mac has no /proc). Sign in as kura,
+# chris or anna (administrators), guest (not one), expired or noshell, with
+# the password "kura"; the helper's real rules apply, over sample containers
+# and a sample journal, and a terminal is your own shell.
 dev: web
 	$(CARGO) run -p kura-desktopd --features dev-auth -- --http --listen $(DEV_LISTEN) --root dev/root --state-dir target/dev-state
 
 build:
 	$(CARGO) build --release --workspace
 
-# Linux binaries for the image, with the interface embedded: desktopd static
-# (musl), the helper against glibc and libpam (PAM_SYSTEM_DIR is the target's
+# Linux binaries for the image, with the interface embedded: desktopd and
+# the file agent static (musl), the helper against glibc and libpam (PAM_SYSTEM_DIR is the target's
 # libpam directory).
 dist-amd64: TRIPLE := x86_64
 dist-arm64: TRIPLE := aarch64
 dist-amd64 dist-arm64: web
-	$(CARGO) zigbuild --release -p kura-desktopd --target $(TRIPLE)-unknown-linux-musl
+	$(CARGO) zigbuild --release -p kura-desktopd -p kura-agent --target $(TRIPLE)-unknown-linux-musl
 	mkdir -p target/pam/$(TRIPLE)
 	cp -L $(PAM_SYSTEM_DIR)/libpam.so target/pam/$(TRIPLE)/
 	RUSTFLAGS="-L $(CURDIR)/target/pam/$(TRIPLE)" $(CARGO) zigbuild --release -p kura-helper --target $(TRIPLE)-unknown-linux-gnu.$(GLIBC)
 	mkdir -p dist/$(TRIPLE)
-	cp target/$(TRIPLE)-unknown-linux-musl/release/kura-desktopd target/$(TRIPLE)-unknown-linux-gnu/release/kura-helper dist/$(TRIPLE)/
+	cp target/$(TRIPLE)-unknown-linux-musl/release/kura-desktopd target/$(TRIPLE)-unknown-linux-musl/release/kura-agent \
+		target/$(TRIPLE)-unknown-linux-gnu/release/kura-helper dist/$(TRIPLE)/
 
 # build.sh calls `make dist ARCH=x86_64|aarch64`.
 dist:

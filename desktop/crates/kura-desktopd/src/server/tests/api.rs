@@ -25,7 +25,7 @@ async fn system_reports_the_device() {
 
 #[tokio::test]
 async fn prefs_round_trip_per_user() {
-    let app = TestApp::new();
+    let app = TestApp::with_guests();
     let cookie = app.sign_in("kura").await;
     assert_eq!(app.send(request("GET", "/api/prefs", Some(&cookie), None)).await.0.status(), 404);
     assert_eq!(app.send(request("PUT", "/api/prefs", Some(&cookie), Some(PREFS))).await.0.status(), 204);
@@ -33,8 +33,8 @@ async fn prefs_round_trip_per_user() {
     assert_eq!(res.status(), 200);
     let parse = |s: &str| kura_desktop_core::prefs::Prefs::parse(s.as_bytes()).unwrap();
     assert_eq!(parse(&body), parse(PREFS));
-    let root = app.sign_in("root").await;
-    assert_eq!(app.send(request("GET", "/api/prefs", Some(&root), None)).await.0.status(), 404);
+    let other = app.sign_in("guest").await;
+    assert_eq!(app.send(request("GET", "/api/prefs", Some(&other), None)).await.0.status(), 404);
 }
 
 #[tokio::test]

@@ -1,0 +1,38 @@
+#!/bin/bash
+# __BRAND__-kiosk — the local screen (ADR-033): Kura Desktop on the
+# machine's own display, in a browser that fills it.
+#
+# Usage: __BRAND__-kiosk display   exit 0 when a display is connected
+#        __BRAND__-kiosk run       the browser, full screen, on this server's own desktop
+#
+# The unit runs "display" as its condition, so a server without a screen
+# starts nothing and keeps its console.
+
+set -euo pipefail
+
+DRM="${KIOSK_DRM:-/sys/class/drm}"   # a test's folder; the kernel's on a device
+URL="https://localhost/"
+
+# display_connected: a connector of any card reports a display
+display_connected() {
+    local status state
+    for status in "${DRM}"/card*-*/status; do
+        [ -f "${status}" ] || continue
+        read -r state < "${status}" || continue
+        [ "${state}" != "connected" ] || return 0
+    done
+    return 1
+}
+
+main() {
+    case "${1:-}" in
+        display) display_connected ;;
+        # The certificate is this server's own, self-signed, and the address
+        # is this machine: nothing between the browser and the server could
+        # be anyone else. -s keeps Ctrl+Alt+F1 to the console.
+        run) exec cage -s -- cog --platform=wl --ignore-tls-errors "${URL}" ;;
+        *) echo "Usage: __BRAND__-kiosk display | run" >&2; exit 2 ;;
+    esac
+}
+
+main "$@"

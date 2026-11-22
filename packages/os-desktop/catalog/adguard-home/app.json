@@ -1,0 +1,11 @@
+{
+  "id": "adguard-home",
+  "name": "AdGuard Home",
+  "version": "0.107.56",
+  "port": 3000,
+  "fixedPorts": [
+    53
+  ],
+  "shared": [],
+  "homepage": "https://adguard.com/adguard-home/overview.html"
+}
