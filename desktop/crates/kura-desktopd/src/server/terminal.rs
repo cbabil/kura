@@ -56,6 +56,7 @@ impl Drop for Closer {
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             // An already ended shell is "not found", which is fine.
             runtime.spawn(async move {
+                tracing::info!("terminal: asking the helper to close it");
                 let closed = helper.close_terminal(&ticket, &id).await;
                 tracing::info!(ok = closed.is_ok(), "terminal closed");
             });
@@ -97,10 +98,11 @@ pub(super) async fn terminal(
     ws.max_message_size(MAX_INCOMING).max_frame_size(MAX_INCOMING).on_upgrade(move |socket| async move {
         let (sink, stream) = socket.split();
         // Each direction on its own, so a flood one way never blocks the other.
-        tokio::select! {
-            () = shell_to_browser(&pty, sink) => {}
-            () = browser_to_shell(&pty, stream, &state, &authed.id) => {}
-        }
+        let ended = tokio::select! {
+            () = shell_to_browser(&pty, sink) => "the shell ended",
+            () = browser_to_shell(&pty, stream, &state, &authed.id) => "the browser left",
+        };
+        tracing::info!("terminal: {ended}");
         drop(closer);
     })
 }
