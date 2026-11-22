@@ -20,7 +20,7 @@ use tokio::sync::OwnedSemaphorePermit;
 
 use super::AppState;
 use super::guard::{Authed, error, origin_matches, refused};
-use crate::helper::Helper;
+use crate::helper::{Helper, HelperError};
 use crate::pty::Pty;
 
 /// The largest message accepted from the client (a big paste).
@@ -56,8 +56,11 @@ impl Drop for Closer {
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             // An already ended shell is "not found", which is fine.
             runtime.spawn(async move {
-                if let Err(e) = helper.close_terminal(&ticket, &id).await {
-                    tracing::debug!("closing a terminal: {e}");
+                match helper.close_terminal(&ticket, &id).await {
+                    // Signed out, or its shell had ended: the helper has closed it already.
+                    Ok(()) | Err(HelperError::NotFound | HelperError::SignedOut) => {}
+                    // A shell that may still be running must show in the journal.
+                    Err(e) => tracing::warn!(terminal = id, "a closed terminal's shell was not stopped: {e}"),
                 }
             });
         }
