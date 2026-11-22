@@ -8,6 +8,8 @@ use crate::root::SysRoot;
 
 /// Kura's configuration, which `kura-config` applies.
 pub const CONFIG: &str = "/etc/kura/config.json";
+/// The name the system has, when Kura's configuration names none.
+const HOSTNAME: &str = "/etc/hostname";
 /// Present while an address change waits to be confirmed.
 pub const PENDING: &str = "/var/lib/kura/network-previous.json";
 /// How the disk layout went at first boot.
@@ -32,7 +34,12 @@ pub fn read_config(root: &SysRoot) -> (String, Vec<String>, Ethernet) {
     } else {
         Ethernet::default()
     };
-    (text(&config["hostname"]), wifi.unwrap_or_default(), ethernet)
+    // A server that was never given a name by an imager still has one.
+    let mut hostname = text(&config["hostname"]);
+    if hostname.is_empty() {
+        hostname = root.read(HOSTNAME).unwrap_or_default().trim().to_owned();
+    }
+    (hostname, wifi.unwrap_or_default(), ethernet)
 }
 
 /// Splits a terse nmcli line at its first plain colon; `\:` and `\\` in the
@@ -154,5 +161,8 @@ mod tests {
         );
         std::fs::write(dir.path().join("etc/kura/config.json"), "{not json").unwrap();
         assert_eq!(read_config(&root).0, "");
+        // Without a name of Kura's, the system's own
+        std::fs::write(dir.path().join("etc/hostname"), "attic-nas\n").unwrap();
+        assert_eq!(read_config(&root).0, "attic-nas");
     }
 }
