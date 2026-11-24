@@ -21,6 +21,7 @@ kura_owned() {
         "usr/bin/${b}-config" "usr/bin/${b}-security" "usr/lib/${b}" \
         usr/lib/systemd/system/"${b}"-*.service usr/lib/systemd/system/"${b}"-*.timer \
         "usr/lib/systemd/system/xrdp.service.d/10-${b}.conf" \
+        "usr/lib/systemd/system/serial-getty@.service.d/10-${b}.conf" \
         "usr/lib/systemd/system/avahi-daemon.service.d/10-${b}.conf" \
         usr/share/dbus-1/system.d/io.kura.Helper.conf \
         "usr/lib/sysusers.d/${b}-desktop.conf" "usr/lib/tmpfiles.d/${b}-desktop.conf" \

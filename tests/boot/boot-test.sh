@@ -141,6 +141,9 @@ check "Kura registered as a package" kura_package
 check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
 check "core services active" services_active
+# This VM has a serial port, so the kernel has a serial console and systemd
+# starts the login prompt on it by itself: nothing in the image forces one
+check "serial login prompt where there is a serial console" services_active "serial-getty@ttyS0"
 check "Docker answers" docker_answers
 check "answers to <host>.local on the local network" mdns_answers
 # Kura Desktop (ADR-023)
