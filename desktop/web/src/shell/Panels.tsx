@@ -9,6 +9,12 @@ import { AppIcon } from '../icons/AppIcon'
 import { appText } from '../apps/registry'
 import { useI18n } from '../i18n'
 
+/** The caption's two lines sit level with the dock's icons. */
+const CAPTION_BOTTOM = 28
+/** How far from the middle the dock reaches with its usual apps, and a
+ *  margin. A dock grown by many open apps covers the caption, which is fine. */
+const DOCK_REACH = 340
+
 export function Wallpaper({ hostname }: { hostname: string }) {
   const k = useTheme().kura
   const { t } = useI18n()
@@ -16,7 +22,10 @@ export function Wallpaper({ hostname }: { hostname: string }) {
     <Box aria-hidden sx={{ position: 'absolute', inset: 0, background: k.wall, overflow: 'hidden' }}>
       <Box sx={{ position: 'absolute', right: '5%', bottom: '10%', fontSize: 'min(62vh, 560px)', lineHeight: 1,
         fontFamily: MINCHO, color: k.glyph, userSelect: 'none' }}>蔵</Box>
-      <Box sx={{ position: 'absolute', left: 44, bottom: 120, color: 'text.secondary', display: { xs: 'none', md: 'block' } }}>
+      {/* In the bottom corner, beside the dock: only where the screen is wide
+          enough for both, and never wider than the room the dock leaves */}
+      <Box sx={{ position: 'absolute', left: 44, bottom: CAPTION_BOTTOM, color: 'text.secondary', display: { xs: 'none', lg: 'block' },
+        maxWidth: `calc(50vw - ${DOCK_REACH}px)`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         <Kicker>蔵 · {t('brand.kicker')}</Kicker>
         {hostname}.local
       </Box>
