@@ -32,9 +32,17 @@ DPkg::Post-Invoke { "if [ -x /usr/lib/${BRAND}/sync-efi.sh ]; then /usr/lib/${BR
 EOF
 
 # ---- Serial console (VMs and the CI boot test) ----
-install -d "${ROOTFS}/etc/systemd/system/getty.target.wants"
-ln -sf /usr/lib/systemd/system/serial-getty@.service \
-    "${ROOTFS}/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
+# The kernel is told of ttyS0 (pc-image.sh), and systemd starts a login
+# prompt on every serial console the kernel has. A PC without the port
+# still has its name, and its kernel still lists it, so the prompt failed
+# and was restarted every ten seconds. It now starts only if the port
+# answers; a condition that fails skips the unit without a restart.
+# (Kura used to force the prompt with a link: migration 003 removes it.)
+install -d "${ROOTFS}/usr/lib/systemd/system/serial-getty@.service.d"
+cat > "${ROOTFS}/usr/lib/systemd/system/serial-getty@.service.d/10-${BRAND}.conf" <<'EOF'
+[Service]
+ExecCondition=/bin/sh -c 'stty -F /dev/%I >/dev/null 2>&1'
+EOF
 
 # ---- Strip documentation and translations ----
 echo "Stripping docs/man/locales..."

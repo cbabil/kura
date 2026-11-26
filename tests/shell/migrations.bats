@@ -85,3 +85,43 @@ status() { cat "${ROOT}/var/lib/kura/$1"; }
     [ "$(cat "${ROOT}/etc/default/console-setup")" = 'CODESET="Lat15"' ]
     [ ! -e "${BATS_TEST_TMPDIR}/calls" ]
 }
+
+# ---- 003: the serial login prompt ----
+
+# serial_link <target>: the prompt's link, as a device has it
+serial_link() {
+    LINK="${ROOT}/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
+    mkdir -p "$(dirname "${LINK}")"
+    ln -s "$1" "${LINK}"
+}
+
+@test "003: the link Kura made for the serial login prompt is removed" {
+    serial_link /usr/lib/systemd/system/serial-getty@.service
+    run "${MIG}/003-serial-getty.sh"
+    [ "$status" -eq 0 ]
+    [ ! -L "${LINK}" ]
+}
+
+@test "003: a prompt the owner set up themselves is left alone" {
+    serial_link /etc/systemd/system/my-serial-getty.service
+    run "${MIG}/003-serial-getty.sh"
+    [ "$status" -eq 0 ]
+    [ -L "${LINK}" ]
+}
+
+# An owner who silenced the loop by masking it: the mask stays theirs, and
+# Kura's link goes, so that unmasking does not bring the loop back
+@test "003: a masked prompt stays masked, without Kura's link behind it" {
+    serial_link /usr/lib/systemd/system/serial-getty@.service
+    ln -s /dev/null "${ROOT}/etc/systemd/system/serial-getty@ttyS0.service"
+    run "${MIG}/003-serial-getty.sh"
+    [ "$status" -eq 0 ]
+    [ ! -L "${LINK}" ]
+    [ "$(readlink "${ROOT}/etc/systemd/system/serial-getty@ttyS0.service")" = "/dev/null" ]
+}
+
+@test "003: no link (a new image, the image build, or run again) does nothing" {
+    run "${MIG}/003-serial-getty.sh"
+    [ "$status" -eq 0 ]
+    [ -z "$(find "${ROOT}/etc" -name 'serial-getty*')" ]
+}

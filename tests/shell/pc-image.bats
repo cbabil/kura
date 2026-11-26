@@ -191,6 +191,26 @@ sync_root() {
     [ ! -L "${rootfs}/etc/systemd/system/multi-user.target.wants/qemu-guest-agent.service" ]
 }
 
+# A PC without a serial port still has the device's name, and its kernel
+# still calls it a console, so systemd starts a login prompt on it that
+# fails and restarts for ever. The prompt starts only if the port answers.
+@test "x86 customize-rootfs: a serial login prompt starts only on a port that answers" {
+    local rootfs="${BATS_TEST_TMPDIR}/rootfs" dropin
+    mkdir -p "${rootfs}"
+    run "${REPO_ROOT}/scripts/x86_64/customize-rootfs.sh" "${rootfs}"
+    [ "$status" -eq 0 ]
+    dropin="${rootfs}/usr/lib/systemd/system/serial-getty@.service.d/10-kura.conf"
+    grep -qxF "[Service]" "${dropin}"
+    grep -qxF "ExecCondition=/bin/sh -c 'stty -F /dev/%I >/dev/null 2>&1'" "${dropin}"
+    # no prompt is forced: systemd starts one where the kernel has a serial console
+    [ -z "$(find "${rootfs}/etc" -name 'serial-getty*' 2>/dev/null)" ]
+    grep -qF 'console=ttyS0,115200 console=tty0' "${REPO_ROOT}/scripts/x86_64/pc-image.sh"
+    # the kura package owns the check, so a device that upgrades gets it
+    source "${REPO_ROOT}/scripts/packaging/kura-package.sh"
+    run kura_owned "${rootfs}" kura
+    output_has "usr/lib/systemd/system/serial-getty@.service.d/10-kura.conf"
+}
+
 @test "x86 customize-rootfs: keeps firmware, drivers and time zones" {
     local rootfs="${BATS_TEST_TMPDIR}/rootfs"
     mkdir -p "${rootfs}/usr/lib/firmware/intel" "${rootfs}/usr/share/zoneinfo/Europe" \
