@@ -31,7 +31,6 @@
   "menu.zoom": "Mărește",
   "menu.desktopHelp": "Ajutor Kura Desktop",
   "status.temp": "Temperatura procesorului",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "Conectat la server",
   "status.disconnected": "Neconectat",
   "status.online": "Online",

@@ -31,7 +31,6 @@
   "menu.zoom": "Zvětšit",
   "menu.desktopHelp": "Nápověda pro Kura Desktop",
   "status.temp": "Teplota procesoru",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "Připojeno k serveru",
   "status.disconnected": "Nepřipojeno",
   "status.online": "Online",

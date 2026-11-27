@@ -31,7 +31,6 @@
   "menu.zoom": "Zoomen",
   "menu.desktopHelp": "Help bij Kura Desktop",
   "status.temp": "CPU-temperatuur",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "Verbonden met de server",
   "status.disconnected": "Niet verbonden",
   "status.online": "Online",

@@ -31,7 +31,6 @@
   "menu.zoom": "拡大/縮小",
   "menu.desktopHelp": "Kura Desktopヘルプ",
   "status.temp": "CPU 温度",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "サーバに接続済み",
   "status.disconnected": "未接続",
   "status.online": "オンライン",

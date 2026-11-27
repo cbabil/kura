@@ -31,7 +31,6 @@
   "menu.zoom": "缩放",
   "menu.desktopHelp": "Kura Desktop 帮助",
   "status.temp": "CPU 温度",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "已连接到服务器",
   "status.disconnected": "未连接",
   "status.online": "在线",

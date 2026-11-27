@@ -31,7 +31,6 @@
   "menu.zoom": "Розгорнути",
   "menu.desktopHelp": "Довідка Kura Desktop",
   "status.temp": "Температура процесора",
-  "status.tempShort": "ЦП {degrees}°",
   "status.connected": "Підключено до сервера",
   "status.disconnected": "Немає підключення",
   "status.online": "У мережі",

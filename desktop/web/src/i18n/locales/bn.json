@@ -31,7 +31,6 @@
   "menu.zoom": "বড় করুন",
   "menu.desktopHelp": "Kura Desktop সহায়তা",
   "status.temp": "CPU-র তাপমাত্রা",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "সার্ভারের সঙ্গে সংযুক্ত",
   "status.disconnected": "সংযুক্ত নয়",
   "status.online": "অনলাইন",

@@ -31,7 +31,6 @@
   "menu.zoom": "Teljes méret",
   "menu.desktopHelp": "Kura Desktop súgó",
   "status.temp": "Processzor hőmérséklete",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "Csatlakozva a szerverhez",
   "status.disconnected": "Nincs kapcsolat",
   "status.online": "Online",
