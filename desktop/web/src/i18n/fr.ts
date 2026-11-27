@@ -109,7 +109,7 @@ export const fr: Messages = {
   'app.catalog.name': 'Catalogue d’apps',
   'app.catalog.blurb': 'Installer des apps en un clic',
   'app.browser.name': 'Navigateur',
-  'app.browser.blurb': 'Un navigateur web sur ce serveur, partagé par toutes les personnes connectées',
+  'app.browser.blurb': 'Votre propre navigateur web, qui tourne sur ce serveur',
   'app.trash.name': 'Corbeille',
   'app.trash.blurb': "Fichiers supprimés, gardés jusqu'à ce que vous la vidiez",
 

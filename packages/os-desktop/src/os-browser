@@ -1,23 +1,27 @@
 #!/bin/bash
-# __BRAND__-browser — the shared Browser (ADR-036): Debian's Chromium in
-# TigerVNC's X server, which __BRAND_NAME__ Desktop shows in a window. Run by
-# __BRAND__-browser.service as its own account; the helper starts the unit
-# when someone opens the app.
+# __BRAND__-browser — a person's Browser (ADR-036): Debian's Chromium in
+# TigerVNC's X server, which __BRAND_NAME__ Desktop shows in a window. The helper
+# has systemd run it as the person who opened the app
+# (__BRAND__-browser-<user>.service), with its profile in their home.
 #
 # Usage: __BRAND__-browser run   the X server and Chromium, until Chromium ends
 #
-# The VNC server listens on a unix socket only (no TCP, not even loopback):
-# the agents' accounts on this machine must not reach it. The folder is the
-# unit's own, and only __BRAND__-desktop shares its group. The X display takes a
-# cookie made here at each start, and the unit's /tmp is private.
+# The VNC server listens on a unix socket only (no TCP, not even loopback),
+# in the unit's runtime folder, the person's alone; the helper connects to
+# it and checks the server is theirs. The X display takes a cookie made here
+# at each start and is numbered by the person's uid, so two people's
+# browsers never meet. Its abstract socket (@/tmp/.X11-unix/X<uid>) is open
+# to every account whatever /tmp is: -nopn makes the server refuse to start
+# rather than run without it, so nobody can hold that name first and have
+# Chromium draw to a server of their own.
 
 set -euo pipefail
 
 BIN="${BROWSER_BIN:-/usr/bin}"          # a test's folder; Debian's on a device
-RUN="${RUNTIME_DIRECTORY:-/run/__BRAND__-browser}"
-STATE="${STATE_DIRECTORY:-/var/lib/__BRAND__-browser}"
+RUN="${RUNTIME_DIRECTORY:?run by its unit, which gives it a runtime folder}"
+PROFILE="${HOME:?}/.config/chromium"   # the person's own, where Chromium keeps it anyway
 WAIT="${BROWSER_WAIT:-15}"              # seconds the X server has to listen
-DISPLAY_NAME=":1"
+DISPLAY_NAME=":$(id -u)"
 SOCKET="${RUN}/vnc.sock"
 COOKIE="${RUN}/Xauthority"
 # Nobody watching for this long ends the X server, and Chromium with it
@@ -52,7 +56,7 @@ run() {
     "${BIN}/matchbox-window-manager" -use_titlebar no &
     wm=$!
     # The sandbox stays on: user namespaces, as Debian's Chromium uses them.
-    "${BIN}/chromium" --user-data-dir="${STATE}/profile" --ozone-platform=x11 \
+    "${BIN}/chromium" --user-data-dir="${PROFILE}" --ozone-platform=x11 \
         --no-first-run --no-default-browser-check --password-store=basic --start-maximized &
     chromium=$!
     # Stopped (Quit, or the machine shutting down; the unit's KillMode=mixed

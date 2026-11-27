@@ -1,9 +1,9 @@
 /**
- * Browser (ADR-036): a Chromium that runs on the server, shared by everyone
- * signed in, shown in a window. The viewer (noVNC) is loaded when the window
- * first opens, so the desktop itself stays small. Closing the window leaves
- * the browser running; it stops after 15 minutes nobody watched, or from
- * File › Quit Browser.
+ * Browser (ADR-036): the signed-in person's own Chromium, running on the
+ * server as them with its profile in their home, shown in a window. The
+ * viewer (noVNC) is loaded when the window first opens, so the desktop
+ * itself stays small. Closing the window leaves the browser running; it
+ * stops after 15 minutes nobody watched, or from File › Quit Browser.
  */
 import { lazy, memo, Suspense, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material'

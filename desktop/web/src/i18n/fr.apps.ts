@@ -11,7 +11,7 @@ export const apps = {
   'browser.label': 'Le navigateur du serveur',
   'browser.loading': 'Démarrage du navigateur…',
   'browser.ended.closed': 'Le navigateur a été fermé, ou personne ne l’a regardé depuis un moment.',
-  'browser.ended.refused': 'Le navigateur n’a pas pu démarrer. Trop de personnes le regardent peut-être, ou il n’est pas installé sur ce serveur.',
+  'browser.ended.refused': 'Le navigateur n’a pas pu démarrer. Votre compte n’a peut-être pas de shell de connexion, trop de fenêtres de navigateur sont peut-être ouvertes, ou il n’est pas installé sur ce serveur.',
   'browser.open': 'Ouvrir le navigateur',
   'browser.paste.title': 'Coller du texte',
   'browser.paste.text': 'Texte pour le presse-papiers du navigateur',

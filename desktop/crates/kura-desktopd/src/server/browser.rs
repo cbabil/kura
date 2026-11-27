@@ -1,9 +1,10 @@
 //! The Browser app (ADR-036): the WebSocket `/api/browser`. The helper
-//! starts the shared Chromium's unit; this relays the VNC server's unix
-//! socket to the page, bytes as they are, in binary frames both ways
-//! (noVNC speaks RFB over them). Text frames mean nothing and are dropped.
+//! starts the signed-in person's own Chromium, as them, and hands over a
+//! connection to its VNC server; this relays it to the page, bytes as they
+//! are, in binary frames both ways (noVNC speaks RFB over them). Text
+//! frames mean nothing and are dropped.
 
-use std::path::Path;
+use std::os::fd::OwnedFd;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -30,11 +31,10 @@ const CHUNK: usize = 64 * 1024;
 /// How often the helper is asked whether the sign-in still holds: a
 /// changed password or a removed account ends the view.
 const RECHECK: Duration = Duration::from_secs(60);
-/// How often a starting browser's socket is tried.
-const RETRY: Duration = Duration::from_millis(200);
 
-/// Opens the shared browser: 401 without a session, 403 for a foreign or
-/// missing Origin, 429 with too many viewers, 503 when it does not start.
+/// Opens the person's own browser: 401 without a session, 403 for a foreign
+/// or missing Origin or an account without a login shell, 429 with too many
+/// views, 503 when it does not start.
 pub(super) async fn browser(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -49,12 +49,16 @@ pub(super) async fn browser(
     let Ok(slot) = state.browser_slots.clone().try_acquire_owned() else {
         return error(StatusCode::TOO_MANY_REQUESTS, "busy");
     };
-    if let Err(e) = crate::helper::ask(state.helper.as_ref(), &authed.ticket, Action::Browser, &()).await {
-        return refused(&state, &authed.id, &e);
-    }
-    let Some(vnc) = connect(&state.browser_socket, state.browser_wait).await else {
-        tracing::warn!("the browser did not start listening");
-        return error(StatusCode::SERVICE_UNAVAILABLE, "unavailable");
+    let vnc = match state.helper.open_browser(&authed.ticket).await {
+        Ok(fd) => fd,
+        Err(e) => return refused(&state, &authed.id, &e),
+    };
+    let vnc = match unix_stream(vnc) {
+        Ok(stream) => stream,
+        Err(e) => {
+            tracing::error!("browser: {e}");
+            return error(StatusCode::SERVICE_UNAVAILABLE, "unavailable");
+        }
     };
     tracing::info!(user = %authed.user.name, "browser opened");
     ws.max_message_size(MAX_INCOMING).max_frame_size(MAX_INCOMING).on_upgrade(move |socket| async move {
@@ -70,25 +74,16 @@ pub(super) async fn browser(
     })
 }
 
-/// Quits the shared browser, for everyone watching it: 204.
+/// Quits the person's own browser: 204.
 pub(super) async fn stop(State(state): State<Arc<AppState>>, authed: Authed) -> Response {
     asked(&state, &authed, Action::BrowserStop, &()).await
 }
 
-/// The VNC server's socket, tried until `wait` has passed: a browser that
-/// was just started takes a moment to listen.
-async fn connect(path: &Path, wait: Duration) -> Option<UnixStream> {
-    let until = Instant::now() + wait;
-    loop {
-        match UnixStream::connect(path).await {
-            Ok(stream) => return Some(stream),
-            Err(_) if Instant::now() < until => tokio::time::sleep(RETRY).await,
-            Err(e) => {
-                tracing::debug!("browser socket: {e}");
-                return None;
-            }
-        }
-    }
+/// The helper's connection, as the runtime's own socket.
+fn unix_stream(fd: OwnedFd) -> std::io::Result<UnixStream> {
+    let stream = std::os::unix::net::UnixStream::from(fd);
+    stream.set_nonblocking(true)?;
+    UnixStream::from_std(stream)
 }
 
 /// Sends the screen to the page until the browser ends, then closes.

@@ -120,19 +120,19 @@ desktop_screens() {
         [ -s "${OUT}/browser.png" ]
 }
 
-# The shared Browser (ADR-036), started here as the helper starts it: while
-# it runs, nothing of it listens on a network port (its VNC server has a
-# unix socket only, the group's), the X server holds its abstract socket
-# itself, and it is not running as anyone else; then it stops when asked
+# The Browser (ADR-036), left open by the screenshots: the login user's own
+# unit runs Chromium as them; its socket is in a folder of theirs alone;
+# nothing of it listens on a network port; the X server holds its own
+# abstract socket (numbered by their uid). Then it stops when asked.
 desktop_browser_private() {
-    local unit="${BRAND}-browser" socket="/run/${BRAND}-browser/vnc.sock" tries=30 ok=0
-    sudo_run "systemctl start ${unit}" &&
-        until sudo_run "test -S ${socket}" || [ "${tries}" -eq 0 ]; do sleep 1; tries=$((tries - 1)); done
-    report_facts "$(sudo_run "stat -c '%U:%G %a' ${socket}" || echo 'no socket')"
-    if [ "$(sudo_run "stat -c '%U:%G %a' ${socket}")" = "${BRAND}-browser:${BRAND}-browser 660" ] &&
+    local unit="browser-${LOGIN_USER}" uid ok=0
+    uid=$(ssh_run "id -u") || return 1
+    report_facts "$(sudo_run "stat -c '%U %a' /run/${unit} /run/${unit}/vnc.sock" | tr '\n' ' ')"
+    if [ "$(ssh_run "systemctl is-active ${unit}" || true)" = active ] &&
+        [ "$(sudo_run "stat -c '%U %a' /run/${unit}")" = "${LOGIN_USER} 700" ] &&
         ! sudo_run "ss -ltnupH" | grep -q 'Xtigervnc\|chromium' &&
-        sudo_run "ss -xlpH" | grep '@/tmp/.X11-unix/X1' | grep -q Xtigervnc &&
-        [ "$(ssh_run "ps -o user= -C chromium | sort -u")" = "${BRAND}-browser" ]; then
+        sudo_run "ss -xlpH" | grep "@/tmp/.X11-unix/X${uid} " | grep -q Xtigervnc &&
+        [ "$(ssh_run "ps -o user= -C chromium | sort -u")" = "${LOGIN_USER}" ]; then
         ok=1
     fi
     sudo_run "systemctl stop ${unit}"

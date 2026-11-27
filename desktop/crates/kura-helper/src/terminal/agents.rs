@@ -17,7 +17,7 @@ impl Terminals {
     /// # Errors
     /// As [`Terminals::open`], without the size.
     pub async fn open_agent(&self, ticket: &str, account: &Account) -> Result<(String, OwnedFd), Refusal> {
-        if !self.login_shell(&account.shell) {
+        if !self.has_login_shell(&account.shell) {
             return Err(Refusal::NoShell);
         }
         self.close_where(|o| o.ticket == ticket && o.kind == Kind::Agent).await;

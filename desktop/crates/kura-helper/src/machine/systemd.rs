@@ -10,7 +10,6 @@ use kura_desktop_core::updates::{JobState, PACKAGE};
 use super::{Machine, update_commands};
 use crate::Fut;
 use crate::job::JobUnit;
-use crate::systemd::ManagerProxy;
 
 /// The update job's unit: one at a time.
 const UNIT: &str = "kura-job-update.service";
@@ -30,7 +29,6 @@ trait Login {
 /// The machine through the system bus.
 pub struct SystemdMachine {
     login: LoginProxy<'static>,
-    manager: ManagerProxy<'static>,
     job: JobUnit,
 }
 
@@ -56,11 +54,7 @@ impl SystemdMachine {
     /// # Errors
     /// Fails when a proxy cannot be set up.
     pub async fn new(conn: &zbus::Connection) -> zbus::Result<Self> {
-        Ok(Self {
-            login: LoginProxy::new(conn).await?,
-            manager: ManagerProxy::new(conn).await?,
-            job: JobUnit::new(conn, UNIT, JOB_TIMEOUT).await?,
-        })
+        Ok(Self { login: LoginProxy::new(conn).await?, job: JobUnit::new(conn, UNIT, JOB_TIMEOUT).await? })
     }
 }
 
@@ -93,17 +87,5 @@ impl Machine for SystemdMachine {
 
     fn job_output(&self) -> Fut<'_, Vec<String>> {
         Box::pin(self.job.output())
-    }
-
-    fn browser(&self, on: bool) -> Fut<'_, Result<(), String>> {
-        Box::pin(async move {
-            let unit = kura_desktop_core::browser::UNIT;
-            let asked = if on {
-                self.manager.start_unit(unit, "replace").await
-            } else {
-                self.manager.stop_unit(unit, "replace").await
-            };
-            asked.map(|_| ()).map_err(|e| e.to_string())
-        })
     }
 }

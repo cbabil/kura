@@ -1,11 +1,9 @@
-//! The Browser's WebSocket (ADR-036) against a stand-in VNC server on a
-//! unix socket of the test's own.
+//! The Browser's WebSocket (ADR-036) against the development helper, whose
+//! browsers are stand-in VNC servers that greet and then echo.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::ws::{Socket, connect_to, serve};
@@ -13,37 +11,13 @@ use super::*;
 
 const PATH: &str = "/api/browser";
 
-/// An app whose Browser listens at a socket in a folder of the test's.
-fn app(viewers: usize) -> (TestApp, PathBuf, tempfile::TempDir) {
-    let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("vnc.sock");
-    let at = socket.clone();
-    let app = TestApp::with(move |s| {
+/// An app where people without a fixture account can sign in, with at most
+/// `views` browser views. Its helper's browsers greet as RFB does, then echo.
+fn app(views: usize) -> TestApp {
+    TestApp::with(move |s| {
         s.fallback_uid = Some(1001);
-        s.browser_socket = at;
-        s.browser_wait = Duration::from_millis(300);
-        s.browser_slots = Arc::new(tokio::sync::Semaphore::new(viewers));
-    });
-    (app, socket, dir)
-}
-
-/// A VNC server that greets each viewer as RFB does, then echoes.
-fn vnc(socket: &std::path::Path) -> tokio::net::UnixListener {
-    tokio::net::UnixListener::bind(socket).unwrap()
-}
-
-async fn echo(listener: tokio::net::UnixListener) {
-    while let Ok((mut stream, _)) = listener.accept().await {
-        tokio::spawn(async move {
-            stream.write_all(b"RFB 003.008\n").await.unwrap();
-            let mut buf = [0u8; 1024];
-            while let Ok(n @ 1..) = stream.read(&mut buf).await {
-                if stream.write_all(&buf[..n]).await.is_err() {
-                    return;
-                }
-            }
-        });
-    }
+        s.browser_slots = Arc::new(tokio::sync::Semaphore::new(views));
+    })
 }
 
 async fn open(addr: SocketAddr, cookie: &str) -> Result<Socket, u16> {
@@ -65,22 +39,34 @@ async fn next_bytes(socket: &mut Socket) -> Option<Vec<u8>> {
     tokio::time::timeout(Duration::from_secs(5), read).await.ok().flatten()
 }
 
+/// Waits until the socket closes; false when it stays open 10 s.
+async fn closes(ws: &mut Socket) -> bool {
+    let ended = async {
+        while let Some(Ok(msg)) = ws.next().await {
+            if matches!(msg, Message::Close(_)) {
+                break;
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), ended).await.is_ok()
+}
+
 #[tokio::test]
-async fn the_upgrade_needs_this_origin_and_a_session() {
-    let (app, socket, _dir) = app(4);
-    tokio::spawn(echo(vnc(&socket)));
+async fn the_upgrade_needs_this_origin_a_session_and_a_login_shell() {
+    let app = app(4);
     let addr = serve(&app).await;
     let cookie = app.sign_in("guest").await;
     assert_eq!(connect_to(addr, PATH, None, Some(&cookie)).await.unwrap_err(), 403, "missing Origin");
     assert_eq!(connect_to(addr, PATH, Some("https://evil.example"), Some(&cookie)).await.unwrap_err(), 403);
     assert_eq!(connect_to(addr, PATH, Some(&format!("https://{addr}")), None).await.unwrap_err(), 401);
-    assert!(open(addr, &cookie).await.is_ok(), "anyone signed in, administrator or not");
+    let noshell = app.sign_in("noshell").await;
+    assert_eq!(open(addr, &noshell).await.unwrap_err(), 403, "no login shell, no browser");
+    assert!(open(addr, &cookie).await.is_ok(), "anyone with a login shell, administrator or not");
 }
 
 #[tokio::test]
 async fn bytes_go_both_ways_unchanged() {
-    let (app, socket, _dir) = app(4);
-    tokio::spawn(echo(vnc(&socket)));
+    let app = app(4);
     let addr = serve(&app).await;
     let cookie = app.sign_in("kura").await;
     let mut ws = open(addr, &cookie).await.unwrap();
@@ -99,23 +85,23 @@ async fn bytes_go_both_ways_unchanged() {
 }
 
 #[tokio::test]
-async fn a_browser_that_never_listens_is_unavailable() {
-    let (app, _socket, _dir) = app(4);
+async fn a_browser_that_does_not_start_is_unavailable() {
+    let app = app(4);
+    app.helper.1.store(true, std::sync::atomic::Ordering::Relaxed);
     let addr = serve(&app).await;
     let cookie = app.sign_in("kura").await;
     assert_eq!(open(addr, &cookie).await.unwrap_err(), 503);
 }
 
 #[tokio::test]
-async fn viewers_are_capped() {
-    let (app, socket, _dir) = app(1);
-    tokio::spawn(echo(vnc(&socket)));
+async fn views_are_capped() {
+    let app = app(1);
     let addr = serve(&app).await;
     let cookie = app.sign_in("kura").await;
     let mut first = open(addr, &cookie).await.unwrap();
     assert_eq!(open(addr, &cookie).await.unwrap_err(), 429);
     first.close(None).await.unwrap();
-    // the slot comes back once the first viewer is gone
+    // the slot comes back once the first view is gone
     let again = async {
         loop {
             match open(addr, &cookie).await {
@@ -128,34 +114,19 @@ async fn viewers_are_capped() {
 }
 
 #[tokio::test]
-async fn the_browser_quitting_or_a_sign_out_ends_the_view() {
-    let (app, socket, _dir) = app(4);
-    let listener = vnc(&socket);
+async fn quitting_ends_only_ones_own_browser_and_a_sign_out_ends_the_view() {
+    let app = app(4);
     let addr = serve(&app).await;
-    let cookie = app.sign_in("kura").await;
-    // a server that greets and then quits: the view ends with it
-    let quit = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await.unwrap();
-        stream.write_all(b"RFB 003.008\n").await.unwrap();
-        drop(stream);
-        listener
-    });
-    let mut ws = open(addr, &cookie).await.unwrap();
-    assert_eq!(next_bytes(&mut ws).await.unwrap(), b"RFB 003.008\n");
-    assert_eq!(next_bytes(&mut ws).await, None, "closed when the browser quit");
-
-    tokio::spawn(echo(quit.await.unwrap()));
-    let mut ws = open(addr, &cookie).await.unwrap();
-    assert!(next_bytes(&mut ws).await.is_some());
-    app.send(request("POST", "/api/logout", Some(&cookie), None)).await;
-    let ended = async {
-        while let Some(Ok(msg)) = ws.next().await {
-            if matches!(msg, Message::Close(_)) {
-                break;
-            }
-        }
-    };
-    tokio::time::timeout(Duration::from_secs(10), ended).await.expect("a sign-out ends the view");
+    let (kura, chris) = (app.sign_in("kura").await, app.sign_in("chris").await);
+    let (mut mine, mut theirs) = (open(addr, &kura).await.unwrap(), open(addr, &chris).await.unwrap());
+    assert!(next_bytes(&mut mine).await.is_some() && next_bytes(&mut theirs).await.is_some());
+    let (code, _) = status(&app, request("POST", "/api/browser/stop", Some(&kura), None)).await;
+    assert_eq!(code, 204);
+    assert!(closes(&mut mine).await, "kura's browser quit, and its view with it");
+    theirs.send(Message::Binary(b"still here".to_vec().into())).await.unwrap();
+    assert_eq!(next_bytes(&mut theirs).await.unwrap(), b"still here", "chris's browser is chris's own");
+    app.send(request("POST", "/api/logout", Some(&chris), None)).await;
+    assert!(closes(&mut theirs).await, "a sign-out ends the view");
 }
 
 #[tokio::test]
@@ -167,7 +138,7 @@ async fn system_info_says_whether_the_browser_is_there() {
 }
 
 #[tokio::test]
-async fn anyone_signed_in_quits_the_shared_browser() {
+async fn quitting_needs_a_session_and_the_interfaces_header() {
     let app = TestApp::with_guests();
     let cookie = app.sign_in("guest").await;
     let (code, _) = status(&app, request("POST", "/api/browser/stop", Some(&cookie), None)).await;

@@ -38,6 +38,7 @@ async fn main() -> std::process::ExitCode {
             machine: Arc::new(SystemdMachine::new(&conn).await?),
             system: Arc::new(SystemdSystem::new(&conn).await?),
             apps: Arc::new(kura_helper::apps::systemd::SystemdApps::new(&conn).await?),
+            browsers: Arc::new(kura_helper::browser::systemd::SystemdBrowsers::new(&conn).await?),
         };
         // No terminal can be open yet: the tickets of an earlier helper are gone.
         backends.shells.sweep().await;

@@ -152,7 +152,7 @@ async fn the_journal_is_for_administrators() {
     assert!(matches!(rig.service.read_journal(&anna, 10, "", -1, "").await, Err(Refusal::Unavailable(_))));
 }
 
-/// Gives the fake root the Browser's unit and programs (ADR-036).
+/// Gives the fake root the Browser's command and programs (ADR-036).
 fn with_browser(dir: &std::path::Path) {
     for file in kura_desktop_core::browser::files() {
         let path = dir.join(file.trim_start_matches('/'));
@@ -162,23 +162,31 @@ fn with_browser(dir: &std::path::Path) {
 }
 
 #[tokio::test]
-async fn everyone_signed_in_starts_and_quits_the_shared_browser() {
+async fn each_person_opens_and_quits_their_own_browser() {
+    use std::io::{Read, Write};
     let rig = rig();
-    let (anna, bob) = (rig.sign_in("anna").await, rig.sign_in("bob").await);
-    assert!(matches!(rig.service.ask(&bob, "browser", "").await, Err(Refusal::Unavailable(_))), "no packages");
-    assert!(rig.machine.asked.lock().unwrap().is_empty());
+    let (anna, bob, carl) = (rig.sign_in("anna").await, rig.sign_in("bob").await, rig.sign_in("carl").await);
+    assert!(matches!(rig.service.open_browser(&bob).await, Err(Refusal::Unavailable(_))), "no packages");
+    assert!(rig.browsers.calls.lock().unwrap().is_empty());
 
     with_browser(rig.dir.path());
-    assert_eq!(rig.service.ask(&bob, "browser", "").await.unwrap(), "", "not an administrator, and still");
-    assert_eq!(rig.service.ask(&anna, "browser", "null").await.unwrap(), "");
-    assert_eq!(rig.service.ask(&anna, "browser-stop", "").await.unwrap(), "");
-    assert_eq!(rig.machine.asked.lock().unwrap().as_slice(), ["browser on", "browser on", "browser off"]);
+    // the connection handed over is the browser's own: bytes go both ways
+    let fd = rig.service.open_browser(&bob).await.expect("not an administrator, and still");
+    let mut theirs = std::os::unix::net::UnixStream::from(fd);
+    rig.browsers.servers.lock().unwrap()[0].write_all(b"RFB 003.008\n").unwrap();
+    let mut greeting = [0u8; 12];
+    theirs.read_exact(&mut greeting).unwrap();
+    assert_eq!(&greeting, b"RFB 003.008\n");
+    rig.service.open_browser(&anna).await.unwrap();
+    assert_eq!(rig.service.open_browser(&carl).await.err(), Some(Refusal::NoShell), "an account without a login shell");
+    assert_eq!(rig.service.ask(&bob, "browser-stop", "").await.unwrap(), "");
+    assert_eq!(rig.browsers.calls.lock().unwrap().as_slice(), ["open bob", "open anna", "stop bob"], "each their own");
 
-    for (action, args) in [("browser", "{}"), ("browser-stop", r#"{"unit":"ssh.service"}"#)] {
-        assert!(matches!(rig.service.ask(&anna, action, args).await, Err(Refusal::Invalid(_))), "{action} {args}");
+    // the browser is its own D-Bus method; its stop takes no arguments
+    for (action, args) in [("browser", ""), ("browser-stop", r#"{"user":"anna"}"#)] {
+        assert!(matches!(rig.service.ask(&bob, action, args).await, Err(Refusal::Invalid(_))), "{action} {args}");
     }
-    assert_eq!(rig.service.ask("forged", "browser", "").await, Err(Refusal::SignedOut));
-    rig.machine.fail.store(true, Ordering::Relaxed);
-    assert!(matches!(rig.service.ask(&anna, "browser", "").await, Err(Refusal::Unavailable(_))));
-    assert_eq!(rig.machine.asked.lock().unwrap().len(), 3, "nothing else reached systemd");
+    assert_eq!(rig.service.open_browser("forged").await.err(), Some(Refusal::SignedOut));
+    rig.browsers.fail.store(true, Ordering::Relaxed);
+    assert!(matches!(rig.service.open_browser(&anna).await, Err(Refusal::Unavailable(_))));
 }

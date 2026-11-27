@@ -34,13 +34,12 @@ impl Service {
         };
         let done = |()| String::new();
         match action {
-            // A terminal's answer is a file descriptor: its own D-Bus method.
-            Action::Terminal | Action::Files => Err(Refusal::Invalid("action".into())),
+            // A file descriptor is the answer: each has its own D-Bus method.
+            Action::Terminal | Action::Files | Action::Browser => Err(Refusal::Invalid("action".into())),
             Action::ListContainers
             | Action::UpdateStatus
             | Action::ReadSettings
             | Action::ReadCatalog
-            | Action::Browser
             | Action::BrowserStop
                 if !matches!(args, "" | "null") =>
             {
@@ -66,8 +65,7 @@ impl Service {
             Action::ChangeSetting => self.change_setting(ticket, &parse::<Change>(args)?).await.map(done),
             Action::ReadCatalog => self.read_catalog(ticket).await,
             Action::ChangeApp => self.change_app(ticket, &parse::<AppChange>(args)?).await.map(done),
-            Action::Browser => self.browser(ticket, true).await.map(done),
-            Action::BrowserStop => self.browser(ticket, false).await.map(done),
+            Action::BrowserStop => self.stop_browser(ticket).await.map(done),
             Action::ChangeOwnPassword => {
                 self.change_own_password(ticket, parse::<OwnPasswordArgs>(args)?).await.map(done)
             }
@@ -198,20 +196,14 @@ impl Service {
         self.machine.power(how).await.map_err(Refusal::Unavailable)
     }
 
-    /// Starts the shared Browser (ADR-036), or quits it. Its unit is the
-    /// one fixed name in `kura_desktop_core::browser::UNIT`; starting one
-    /// that runs already changes nothing.
+    /// Quits the ticket's user's own Browser; one that is not running is fine.
     ///
     /// # Errors
-    /// [`Refusal::Unavailable`] on a machine without the Browser's
-    /// packages, or when systemd refuses.
-    pub(super) async fn browser(&self, ticket: &str, on: bool) -> Result<(), Refusal> {
-        let account = self.admit(ticket, if on { Action::Browser } else { Action::BrowserStop })?;
-        if on && !kura_desktop_core::browser::available(&self.root) {
-            return Err(Refusal::Unavailable("the browser is not installed".into()));
-        }
-        let done = self.machine.browser(on).await;
-        tracing::info!(user = account.name, on, ok = done.is_ok(), "browser");
-        done.map_err(Refusal::Unavailable)
+    /// [`Refusal::SignedOut`] without a live ticket.
+    pub(super) async fn stop_browser(&self, ticket: &str) -> Result<(), Refusal> {
+        let account = self.admit(ticket, Action::BrowserStop)?;
+        self.browsers.stop(&account.name).await;
+        tracing::info!(user = account.name, "browser stopped");
+        Ok(())
     }
 }

@@ -38,6 +38,8 @@ pub trait Helper: Send + Sync {
     fn open_terminal<'a>(&'a self, ticket: &'a str, cols: u16, rows: u16) -> Fut<'a, (String, OwnedFd)>;
     /// Starts the user's file agent: its id and the socket to it.
     fn open_files<'a>(&'a self, ticket: &'a str) -> Fut<'a, (String, OwnedFd)>;
+    /// A connection to the user's own Browser (ADR-036), started first.
+    fn open_browser<'a>(&'a self, ticket: &'a str) -> Fut<'a, OwnedFd>;
     /// Stops a terminal or a file agent.
     fn close_terminal<'a>(&'a self, ticket: &'a str, id: &'a str) -> Fut<'a, ()>;
     /// Does one of the helper's named actions with its JSON arguments

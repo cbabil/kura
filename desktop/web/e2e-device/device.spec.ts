@@ -50,15 +50,13 @@ test('opens a shell as the login user, the containers and the journal', async ({
   await page.screenshot({ path: `${shots}/console.png` })
 })
 
-test('opens the shared Browser: a real Chromium on the device, drawn in its window', async ({ page }) => {
+test('opens the Browser: the login user’s own Chromium on the device, drawn in its window', async ({ page }) => {
   const shots = need('KURA_DEVICE_SHOTS')
   await page.goto('/')
   await signIn(page, need('KURA_DEVICE_USER'), need('KURA_DEVICE_PASS'))
-  // The image is built with OS_BROWSER (ADR-036); Chromium's first page needs no network
+  // The image is built with OS_BROWSER (ADR-036); Chromium's first page needs no network.
+  // It is left running: the boot test checks it while it runs (desktop_browser_private).
   const win = await openApp(page, 'Browser')
   await browserScreen(win)
   await page.screenshot({ path: `${shots}/browser.png` })
-  await page.getByRole('button', { name: 'File' }).click()
-  await page.getByRole('menuitem', { name: 'Quit Browser' }).click()
-  await expect(win.getByRole('status')).toContainText('The browser was closed', { timeout: 20_000 })
 })

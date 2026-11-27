@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
-# tests/shell/desktop-browser.bats — the shared Browser (ADR-036): Debian's
-# Chromium in TigerVNC's X server, as its own account, shown in Kura
-# Desktop. Its packages come with OS_BROWSER on the PC image only; its
-# unit, account and command are on every PC, started only when asked.
+# tests/shell/desktop-browser.bats — the Browser (ADR-036): each person's
+# own Debian Chromium in TigerVNC's X server, run as them by the helper,
+# shown in Kura Desktop. Its packages come with OS_BROWSER on the PC image
+# only; its command is on every PC. (The unit's settings are the helper's:
+# kura-helper/src/browser/systemd.rs.)
 
 REPO_ROOT="${BATS_TEST_DIRNAME}/../.."
 
@@ -10,13 +11,11 @@ setup() {
     load test_helper
     desktop_rootfs
     BROWSER=$(branded browser)
-    UNIT="${ROOTFS}/usr/lib/systemd/system/kura-browser.service"
-    USERS="${ROOTFS}/usr/lib/sysusers.d/kura-browser.conf"
     BIN="${BATS_TEST_TMPDIR}/bin"
     LOG="${BATS_TEST_TMPDIR}/calls"
     mkdir -p "${BIN}"
-    export RUNTIME_DIRECTORY="${BATS_TEST_TMPDIR}/run" STATE_DIRECTORY="${BATS_TEST_TMPDIR}/state"
-    mkdir -p "${RUNTIME_DIRECTORY}" "${STATE_DIRECTORY}"
+    export RUNTIME_DIRECTORY="${BATS_TEST_TMPDIR}/run" HOME="${BATS_TEST_TMPDIR}/home"
+    mkdir -p "${RUNTIME_DIRECTORY}" "${HOME}"
 }
 
 # stub <name> <body>: a program in BIN that notes its arguments, then runs body
@@ -34,51 +33,25 @@ x_server() {
 @test "the Pi's image has nothing of the Browser" {
     run "${INSTALL}" "${ROOTFS}" "${REPO_ROOT}/packages" "${DIST}"
     [ "$status" -eq 0 ]
-    [ ! -e "${UNIT}" ]
     [ ! -e "${ROOTFS}/usr/lib/kura/kura-browser" ]
-    [ ! -e "${USERS}" ]
 }
 
-@test "every PC image has the unit, its account and its command, never started at boot" {
+@test "every PC image has the command, and no unit or account of its own" {
     OS_KIOSK_FILES=true run "${INSTALL}" "${ROOTFS}" "${REPO_ROOT}/packages" "${DIST}"
     [ "$status" -eq 0 ]
     [ -x "${ROOTFS}/usr/lib/kura/kura-browser" ]
-    [ -f "${UNIT}" ]
-    run find "${ROOTFS}/etc/systemd" -name kura-browser.service
-    [ -z "$output" ]
-    file_has "${USERS}" 'u kura-browser - "Kura Browser" /var/lib/kura-browser /usr/sbin/nologin'
-    # desktopd may open the socket; nobody else is added to the group
-    grep -qxF "m kura-desktop kura-browser" "${USERS}"
-    [ "$(grep -c '^m ' "${USERS}")" -eq 1 ]
-    run grep -rl "__BRAND" "${UNIT}" "${ROOTFS}/usr/lib/kura/kura-browser" "${USERS}"
+    # each person's browser is a unit the helper starts, as them
+    [ ! -e "${ROOTFS}/usr/lib/systemd/system/kura-browser.service" ]
+    [ ! -e "${ROOTFS}/usr/lib/sysusers.d/kura-browser.conf" ]
+    run grep -l "__BRAND" "${ROOTFS}/usr/lib/kura/kura-browser"
     [ -z "$output" ]
 }
 
-@test "the kura package owns the Browser's files, so an upgrade keeps them" {
+@test "the kura package owns the command, so an upgrade keeps it" {
     source "${REPO_ROOT}/scripts/packaging/kura-package.sh"
     OS_KIOSK_FILES=true "${INSTALL}" "${ROOTFS}" "${REPO_ROOT}/packages" "${DIST}"
     run kura_owned "${ROOTFS}" kura
     [[ "$output" == *"usr/lib/kura/kura-browser"* ]]
-    [[ "$output" == *"usr/lib/systemd/system/kura-browser.service"* ]]
-    [[ "$output" == *"usr/lib/sysusers.d/kura-browser.conf"* ]]
-}
-
-@test "the unit: its own account, its own folders, no loopback, and the sandbox Chromium needs" {
-    OS_KIOSK_FILES=true "${INSTALL}" "${ROOTFS}" "${REPO_ROOT}/packages" "${DIST}"
-    local line
-    for line in "User=kura-browser" "Group=kura-browser" "ExecStart=/usr/lib/kura/kura-browser run" \
-                "StateDirectory=kura-browser" "StateDirectoryMode=0700" \
-                "RuntimeDirectory=kura-browser" "RuntimeDirectoryMode=0750" \
-                "Environment=HOME=/var/lib/kura-browser" "UMask=0077" \
-                "NoNewPrivileges=yes" "ProtectSystem=strict" "ProtectHome=yes" "PrivateTmp=yes" \
-                "IPAddressDeny=localhost" "Restart=no" "KillMode=mixed" \
-                "ConditionPathExists=/usr/bin/Xtigervnc" "ConditionPathExists=/usr/bin/chromium" \
-                "ConditionPathExists=/usr/bin/matchbox-window-manager" "ConditionPathExists=/usr/bin/xauth"; do
-        grep -qxF "${line}" "${UNIT}" || { echo "missing: ${line}"; return 1; }
-    done
-    # Chromium's own sandbox needs user namespaces, and V8 writable code
-    run grep -E "^(RestrictNamespaces|MemoryDenyWriteExecute|PrivateNetwork|\[Install\])" "${UNIT}"
-    [ "$status" -ne 0 ]
 }
 
 @test "the build adds the Browser's packages to a PC image built with OS_BROWSER only" {
@@ -103,18 +76,19 @@ x_server() {
     [ "$status" -eq 0 ]
     local x
     x=$(grep '^Xtigervnc ' "${LOG}")
-    for want in ":1" "-auth ${RUNTIME_DIRECTORY}/Xauthority" "-nolisten tcp" "-rfbport -1" \
+    for want in ":$(id -u)" "-auth ${RUNTIME_DIRECTORY}/Xauthority" "-nolisten tcp" "-rfbport -1" \
                 "-rfbunixpath ${RUNTIME_DIRECTORY}/vnc.sock" "-rfbunixmode 0660" "-SecurityTypes None" \
                 "-MaxDisconnectionTime 900" "-nopn"; do
         [[ "${x}" == *" ${want}"* ]] || { echo "X lacks: ${want}"; return 1; }
     done
     [[ "${x}" != *"-localhost"* && "${x}" != *"-rfbport 59"* ]]
-    # a fresh cookie of 32 hex digits, for display 1
-    grep -qE "^xauth -f ${RUNTIME_DIRECTORY}/Xauthority add :1 \. [0-9a-f]{32}$" "${LOG}"
+    # a fresh cookie of 32 hex digits, for the display of the person's uid
+    grep -qE "^xauth -f ${RUNTIME_DIRECTORY}/Xauthority add :$(id -u) \. [0-9a-f]{32}$" "${LOG}"
     grep -qx "matchbox-window-manager -use_titlebar no" "${LOG}"
     local c
     c=$(grep '^chromium ' "${LOG}")
-    for want in "--user-data-dir=${STATE_DIRECTORY}/profile" "--ozone-platform=x11" "--no-first-run" \
+    # the profile in the person's home
+    for want in "--user-data-dir=${HOME}/.config/chromium" "--ozone-platform=x11" "--no-first-run" \
                 "--password-store=basic" "--start-maximized"; do
         [[ "${c}" == *" ${want}"* ]] || { echo "chromium lacks: ${want}"; return 1; }
     done
@@ -154,9 +128,11 @@ x_server() {
     [ "$status" -ne 0 ]
 }
 
-@test "nothing else is a command" {
+@test "nothing else is a command, and it runs only under its unit" {
     run "${BROWSER}" https://example.org
     [ "$status" -eq 2 ]
+    RUNTIME_DIRECTORY="" run "${BROWSER}" run
+    [ "$status" -ne 0 ]
     run "${BROWSER}"
     [ "$status" -eq 2 ]
 }

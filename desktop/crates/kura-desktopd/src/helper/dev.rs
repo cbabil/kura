@@ -8,6 +8,7 @@
 
 mod apps;
 mod backends;
+mod browsers;
 mod sample;
 mod shell;
 mod system;
@@ -97,8 +98,8 @@ impl DevHelper {
         std::fs::write(units.join("xrdp.service"), "").expect("Remote Desktop's unit");
         std::fs::create_dir_all(dir.path().join("usr/sbin")).expect("the system programs folder");
         std::fs::write(dir.path().join("usr/sbin/xrdp"), "").expect("Remote Desktop's program");
-        // ...and the shared Browser's unit and programs (ADR-036); nothing
-        // listens on its socket, so opening it answers "unavailable".
+        // ...and the Browser's command and programs (ADR-036): a stand-in
+        // VNC server answers for it (browsers.rs).
         for file in kura_desktop_core::browser::files() {
             std::fs::write(dir.path().join(file.trim_start_matches('/')), "").expect("a Browser file");
         }
@@ -111,6 +112,7 @@ impl DevHelper {
             machine: Arc::new(backends::DevMachine::default()),
             system: Arc::new(system::DevSystem::new(dir.path().to_owned())),
             apps: Arc::new(apps::DevApps::new(dir.path().to_owned()).expect("the development catalog")),
+            browsers: Arc::new(browsers::DevBrowsers::default()),
         };
         Self { service: Service::new(auth, root, backends), _accounts: dir }
     }
@@ -150,6 +152,10 @@ impl Helper for DevHelper {
 
     fn close_terminal<'a>(&'a self, ticket: &'a str, id: &'a str) -> Fut<'a, ()> {
         Box::pin(async move { Ok(self.service.close_terminal(ticket, id).await?) })
+    }
+
+    fn open_browser<'a>(&'a self, ticket: &'a str) -> Fut<'a, OwnedFd> {
+        Box::pin(async move { Ok(self.service.open_browser(ticket).await?) })
     }
 
     fn ask<'a>(&'a self, ticket: &'a str, action: Action, args: String) -> Fut<'a, String> {

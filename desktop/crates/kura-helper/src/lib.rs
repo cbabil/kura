@@ -11,10 +11,12 @@
 //! - reads the system journal;
 //! - says whether a Kura update waits, starts one as a job of its own, and
 //!   restarts or shuts down the machine;
-//! - shows and changes the settings: host name, network, clock, users.
+//! - shows and changes the settings: host name, network, clock, users;
+//! - starts each person's Browser as them and hands over its screen.
 
 pub mod apps;
 pub mod authenticate;
+pub mod browser;
 pub mod docker;
 #[cfg(any(test, feature = "fakes"))]
 pub mod fakes;

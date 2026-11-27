@@ -55,6 +55,10 @@ impl Service {
     async fn end_sign_ins(&self, user: &str, keep: Option<&str>) {
         self.gate.sign_out_user(user, keep);
         self.terminals.close_user(user, keep).await;
+        // Their browser too, unless it is their own change from a session they keep
+        if keep.is_none() {
+            self.browsers.stop(user).await;
+        }
     }
 
     /// Makes one change. Two things nobody does to their own account from

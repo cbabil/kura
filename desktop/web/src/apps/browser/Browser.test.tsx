@@ -84,7 +84,7 @@ describe('Browser', () => {
     Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true })
   })
 
-  it('shows the shared browser at the window’s size and focuses it once connected', async () => {
+  it('shows the browser at the window’s size, sharing it with one’s other windows, and focuses it once connected', async () => {
     const { channels } = setup()
     expect(await screen.findByRole('application', { name: 'The server’s browser' })).toBeInTheDocument()
     const view = novnc.views[0]
@@ -161,7 +161,7 @@ describe('Browser', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  it('quits the browser for everyone from its menu, once per command', async () => {
+  it('quits one’s own browser from its menu, once per command', async () => {
     const { send, browserStop } = setup()
     await screen.findByRole('application')
     send('quit', 1)

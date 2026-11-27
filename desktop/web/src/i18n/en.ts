@@ -122,7 +122,7 @@ export const en = {
   'app.catalog.name': 'App Catalog',
   'app.catalog.blurb': 'Install apps in one click',
   'app.browser.name': 'Browser',
-  'app.browser.blurb': 'A web browser on this server, shared by everyone signed in',
+  'app.browser.blurb': 'Your own web browser, running on this server',
   'app.trash.name': 'Trash',
   'app.trash.blurb': 'Deleted files, kept until you empty it',
 

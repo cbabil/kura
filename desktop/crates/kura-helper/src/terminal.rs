@@ -83,7 +83,7 @@ impl Terminals {
         if !valid_size(cols, rows) {
             return Err(Refusal::Invalid("terminal size".into()));
         }
-        if !self.login_shell(&account.shell) {
+        if !self.has_login_shell(&account.shell) {
             return Err(Refusal::NoShell);
         }
         self.forget_ended(&account.name, Kind::Shell).await;
@@ -180,8 +180,8 @@ impl Terminals {
     }
 
     /// True when `shell` is one of `/etc/shells`: an account with `nologin`
-    /// or no shell gets no terminal.
-    fn login_shell(&self, shell: &str) -> bool {
+    /// or no shell gets no terminal, no Files and no Browser.
+    pub fn has_login_shell(&self, shell: &str) -> bool {
         let shells = self.root.read("/etc/shells").unwrap_or_default();
         !shell.is_empty() && shells.lines().map(str::trim).any(|l| l == shell && !l.starts_with('#'))
     }

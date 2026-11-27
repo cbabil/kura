@@ -38,7 +38,7 @@ e2e: build
 # they count as 0% on Linux and are not compiled at all on a Mac;
 # `test-live` and `e2e` prove them, against the real thing. Anything new
 # that is privileged is counted unless it is added to this list on purpose.
-SYSTEM_ONLY := kura-helper/src/(systemd|job)\.rs$$|kura-helper/src/(system|machine|apps|terminal)/systemd\.rs$$
+SYSTEM_ONLY := kura-helper/src/(systemd|job)\.rs$$|kura-helper/src/(system|machine|apps|terminal|browser)/systemd\.rs$$
 coverage:
 	$(CARGO) llvm-cov --workspace --fail-under-lines 90 \
 		--ignore-filename-regex '(main\.rs|/tests/|tests\.rs|$(SYSTEM_ONLY))'

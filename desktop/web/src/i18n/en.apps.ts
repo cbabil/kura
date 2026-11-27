@@ -12,7 +12,7 @@ export const apps = {
   'browser.label': 'The server’s browser',
   'browser.loading': 'Starting the browser…',
   'browser.ended.closed': 'The browser was closed, or nobody had watched it for a while.',
-  'browser.ended.refused': 'The browser could not start. Too many people may be watching it, or it is not installed on this server.',
+  'browser.ended.refused': 'The browser could not start. Your account may have no login shell, too many browser windows may be open, or it is not installed on this server.',
   'browser.open': 'Open Browser',
   'browser.paste.title': 'Paste Text',
   'browser.paste.text': 'Text for the browser’s clipboard',

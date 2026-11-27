@@ -15,6 +15,7 @@ trait Helper1 {
     fn open_terminal(&self, ticket: &str, cols: u16, rows: u16) -> zbus::Result<(String, zbus::OwnedFd)>;
     fn open_files(&self, ticket: &str) -> zbus::Result<(String, zbus::OwnedFd)>;
     fn close_terminal(&self, ticket: &str, id: &str) -> zbus::Result<()>;
+    fn open_browser(&self, ticket: &str) -> zbus::Result<zbus::OwnedFd>;
     fn ask(&self, ticket: &str, action: &str, args: &str) -> zbus::Result<String>;
 }
 
@@ -75,6 +76,10 @@ impl Helper for DbusHelper {
 
     fn close_terminal<'a>(&'a self, ticket: &'a str, id: &'a str) -> Fut<'a, ()> {
         Box::pin(async move { Ok(self.proxy.close_terminal(ticket, id).await?) })
+    }
+
+    fn open_browser<'a>(&'a self, ticket: &'a str) -> Fut<'a, OwnedFd> {
+        Box::pin(async move { Ok(self.proxy.open_browser(ticket).await?.into()) })
     }
 
     fn ask<'a>(&'a self, ticket: &'a str, action: Action, args: String) -> Fut<'a, String> {

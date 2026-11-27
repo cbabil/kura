@@ -32,6 +32,7 @@ export default function RfbView({ api, onEnd, pasteRef }: Props) {
   useEffect(() => {
     const target = host.current
     if (!target) return
+    // Shared: the person's other windows and devices may show the same browser
     const rfb = new RFB(target, api.browser(), { shared: true })
     rfb.resizeSession = true
     rfb.focusOnClick = true
@@ -52,7 +53,7 @@ export default function RfbView({ api, onEnd, pasteRef }: Props) {
       navigator.clipboard?.writeText(last).catch(() => {}) // a refused write leaves the server's copy where it is
     })
     // Ctrl+V or ⌘+V here pastes what was copied here: the clipboard is read
-    // then, and only then (never on a mere click: everyone watching would get
+    // then, and only then (never on a mere click: every window on this browser would get
     // it), handed over, and the server's browser is sent Ctrl+V. A browser
     // that will not share its clipboard pastes the server's own.
     const onKey = (e: KeyboardEvent) => {

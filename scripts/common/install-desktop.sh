@@ -93,11 +93,9 @@ if [ "${OS_KIOSK_FILES:-false}" = "true" ]; then
     brand "${SRC}/xrdp-dropin.conf" "${units}/xrdp.service.d/10-${BRAND}.conf" 0644
     disable_unit "${ROOTFS}" multi-user.target xrdp.service
     disable_unit "${ROOTFS}" multi-user.target xrdp-sesman.service
-    # The shared Browser (ADR-036): started by the helper when the app opens,
-    # never at boot; its programs come with OS_BROWSER.
+    # The Browser (ADR-036): the command each person's browser runs, as
+    # them, when the helper starts it; its programs come with OS_BROWSER.
     brand "${SRC}/os-browser" "${lib}/${BRAND}-browser" 0755
-    brand "${SRC}/os-browser.service" "${units}/${BRAND}-browser.service" 0644
-    brand "${SRC}/sysusers-browser.conf" "${ROOTFS}/usr/lib/sysusers.d/${BRAND}-browser.conf" 0644
     if [ "${OS_KIOSK:-false}" = "true" ]; then
         enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-kiosk.service"
     fi
