@@ -23,6 +23,11 @@ test('refuses a wrong password, then signs in to Activity Monitor', async ({ pag
   await submit(page, MOCK_PASSWORD)
   await expect(page.getByText('CPU · 4 cores')).toBeVisible()
   await expect(page.getByRole('table', { name: 'Busiest processes' })).toBeVisible()
+  // the menu bar's temperature is short: "CPU 48°", its name in the tooltip
+  const temp = page.getByText(/^CPU \d+(\.\d)?°$/)
+  await expect(temp).toBeVisible()
+  await temp.hover()
+  await expect(page.getByRole('tooltip', { name: 'CPU temperature' })).toBeVisible()
 })
 
 test('moves a window by its title bar and keeps it on screen', async ({ page }) => {

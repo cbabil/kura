@@ -75,8 +75,8 @@ export function StatusArea() {
   return (
     <>
       {tempC !== null && (
-        <Tooltip title={t('status.temp', { degrees: tempC })}>
-          <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: '4px' }}><Glyph name="temp" size={15} />{tempC}°</Box>
+        <Tooltip title={t('status.temp')}>
+          <Box sx={{ display: { xs: 'none', sm: 'flex' }, whiteSpace: 'nowrap' }}>{t('status.tempShort', { degrees: tempC })}</Box>
         </Tooltip>
       )}
       <Tooltip title={t(online ? 'status.connected' : 'status.disconnected')}>
