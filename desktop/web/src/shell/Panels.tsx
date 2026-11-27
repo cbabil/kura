@@ -15,7 +15,8 @@ const CAPTION_BOTTOM = 28
  *  margin. A dock grown by many open apps covers the caption, which is fine. */
 const DOCK_REACH = 340
 
-export function Wallpaper({ hostname }: { hostname: string }) {
+/** The wallpaper, with the server's name and the running Kura in the bottom corner. */
+export function Wallpaper({ hostname, version }: { hostname: string; version: string }) {
   const k = useTheme().kura
   const { t } = useI18n()
   return (
@@ -28,6 +29,7 @@ export function Wallpaper({ hostname }: { hostname: string }) {
         maxWidth: `calc(50vw - ${DOCK_REACH}px)`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         <Kicker>蔵 · {t('brand.kicker')}</Kicker>
         {hostname}.local
+        {version && <Box sx={{ fontSize: 12, mt: 0.25 }}>Kura {version}</Box>}
       </Box>
     </Box>
   )
@@ -57,7 +59,8 @@ export function About({ open, system, onClose }: { open: boolean; system: System
   const { t, tn, format } = useI18n()
   const rows: [string, string][] = system
     ? [
-        [t('about.version'), system.os],
+        // The installed version follows upgrades; the system's name is the image's
+        [t('about.version'), system.version ? `Kura ${system.version}` : system.os],
         [t('about.host'), system.hostname],
         [t('about.kernel'), system.kernel],
         [t('about.processor'), tn('about.cores', system.cores, { arch: system.arch })],

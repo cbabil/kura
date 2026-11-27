@@ -25,6 +25,7 @@ const system: SystemInfo = {
   memTotal: 16 * GB,
   uptime: 3 * 86400 + 4 * 3600,
   browser: true,
+  version: '0.6.1',
 }
 
 /** A smooth pseudo-random wave so charts look alive but tests stay stable. */

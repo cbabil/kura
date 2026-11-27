@@ -3,7 +3,7 @@ import type { SystemInfo } from '../api'
 import { APP_BY_ID, DOCKABLE, dockable, launcherEntries, offered } from './registry'
 
 const facts = (browser: boolean): SystemInfo =>
-  ({ hostname: 'kura', os: 'Kura', kernel: '6', arch: 'x86_64', cores: 2, memTotal: 1, uptime: 1, browser })
+  ({ hostname: 'kura', os: 'Kura', kernel: '6', arch: 'x86_64', cores: 2, memTotal: 1, uptime: 1, browser, version: '0.8.1' })
 
 describe('apps a server offers', () => {
   it('shows the Browser only where its packages are installed', () => {
