@@ -30,7 +30,7 @@
   "menu.minimize": "Minimalizovat",
   "menu.zoom": "Zvětšit",
   "menu.desktopHelp": "Nápověda pro Kura Desktop",
-  "status.temp": "Nejteplejší čidlo",
+  "status.temp": "Teplota serveru: {degrees} °C, jeho nejteplejší část (obvykle procesor)",
   "status.connected": "Připojeno k serveru",
   "status.disconnected": "Nepřipojeno",
   "status.online": "Online",

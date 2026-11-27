@@ -30,7 +30,7 @@
   "menu.minimize": "Свернуть",
   "menu.zoom": "Развернуть",
   "menu.desktopHelp": "Справка Kura Desktop",
-  "status.temp": "Самый горячий датчик",
+  "status.temp": "Температура сервера: {degrees} °C, его самая горячая часть (обычно процессор)",
   "status.connected": "Подключено к серверу",
   "status.disconnected": "Нет подключения",
   "status.online": "В сети",

@@ -30,7 +30,7 @@
   "menu.minimize": "Minimalizuj",
   "menu.zoom": "Powiększ",
   "menu.desktopHelp": "Pomoc Kura Desktop",
-  "status.temp": "Najcieplejszy czujnik",
+  "status.temp": "Temperatura serwera: {degrees} °C, jego najcieplejsza część (zwykle procesor)",
   "status.connected": "Połączono z serwerem",
   "status.disconnected": "Brak połączenia",
   "status.online": "Online",

@@ -30,7 +30,7 @@
   "menu.minimize": "מזעור",
   "menu.zoom": "הגדלה",
   "menu.desktopHelp": "העזרה של Kura Desktop",
-  "status.temp": "החיישן החם ביותר",
+  "status.temp": "טמפרטורת השרת: {degrees} °C, החלק החם ביותר שלו (בדרך כלל המעבד)",
   "status.connected": "מחובר לשרת",
   "status.disconnected": "לא מחובר",
   "status.online": "מקוון",

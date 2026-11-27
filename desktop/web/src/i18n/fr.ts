@@ -40,7 +40,7 @@ export const fr: Messages = {
   'menu.minimize': 'Réduire',
   'menu.zoom': 'Agrandir',
   'menu.desktopHelp': 'Aide de Kura Desktop',
-  'status.temp': 'Capteur le plus chaud',
+  'status.temp': 'Température du serveur : {degrees} °C, sa partie la plus chaude (en général le processeur)',
   'status.connected': 'Connecté au serveur',
   'status.disconnected': 'Non connecté',
   'status.online': 'En ligne',

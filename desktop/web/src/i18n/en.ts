@@ -47,7 +47,7 @@ export const en = {
   'menu.minimize': 'Minimize',
   'menu.zoom': 'Zoom',
   'menu.desktopHelp': 'Kura Desktop Help',
-  'status.temp': 'Hottest sensor',
+  'status.temp': 'Server temperature: {degrees} °C, its hottest part (usually the processor)',
   'status.connected': 'Connected to the server',
   'status.disconnected': 'Not connected',
   'status.online': 'Online',

@@ -30,7 +30,7 @@
   "menu.minimize": "Simge Durumuna Küçült",
   "menu.zoom": "Büyüt",
   "menu.desktopHelp": "Kura Desktop Yardımı",
-  "status.temp": "En sıcak sensör",
+  "status.temp": "Sunucu sıcaklığı: {degrees} °C, en sıcak parçası (genellikle işlemci)",
   "status.connected": "Sunucuya bağlı",
   "status.disconnected": "Bağlı değil",
   "status.online": "Çevrimiçi",

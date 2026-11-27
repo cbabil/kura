@@ -30,7 +30,7 @@
   "menu.minimize": "Minimalizálás",
   "menu.zoom": "Teljes méret",
   "menu.desktopHelp": "Kura Desktop súgó",
-  "status.temp": "Legmelegebb érzékelő",
+  "status.temp": "A szerver hőmérséklete: {degrees} °C, a legmelegebb része (általában a processzor)",
   "status.connected": "Csatlakozva a szerverhez",
   "status.disconnected": "Nincs kapcsolat",
   "status.online": "Online",

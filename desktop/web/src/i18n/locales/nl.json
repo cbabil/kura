@@ -30,7 +30,7 @@
   "menu.minimize": "Minimaliseren",
   "menu.zoom": "Zoomen",
   "menu.desktopHelp": "Help bij Kura Desktop",
-  "status.temp": "Warmste sensor",
+  "status.temp": "Servertemperatuur: {degrees} °C, het warmste onderdeel (meestal de processor)",
   "status.connected": "Verbonden met de server",
   "status.disconnected": "Niet verbonden",
   "status.online": "Online",

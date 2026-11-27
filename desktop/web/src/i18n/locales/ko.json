@@ -30,7 +30,7 @@
   "menu.minimize": "최소화",
   "menu.zoom": "확대/축소",
   "menu.desktopHelp": "Kura Desktop 도움말",
-  "status.temp": "가장 뜨거운 센서",
+  "status.temp": "서버 온도: {degrees} °C, 가장 뜨거운 부분(보통 프로세서)",
   "status.connected": "서버에 연결됨",
   "status.disconnected": "연결되지 않음",
   "status.online": "온라인",

@@ -30,7 +30,7 @@
   "menu.minimize": "Minimizar",
   "menu.zoom": "Ampliar",
   "menu.desktopHelp": "Ajuda do Kura Desktop",
-  "status.temp": "Sensor mais quente",
+  "status.temp": "Temperatura do servidor: {degrees} °C, sua parte mais quente (geralmente o processador)",
   "status.connected": "Conectado ao servidor",
   "status.disconnected": "Sem conexão",
   "status.online": "Online",

@@ -30,7 +30,7 @@
   "menu.minimize": "Minimitza",
   "menu.zoom": "Zoom",
   "menu.desktopHelp": "Ajuda de Kura Desktop",
-  "status.temp": "Sensor més calent",
+  "status.temp": "Temperatura del servidor: {degrees} °C, la seva part més calenta (normalment el processador)",
   "status.connected": "Connectat al servidor",
   "status.disconnected": "No connectat",
   "status.online": "En línia",

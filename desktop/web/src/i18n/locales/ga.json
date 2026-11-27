@@ -30,7 +30,7 @@
   "menu.minimize": "Íoslaghdaigh",
   "menu.zoom": "Méadaigh",
   "menu.desktopHelp": "Cabhair Kura Desktop",
-  "status.temp": "An braiteoir is teo",
+  "status.temp": "Teocht an fhreastalaí: {degrees} °C, an chuid is teo de (an próiseálaí de ghnáth)",
   "status.connected": "Ceangailte leis an bhfreastalaí",
   "status.disconnected": "Gan cheangal",
   "status.online": "Ar líne",

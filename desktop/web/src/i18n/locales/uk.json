@@ -30,7 +30,7 @@
   "menu.minimize": "Згорнути",
   "menu.zoom": "Розгорнути",
   "menu.desktopHelp": "Довідка Kura Desktop",
-  "status.temp": "Найгарячіший датчик",
+  "status.temp": "Температура сервера: {degrees} °C, його найгарячіша частина (зазвичай процесор)",
   "status.connected": "Підключено до сервера",
   "status.disconnected": "Немає підключення",
   "status.online": "У мережі",

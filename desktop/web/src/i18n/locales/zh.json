@@ -30,7 +30,7 @@
   "menu.minimize": "最小化",
   "menu.zoom": "缩放",
   "menu.desktopHelp": "Kura Desktop 帮助",
-  "status.temp": "温度最高的传感器",
+  "status.temp": "服务器温度：{degrees} °C，其最热的部件（通常是处理器）",
   "status.connected": "已连接到服务器",
   "status.disconnected": "未连接",
   "status.online": "在线",

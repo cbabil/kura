@@ -30,7 +30,7 @@
   "menu.minimize": "Pomanjšaj",
   "menu.zoom": "Povečaj",
   "menu.desktopHelp": "Pomoč za Kura Desktop",
-  "status.temp": "Najtoplejše tipalo",
+  "status.temp": "Temperatura strežnika: {degrees} °C, njegov najtoplejši del (običajno procesor)",
   "status.connected": "Povezano s strežnikom",
   "status.disconnected": "Ni povezave",
   "status.online": "Povezano",
