@@ -4,7 +4,7 @@
 services:
   syncthing:
     image: syncthing/syncthing:1.29.2
-    container_name: kura-syncthing
+    container_name: syncthing
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

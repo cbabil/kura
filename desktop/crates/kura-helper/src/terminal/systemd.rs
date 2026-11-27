@@ -14,10 +14,12 @@ use zbus::Variant as Value;
 
 use super::ShellLauncher;
 use crate::Fut;
-use crate::systemd::{ManagerProxy, Property};
+use crate::systemd::{DESCRIBED, ManagerProxy, Property, is_ours};
 
-/// What every terminal's and every file agent's unit is called.
-const UNITS: [&str; 2] = ["kura-terminal-*.service", "kura-files-*.service"];
+/// What every terminal's and every file agent's unit is called. The names
+/// are the apps' own, so another program could have a unit that matches:
+/// only units described as Kura Desktop's ([`DESCRIBED`]) are swept.
+const UNITS: [&str; 2] = ["terminal-*.service", "files-*.service"];
 /// The most memory and tasks one agent may take.
 const AGENT_MEMORY_MAX: u64 = 256 * 1024 * 1024;
 const AGENT_TASKS_MAX: u64 = 16;
@@ -49,12 +51,12 @@ impl SystemdShell {
         tcsetwinsize(&master, size).map_err(io)?;
         let tty = ptsname(&master, Vec::new()).map_err(io)?.to_string_lossy().into_owned();
 
-        let unit = format!("kura-terminal-{}.service", &new_session_id()[..16]);
+        let unit = format!("terminal-{}.service", &new_session_id()[..16]);
         // A leading "-" in argv[0] makes it a login shell, as login(1) does.
         let name = account.shell.rsplit('/').next().unwrap_or("sh");
         let exec = vec![(account.shell.clone(), vec![format!("-{name}")], false)];
         let properties: Vec<Property<'_>> = vec![
-            ("Description", Value::from(format!("Kura Desktop terminal of {}", account.name))),
+            ("Description", Value::from(format!("{DESCRIBED} terminal of {}", account.name))),
             ("User", Value::from(account.name.as_str())),
             ("PAMName", Value::from("login")),
             ("WorkingDirectory", Value::from("~")),
@@ -88,11 +90,11 @@ impl SystemdShell {
         use rustix::net::{AddressFamily, SocketFlags, SocketType, socketpair};
         let (ours, theirs) = socketpair(AddressFamily::UNIX, SocketType::STREAM, SocketFlags::CLOEXEC, None)
             .map_err(|e| format!("socket: {e}"))?;
-        let unit = format!("kura-files-{}.service", &new_session_id()[..16]);
+        let unit = format!("files-{}.service", &new_session_id()[..16]);
         let exec = vec![(AGENT.to_owned(), vec!["kura-agent".to_owned()], false)];
         let end = || Value::from(zbus::Fd::from(std::os::fd::AsFd::as_fd(&theirs)));
         let properties: Vec<Property<'_>> = vec![
-            ("Description", Value::from(format!("Kura Desktop files of {}", account.name))),
+            ("Description", Value::from(format!("{DESCRIBED} files of {}", account.name))),
             ("User", Value::from(account.name.as_str())),
             ("WorkingDirectory", Value::from("~")),
             ("StandardInputFileDescriptor", end()),
@@ -132,7 +134,7 @@ impl ShellLauncher for SystemdShell {
     fn sweep(&self) -> Fut<'_, ()> {
         Box::pin(async {
             let units = self.manager.list_units_by_patterns(&[], &UNITS).await.unwrap_or_default();
-            for (name, ..) in units {
+            for (name, ..) in units.into_iter().filter(|u| is_ours(&u.1)) {
                 tracing::warn!("stopping {name}, left by an earlier helper");
                 self.close(&name).await;
             }

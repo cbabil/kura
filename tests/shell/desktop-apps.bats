@@ -22,13 +22,23 @@ setup() {
     ADMIN_GROUP="$(id -gn)"   # a group the test may give folders to
     BUSY=""                   # ports something listens on
     FAIL=""                   # a docker compose step that fails
+    TAKEN=""                  # names a project or container of the owner's has
+    OLD=""                    # apps still running under the old name kura-<id>
     # ss -Hltnu "sport = :<port>": a line when the port is one of BUSY
     ss() {
         local asked="${*: -1}"
         case " ${BUSY} " in *" ${asked##*:} "*) echo "LISTEN" ;; esac
     }
+    # docker ps -aq --filter ...: a container id when the filter names one of
+    # TAKEN (any project or container) or OLD (a project kura-<id>)
     docker() {
         log_call docker "$@"
+        if [ "$1" = "ps" ]; then
+            local name
+            for name in ${TAKEN}; do case "$*" in *"=${name}"* | *"=^/${name}\$"*) echo "c0ffee" ;; esac; done
+            for name in ${OLD}; do case "$*" in *"project=kura-${name}"*) echo "0dd" ;; esac; done
+            return 0
+        fi
         [ -z "${FAIL}" ] || case "$*" in *"${FAIL}"*) return 1 ;; esac
     }
 }
@@ -47,7 +57,7 @@ env_of() { cat "${ROOT}/srv/apps/$1/.env"; }
                and (.fixedPorts | type == "array") and (.shared | type == "array") and (.homepage | startswith("https://"))' \
             "${dir}app.json" >/dev/null || { echo "bad facts: ${id}"; return 1; }
         grep -qx "  ${id}:" "${dir}compose.yaml"
-        grep -qx "    container_name: kura-${id}" "${dir}compose.yaml"
+        grep -qx "    container_name: ${id}" "${dir}compose.yaml"
     done
     [ "$(find "${CATALOG}" -mindepth 1 -maxdepth 1 -type d | wc -l)" -ge 6 ]
 }
@@ -101,8 +111,17 @@ env_of() { cat "${ROOT}/srv/apps/$1/.env"; }
     cmp "${CATALOG}/jellyfin/compose.yaml" "${ROOT}/srv/apps/jellyfin/compose.yaml"
     [ "$(env_of jellyfin)" = "$(printf 'KURA_PORT=8096\nKURA_DATA=/srv/apps/jellyfin/data\nKURA_TZ=Europe/Paris\nKURA_VERSION=10.10.7')" ]
     [ -d "${ROOT}/srv/apps/jellyfin/data/media" ]
-    grep -q "docker compose --project-name kura-jellyfin --project-directory ${ROOT}/srv/apps/jellyfin .* pull" "${CALLS}"
-    grep -q "docker compose --project-name kura-jellyfin .* up --detach" "${CALLS}"
+    grep -q "docker compose --project-name jellyfin --project-directory ${ROOT}/srv/apps/jellyfin .* pull" "${CALLS}"
+    grep -q "docker compose --project-name jellyfin .* up --detach" "${CALLS}"
+}
+
+@test "install: refuses a name one of the owner's own projects or containers has" {
+    TAKEN="jellyfin"
+    run main install jellyfin 8096
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"a project or container named jellyfin"* ]]
+    ! grep -q "compose" "${CALLS}"
+    [ ! -e "${ROOT}/srv/apps/jellyfin/.env" ]
 }
 
 @test "install: refuses what is not in the catalog, a bad port, a port in use, a second time" {
@@ -156,6 +175,21 @@ env_of() { cat "${ROOT}/srv/apps/$1/.env"; }
     run main update jellyfin
     [ "$status" -ne 0 ]
     [[ "$output" == *"not installed"* ]]
+}
+
+@test "update and remove: an app installed under the old name kura-<id> moves to its own name" {
+    main install gitea 3999
+    OLD="gitea"
+    : > "${CALLS}"
+    run main update gitea
+    [ "$status" -eq 0 ]
+    grep -q "docker compose --project-name kura-gitea .* down" "${CALLS}"
+    grep -q "docker compose --project-name gitea .* up --detach" "${CALLS}"
+    : > "${CALLS}"
+    run main remove gitea
+    [ "$status" -eq 0 ]
+    grep -q "docker compose --project-name kura-gitea .* down --remove-orphans" "${CALLS}"
+    grep -q "docker compose --project-name gitea .* down --remove-orphans" "${CALLS}"
 }
 
 @test "update: one that fails leaves the app as it was, version included" {

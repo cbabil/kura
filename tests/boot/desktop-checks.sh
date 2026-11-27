@@ -106,7 +106,7 @@ desktop_files() {
 }
 
 # No shell started for a terminal is left running once its window is closed
-desktop_terminals_closed() { [ -z "$(ssh_run "systemctl list-units --no-legend 'kura-terminal-*'")" ]; }
+desktop_terminals_closed() { [ -z "$(ssh_run "systemctl list-units --no-legend 'terminal-*'")" ]; }
 
 # signin.png and desktop.png through a real browser (Playwright's Chromium),
 # then a terminal (its shell must be the login user's), the containers and

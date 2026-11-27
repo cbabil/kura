@@ -4,7 +4,7 @@
 services:
   uptime-kuma:
     image: louislam/uptime-kuma:1.23.16
-    container_name: kura-uptime-kuma
+    container_name: uptime-kuma
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

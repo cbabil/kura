@@ -38,13 +38,31 @@ installed() { grep -Eqs '^KURA_PORT=[0-9]+$' "${APPS}/$1/.env"; }
 # port_free <port>: nothing listens on it, over TCP or UDP
 port_free() { [ -z "$(ss -Hltnu "sport = :$1" 2>/dev/null)" ]; }
 
+# compose_as <project> <id> <arguments>: docker compose for the app, under
+# that project name
+compose_as() {
+    local project="$1" id="$2"
+    shift 2
+    docker compose --project-name "${project}" --project-directory "${APPS}/${id}" \
+        --file "${APPS}/${id}/compose.yaml" --env-file "${APPS}/${id}/.env" "$@"
+}
+
 # compose <id> <arguments>: docker compose for the app, under its own name
+# (jellyfin, as Containers shows it)
 compose() {
     local id="$1"
     shift
-    docker compose --project-name "${BRAND}-${id}" --project-directory "${APPS}/${id}" \
-        --file "${APPS}/${id}/compose.yaml" --env-file "${APPS}/${id}/.env" "$@"
+    compose_as "${id}" "${id}" "$@"
 }
+
+# taken <id>: a compose project or a container of the owner's has that name
+taken() {
+    [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=$1")$(docker ps -aq --filter "name=^/$1\$")" ]
+}
+
+# old_name <id>: still running under the name apps had before (${BRAND}-<id>);
+# its next update or its removal takes it off that name
+old_name() { [ -n "$(docker ps -aq --filter "label=com.docker.compose.project=${BRAND}-$1")" ]; }
 
 # write_env <id> <port>: the values the compose file takes
 write_env() {
@@ -75,6 +93,8 @@ cmd_install() {
         [ "${fixed}" != "${port}" ] || fail "port ${port} is one this app needs for something else"
         port_free "${fixed}" || fail "port ${fixed}, which this app needs, is in use"
     done
+    # Apps run under their own name: one of the owner's under it is not Kura's to take over
+    ! taken "${id}" || fail "a project or container named ${id} is already on this server"
     # What an app keeps (its database, its secrets) is for root and the
     # administrators, not for every account on the server
     install -d -m 0755 "${APPS}/${id}"
@@ -106,7 +126,8 @@ cmd_update() {
     cp -p "${dir}/.env" "${dir}/.env.before"
     install -m 0644 "${from}/compose.yaml" "${dir}/compose.yaml"
     write_env "${id}" "${port}"
-    if ! { compose "${id}" pull && compose "${id}" up --detach; }; then
+    if ! { compose "${id}" pull && { ! old_name "${id}" || compose_as "${BRAND}-${id}" "${id}" down; } &&
+        compose "${id}" up --detach; }; then
         # Back to what was running: the version shown stays the one installed
         mv "${dir}/compose.yaml.before" "${dir}/compose.yaml"
         mv "${dir}/.env.before" "${dir}/.env"
@@ -123,7 +144,10 @@ cmd_remove() {
     app_id "${id}"
     installed "${id}" || fail "not installed"
     [ -z "${data}" ] || [ "${data}" = "data" ] || fail "remove takes 'data' or nothing"
-    [ ! -f "${APPS}/${id}/compose.yaml" ] || compose "${id}" down --remove-orphans || fail "the app did not stop"
+    if [ -f "${APPS}/${id}/compose.yaml" ]; then
+        ! old_name "${id}" || compose_as "${BRAND}-${id}" "${id}" down --remove-orphans || fail "the app did not stop"
+        compose "${id}" down --remove-orphans || fail "the app did not stop"
+    fi
     forget "${id}"
     if [ "${data}" = "data" ]; then
         rm -rf "${APPS:?}/${id:?}"
