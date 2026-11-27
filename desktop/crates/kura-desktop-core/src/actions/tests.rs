@@ -19,7 +19,15 @@ fn only_looking_is_open_to_everyone() {
     let open: Vec<_> = Action::ALL.into_iter().filter(|a| !a.needs_admin()).collect();
     assert_eq!(
         open,
-        [Action::Terminal, Action::Files, Action::ListContainers, Action::UpdateStatus, Action::ChangeOwnPassword]
+        [
+            Action::Terminal,
+            Action::Files,
+            Action::ListContainers,
+            Action::UpdateStatus,
+            Action::ChangeOwnPassword,
+            Action::Browser,
+            Action::BrowserStop,
+        ]
     );
 }
 

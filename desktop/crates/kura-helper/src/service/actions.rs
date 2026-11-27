@@ -34,9 +34,13 @@ impl Service {
         };
         let done = |()| String::new();
         match action {
-            // A terminal's answer is a file descriptor: its own D-Bus method.
-            Action::Terminal | Action::Files => Err(Refusal::Invalid("action".into())),
-            Action::ListContainers | Action::UpdateStatus | Action::ReadSettings | Action::ReadCatalog
+            // A file descriptor is the answer: each has its own D-Bus method.
+            Action::Terminal | Action::Files | Action::Browser => Err(Refusal::Invalid("action".into())),
+            Action::ListContainers
+            | Action::UpdateStatus
+            | Action::ReadSettings
+            | Action::ReadCatalog
+            | Action::BrowserStop
                 if !matches!(args, "" | "null") =>
             {
                 Err(Refusal::Invalid("arguments".into()))
@@ -61,6 +65,7 @@ impl Service {
             Action::ChangeSetting => self.change_setting(ticket, &parse::<Change>(args)?).await.map(done),
             Action::ReadCatalog => self.read_catalog(ticket).await,
             Action::ChangeApp => self.change_app(ticket, &parse::<AppChange>(args)?).await.map(done),
+            Action::BrowserStop => self.stop_browser(ticket).await.map(done),
             Action::ChangeOwnPassword => {
                 self.change_own_password(ticket, parse::<OwnPasswordArgs>(args)?).await.map(done)
             }
@@ -189,5 +194,16 @@ impl Service {
         }
         tracing::warn!(user = account.name, ?how, "power");
         self.machine.power(how).await.map_err(Refusal::Unavailable)
+    }
+
+    /// Quits the ticket's user's own Browser; one that is not running is fine.
+    ///
+    /// # Errors
+    /// [`Refusal::SignedOut`] without a live ticket.
+    pub(super) async fn stop_browser(&self, ticket: &str) -> Result<(), Refusal> {
+        let account = self.admit(ticket, Action::BrowserStop)?;
+        self.browsers.stop(&account.name).await;
+        tracing::info!(user = account.name, "browser stopped");
+        Ok(())
     }
 }

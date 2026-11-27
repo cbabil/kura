@@ -11,7 +11,7 @@ const win: Win = { app: 'catalog', x: 100, y: 80, w: 800, h: 500, minimized: fal
 function setup(width = 1440) {
   const actions: WindowActions = {
     open: vi.fn(), focus: vi.fn(), close: vi.fn(), minimize: vi.fn(), zoom: vi.fn(),
-    move: vi.fn(), resize: vi.fn(), settle: vi.fn(), setView: vi.fn(),
+    move: vi.fn(), resize: vi.fn(), settle: vi.fn(), setView: vi.fn(), command: vi.fn(),
   }
   renderWithTheme(
     <Window win={win} def={{ ...APP_BY_ID.catalog, Body: undefined }} focused={false} bounds={boundsFor(width, 900)} z={1} view="" actions={actions} />,

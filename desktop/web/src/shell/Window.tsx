@@ -9,7 +9,7 @@ import { memo, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { appText } from '../apps/registry'
-import type { AppDef, AppProps } from '../apps/types'
+import type { AppCommand, AppDef, AppProps } from '../apps/types'
 import { useI18n } from '../i18n'
 import { colors } from '../theme'
 import { TITLE_BAR, type Bounds } from './layout'
@@ -25,6 +25,7 @@ interface Props {
   bounds: Bounds
   z: number
   view: string
+  command?: AppCommand | null
   actions: WindowActions
 }
 
@@ -42,7 +43,7 @@ const HANDLES = [
   { kind: 'corner', sx: { right: 0, bottom: 0, width: 14, height: 14, cursor: 'nwse-resize' } },
 ] as const
 
-function WindowFrame({ win, def, focused, bounds, z, view, actions }: Props) {
+function WindowFrame({ win, def, focused, bounds, z, view, command = null, actions }: Props) {
   const k = useTheme().kura
   const { t } = useI18n()
   const { app } = win
@@ -52,8 +53,8 @@ function WindowFrame({ win, def, focused, bounds, z, view, actions }: Props) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
   const { minimized } = win
   const body = useMemo<AppProps>(
-    () => ({ view, setView: (v) => actions.setView(app, v), compact, minimized }),
-    [view, actions, app, compact, minimized],
+    () => ({ view, setView: (v) => actions.setView(app, v), compact, minimized, command }),
+    [view, actions, app, compact, minimized, command],
   )
 
   /** Starts a move or resize; the handle says which in data-drag. */

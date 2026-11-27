@@ -18,6 +18,8 @@ pub struct SystemInfo {
     pub mem_total: u64,
     /// Seconds since boot.
     pub uptime: u64,
+    /// Whether the shared Browser can run here (ADR-036).
+    pub browser: bool,
 }
 
 /// Reads the system facts.
@@ -36,6 +38,7 @@ pub fn read(root: &SysRoot) -> Result<SystemInfo, StatsError> {
         cores: cpu::read(root)?.1,
         mem_total: mem::read(root)?.total,
         uptime: uptime.uptime as u64,
+        browser: crate::browser::available(root),
     })
 }
 
@@ -67,8 +70,13 @@ mod tests {
             cores: 2,
             mem_total: 16_000_000 * 1024,
             uptime: 273_600,
+            browser: false,
         };
         assert_eq!(s, want);
+        for file in crate::browser::files() {
+            f.write(file.trim_start_matches('/'), "");
+        }
+        assert!(read(&f.root()).unwrap().browser, "a PC with the Browser's packages");
     }
 
     #[test]

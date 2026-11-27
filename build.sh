@@ -343,6 +343,13 @@ install_packages() {
         PACKAGES="${PACKAGES} ${KIOSK_PKGS}"
     fi
 
+    # The shared Browser (ADR-036): Chromium and its X server, PC image only
+    if [ "${OS_BROWSER:-false}" = "true" ] && [ "${TARGET}" = "x86_64" ]; then
+        local BROWSER_PKGS
+        BROWSER_PKGS=$(grep -v '^#' "${CONFIG_DIR}/packages-browser.list" | grep -v '^$' | tr '\n' ' ')
+        PACKAGES="${PACKAGES} ${BROWSER_PKGS}"
+    fi
+
     # Suppress debconf dialog warnings inside chroot
     export DEBIAN_FRONTEND=noninteractive
 
@@ -515,7 +522,9 @@ refresh_initramfs() {
 }
 
 # ============================================================================
-# apply_overlays -- rsync overlay files into rootfs
+# apply_overlays -- rsync overlay files into rootfs, owned by root: -a alone
+# would keep the checkout's owner (the CI runner's ID 1001) on every file and
+# directory, / and /etc included
 # ============================================================================
 
 apply_overlays() {
@@ -524,12 +533,12 @@ apply_overlays() {
 
     # Common overlay
     if [ -d "${OVERLAY_DIR}/common" ]; then
-        rsync -a "${OVERLAY_DIR}/common/" "${ROOTFS}/"
+        rsync -a --chown=0:0 "${OVERLAY_DIR}/common/" "${ROOTFS}/"
     fi
 
     # Target-specific overlay
     if [ -d "${OVERLAY_DIR}/${TARGET}" ]; then
-        rsync -a "${OVERLAY_DIR}/${TARGET}/" "${ROOTFS}/"
+        rsync -a --chown=0:0 "${OVERLAY_DIR}/${TARGET}/" "${ROOTFS}/"
     fi
 }
 

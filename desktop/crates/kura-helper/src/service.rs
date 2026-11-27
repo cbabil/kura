@@ -19,6 +19,7 @@ use zeroize::Zeroizing;
 
 use crate::apps::Apps;
 use crate::authenticate::Authenticator;
+use crate::browser::Browsers;
 use crate::docker::Docker;
 use crate::journal::Journal;
 use crate::machine::Machine;
@@ -35,6 +36,7 @@ pub struct Backends {
     pub machine: Arc<dyn Machine>,
     pub system: Arc<dyn System>,
     pub apps: Arc<dyn Apps>,
+    pub browsers: Arc<dyn Browsers>,
 }
 
 /// Requests to Docker, the journal and apt in flight at most; more are
@@ -59,6 +61,7 @@ pub struct Service {
     machine: Arc<dyn Machine>,
     system: Arc<dyn System>,
     apps: Arc<dyn Apps>,
+    browsers: Arc<dyn Browsers>,
     root: SysRoot,
     terminals: Terminals,
 }
@@ -82,6 +85,7 @@ impl Service {
             machine: backends.machine,
             system: backends.system,
             apps: backends.apps,
+            browsers: backends.browsers,
             terminals: Terminals::new(backends.shells, root.clone()),
             root,
         }
@@ -164,6 +168,26 @@ impl Service {
         let opened = self.terminals.open_agent(ticket, &account).await;
         tracing::info!(user = account.name, ok = opened.is_ok(), "open files");
         opened
+    }
+
+    /// A connection to the ticket's user's own Browser (ADR-036), started
+    /// as them when it is not running. Like a terminal and Files, it is for
+    /// accounts with a login shell: it runs as them, with their home.
+    ///
+    /// # Errors
+    /// [`Refusal::NoShell`] without a login shell; [`Refusal::Unavailable`]
+    /// without the Browser's packages or when it does not start.
+    pub async fn open_browser(&self, ticket: &str) -> Result<OwnedFd, Refusal> {
+        let account = self.admit(ticket, Action::Browser)?;
+        if !self.terminals.has_login_shell(&account.shell) {
+            return Err(Refusal::NoShell);
+        }
+        if !kura_desktop_core::browser::available(&self.root) {
+            return Err(Refusal::Unavailable("the browser is not installed".into()));
+        }
+        let opened = self.browsers.open(&account).await;
+        tracing::info!(user = account.name, ok = opened.is_ok(), "open browser");
+        opened.map_err(Refusal::Unavailable)
     }
 
     /// Stops a terminal or a file agent the ticket opened.

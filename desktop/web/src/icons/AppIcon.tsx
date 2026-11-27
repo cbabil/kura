@@ -4,6 +4,7 @@
  * apps, from D2) get a generated squircle with their initial.
  */
 import activity from './apps/activity.svg'
+import browser from './apps/browser.svg'
 import catalog from './apps/catalog.svg'
 import consoleIcon from './apps/console.svg'
 import containers from './apps/containers.svg'
@@ -13,7 +14,7 @@ import terminal from './apps/terminal.svg'
 import trash from './apps/trash.svg'
 
 export const ICONS: Record<string, string> = {
-  activity, catalog, console: consoleIcon, containers, files, settings, terminal, trash,
+  activity, browser, catalog, console: consoleIcon, containers, files, settings, terminal, trash,
 }
 
 const FALLBACK_HUES = [262, 228, 199, 160, 32, 340]

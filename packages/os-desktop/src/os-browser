@@ -1,0 +1,81 @@
+#!/bin/bash
+# __BRAND__-browser — a person's Browser (ADR-036): Debian's Chromium in
+# TigerVNC's X server, which __BRAND_NAME__ Desktop shows in a window. The helper
+# has systemd run it as the person who opened the app
+# (__BRAND__-browser-<user>.service), with its profile in their home.
+#
+# Usage: __BRAND__-browser run   the X server and Chromium, until Chromium ends
+#
+# The VNC server listens on a unix socket only (no TCP, not even loopback),
+# in the unit's runtime folder, the person's alone; the helper connects to
+# it and checks the server is theirs. The X display takes a cookie made here
+# at each start and is numbered by the person's uid, so two people's
+# browsers never meet. Its abstract socket (@/tmp/.X11-unix/X<uid>) is open
+# to every account whatever /tmp is: -nopn makes the server refuse to start
+# rather than run without it, so nobody can hold that name first and have
+# Chromium draw to a server of their own.
+
+set -euo pipefail
+
+BIN="${BROWSER_BIN:-/usr/bin}"          # a test's folder; Debian's on a device
+RUN="${RUNTIME_DIRECTORY:?run by its unit, which gives it a runtime folder}"
+PROFILE="${HOME:?}/.config/chromium"   # the person's own, where Chromium keeps it anyway
+WAIT="${BROWSER_WAIT:-15}"              # seconds the X server has to listen
+DISPLAY_NAME=":$(id -u)"
+SOCKET="${RUN}/vnc.sock"
+COOKIE="${RUN}/Xauthority"
+# Nobody watching for this long ends the X server, and Chromium with it
+IDLE=900
+# listening: wait for the X server's socket, as long as the server runs
+listening() {
+    local x="$1" tries=$((WAIT * 10))
+    while [ "${tries}" -gt 0 ]; do
+        [ -e "${SOCKET}" ] && return 0
+        kill -0 "${x}" 2>/dev/null || return 1
+        sleep 0.1
+        tries=$((tries - 1))
+    done
+    return 1
+}
+
+run() {
+    local x wm chromium
+    rm -f "${SOCKET}" "${COOKIE}"
+    "${BIN}/xauth" -f "${COOKIE}" add "${DISPLAY_NAME}" . "$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+    "${BIN}/Xtigervnc" "${DISPLAY_NAME}" -auth "${COOKIE}" -nolisten tcp \
+        -nopn -rfbport -1 -rfbunixpath "${SOCKET}" -rfbunixmode 0660 -SecurityTypes None \
+        -MaxDisconnectionTime "${IDLE}" -geometry 1280x800 -depth 24 -desktop "__BRAND_NAME__ Browser" &
+    x=$!
+    # shellcheck disable=SC2064
+    trap "kill ${x} 2>/dev/null || true" EXIT
+    if ! listening "${x}"; then
+        echo "the X server did not start" >&2
+        return 1
+    fi
+    export DISPLAY="${DISPLAY_NAME}" XAUTHORITY="${COOKIE}"
+    "${BIN}/matchbox-window-manager" -use_titlebar no &
+    wm=$!
+    # The sandbox stays on: user namespaces, as Debian's Chromium uses them.
+    "${BIN}/chromium" --user-data-dir="${PROFILE}" --ozone-platform=x11 \
+        --no-first-run --no-default-browser-check --password-store=basic --start-maximized &
+    chromium=$!
+    # Stopped (Quit, or the machine shutting down; the unit's KillMode=mixed
+    # signals this script alone): Chromium is asked to close first, so it
+    # saves its session and does not offer to restore pages next time.
+    # shellcheck disable=SC2064
+    trap "kill -TERM ${chromium} 2>/dev/null; wait ${chromium}; kill ${wm} ${x} 2>/dev/null; exit 0" TERM
+    # Chromium ends when it is closed, or when the X server goes (nobody
+    # watched for IDLE seconds); either way the rest go, and the unit ends.
+    wait "${chromium}" || true
+    kill "${wm}" "${x}" 2>/dev/null || true
+    wait 2>/dev/null || true
+}
+
+main() {
+    case "${1:-}" in
+        run) run ;;
+        *) echo "Usage: __BRAND__-browser run" >&2; exit 2 ;;
+    esac
+}
+
+main "$@"

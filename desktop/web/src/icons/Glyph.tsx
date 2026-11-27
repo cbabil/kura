@@ -29,6 +29,8 @@ const PATHS = {
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   home: 'M3 11l9-7 9 7M5 10v10h14V10',
   gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1',
+  check: 'M5 12.5l4.5 4.5L19 7',
+  chevron: 'M9 5l7 7-7 7',
 } as const
 
 export type GlyphName = keyof typeof PATHS

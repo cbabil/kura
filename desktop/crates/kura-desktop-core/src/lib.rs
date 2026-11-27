@@ -7,6 +7,7 @@
 pub mod accounts;
 pub mod actions;
 pub mod auth;
+pub mod browser;
 pub mod catalog;
 pub mod containers;
 pub mod files;

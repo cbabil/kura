@@ -101,6 +101,12 @@ chroot "${TREE}" /usr/bin/modprobe -S "${KVER}" --show-depends nvme >/dev/null |
     { echo "ERROR: modprobe cannot resolve modules in the initrd" >&2; exit 1; }
 
 echo "  Packing..."
+# The initrd has no accounts but root: anything else would be an unknown ID
+if [ -n "$(find "${TREE}" \( ! -user 0 -o ! -group 0 \) -print -quit)" ]; then
+    echo "ERROR: initrd files not owned by root:" >&2
+    find "${TREE}" \( ! -user 0 -o ! -group 0 \) | head -n 20 >&2
+    exit 1
+fi
 chroot "${ROOTFS}" sh -c 'cd /tmp/initrd && find . | cpio -o -H newc --quiet | zstd -q -19 -T0' > "${OUTPUT}"
 rm -rf "${TREE}"
 echo "  Initrd: $(du -h "${OUTPUT}" | cut -f1)"

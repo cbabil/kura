@@ -5,6 +5,8 @@ mod system;
 
 pub use system::{FakeApps, FakeMachine, FakeSystem};
 
+use crate::browser::Browsers;
+
 use std::os::fd::OwnedFd;
 use std::os::unix::net::UnixStream;
 use std::sync::Mutex;
@@ -155,5 +157,35 @@ fn echo_upper(mut shell: UnixStream) {
             Ok(n @ 1..) if shell.write_all(&buf[..n].to_ascii_uppercase()).is_ok() => {}
             _ => break,
         }
+    }
+}
+
+/// Browsers that record what they were asked: an open hands over one end of
+/// a socket pair and keeps the other (the "server") in `servers`.
+#[derive(Default)]
+pub struct FakeBrowsers {
+    pub fail: AtomicBool,
+    /// "open anna", "stop anna", ...
+    pub calls: Mutex<Vec<String>>,
+    pub servers: Mutex<Vec<UnixStream>>,
+}
+
+impl Browsers for FakeBrowsers {
+    fn open<'a>(&'a self, account: &'a Account) -> Fut<'a, Result<OwnedFd, String>> {
+        let opened = if self.fail.load(Ordering::Relaxed) {
+            Err("systemd said no".to_owned())
+        } else {
+            self.calls.lock().unwrap().push(format!("open {}", account.name));
+            UnixStream::pair().map_err(|e| e.to_string()).map(|(ours, server)| {
+                self.servers.lock().unwrap().push(server);
+                ours.into()
+            })
+        };
+        Box::pin(async move { opened })
+    }
+
+    fn stop<'a>(&'a self, user: &'a str) -> Fut<'a, ()> {
+        self.calls.lock().unwrap().push(format!("stop {user}"));
+        Box::pin(async {})
     }
 }

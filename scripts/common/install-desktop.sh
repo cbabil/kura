@@ -76,7 +76,8 @@ for unit in desktopd helper desktop-cert network-pending; do
     enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-${unit}.service"
 done
 
-# The local screen (ADR-033). Its unit, user and command are in every PC
+# The local screen (ADR-033), and the same way Remote Desktop (ADR-035) and
+# the Browser (ADR-036). Its unit, user and command are in every PC
 # image (OS_KIOSK_FILES, set by build.sh), so the kura package is the same
 # for all PCs and an upgrade takes nothing away; they do nothing without
 # the browser, which only an image built with OS_KIOSK has and turns on.
@@ -92,6 +93,9 @@ if [ "${OS_KIOSK_FILES:-false}" = "true" ]; then
     brand "${SRC}/xrdp-dropin.conf" "${units}/xrdp.service.d/10-${BRAND}.conf" 0644
     disable_unit "${ROOTFS}" multi-user.target xrdp.service
     disable_unit "${ROOTFS}" multi-user.target xrdp-sesman.service
+    # The Browser (ADR-036): the command each person's browser runs, as
+    # them, when the helper starts it; its programs come with OS_BROWSER.
+    brand "${SRC}/os-browser" "${lib}/${BRAND}-browser" 0755
     if [ "${OS_KIOSK:-false}" = "true" ]; then
         enable_unit "${ROOTFS}" multi-user.target "/usr/lib/systemd/system/${BRAND}-kiosk.service"
     fi

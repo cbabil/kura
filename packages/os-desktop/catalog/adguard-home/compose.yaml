@@ -4,7 +4,7 @@
 services:
   adguard-home:
     image: adguard/adguardhome:v0.107.56
-    container_name: kura-adguard-home
+    container_name: adguard-home
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

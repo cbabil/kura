@@ -5,7 +5,7 @@
  * Docker's containers and the journal, with a screenshot of each.
  */
 import { expect, test } from '@playwright/test'
-import { openApp, runInTerminal } from '../e2e/apps'
+import { browserScreen, openApp, runInTerminal } from '../e2e/apps'
 import { signIn } from '../e2e/sign-in'
 
 /** A setting the boot test passes; a missing one fails the run, never fills in a blank. */
@@ -48,4 +48,15 @@ test('opens a shell as the login user, the containers and the journal', async ({
   const console = await openApp(page, 'Console')
   await expect(console.getByRole('log', { name: 'System journal' }).getByRole('listitem').first()).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: `${shots}/console.png` })
+})
+
+test('opens the Browser: the login user’s own Chromium on the device, drawn in its window', async ({ page }) => {
+  const shots = need('KURA_DEVICE_SHOTS')
+  await page.goto('/')
+  await signIn(page, need('KURA_DEVICE_USER'), need('KURA_DEVICE_PASS'))
+  // The image is built with OS_BROWSER (ADR-036); Chromium's first page needs no network.
+  // It is left running: the boot test checks it while it runs (desktop_browser_private).
+  const win = await openApp(page, 'Browser')
+  await browserScreen(win)
+  await page.screenshot({ path: `${shots}/browser.png` })
 })

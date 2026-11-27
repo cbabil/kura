@@ -38,6 +38,13 @@ impl SysRoot {
         std::fs::read_to_string(&path).map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", path.display())))
     }
 
+    /// True when this image has the unit `unit` and every one of `programs`:
+    /// a feature whose packages may be left out (the local screen, Remote
+    /// Desktop, the Browser).
+    pub fn has_unit(&self, unit: &str, programs: &[&str]) -> bool {
+        self.path(format!("/usr/lib/systemd/system/{unit}")).exists() && programs.iter().all(|p| self.path(p).exists())
+    }
+
     /// Opens a file under this root for streaming parsers.
     ///
     /// # Errors
@@ -57,6 +64,17 @@ mod tests {
         assert_eq!(root.path("/proc/stat"), PathBuf::from("/tmp/fixture/proc/stat"));
         assert_eq!(root.path("proc/stat"), PathBuf::from("/tmp/fixture/proc/stat"));
         assert_eq!(SysRoot::default().path("/etc"), PathBuf::from("/etc"));
+    }
+
+    #[test]
+    fn a_unit_counts_only_with_its_programs() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = SysRoot::new(dir.path());
+        assert!(!root.has_unit("x.service", &[]));
+        std::fs::create_dir_all(dir.path().join("usr/lib/systemd/system")).unwrap();
+        std::fs::write(dir.path().join("usr/lib/systemd/system/x.service"), "").unwrap();
+        assert!(root.has_unit("x.service", &[]));
+        assert!(!root.has_unit("x.service", &["/usr/bin/x"]));
     }
 
     #[test]

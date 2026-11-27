@@ -8,6 +8,16 @@ export const apps = {
   'terminal.ended.refused': 'The shell could not start. Your account may have no login shell, or too many terminals are open.',
   'terminal.new': 'New Shell',
 
+  // Browser
+  'browser.label': 'The server’s browser',
+  'browser.loading': 'Starting the browser…',
+  'browser.ended.closed': 'The browser was closed, or nobody had watched it for a while.',
+  'browser.ended.refused': 'The browser could not start. Your account may have no login shell, too many browser windows may be open, or it is not installed on this server.',
+  'browser.open': 'Open Browser',
+  'browser.paste.title': 'Paste Text',
+  'browser.paste.text': 'Text for the browser’s clipboard',
+  'browser.paste.send': 'Paste',
+
   // Containers
   'containers.list': 'Containers',
   'containers.search': 'Search containers',

@@ -5,7 +5,7 @@ use kura_desktop_core::containers::ContainerAction;
 
 use super::*;
 use crate::authenticate::tests::{FakePam, root};
-use crate::fakes::{CONTAINER, FakeApps, FakeDocker, FakeJournal, FakeMachine, FakeShell, FakeSystem};
+use crate::fakes::{CONTAINER, FakeApps, FakeBrowsers, FakeDocker, FakeJournal, FakeMachine, FakeShell, FakeSystem};
 use crate::terminal::MAX_PER_USER;
 
 pub(crate) struct Rig {
@@ -16,6 +16,7 @@ pub(crate) struct Rig {
     pub machine: Arc<FakeMachine>,
     pub system: Arc<FakeSystem>,
     pub apps: Arc<FakeApps>,
+    pub browsers: Arc<FakeBrowsers>,
     pub dir: tempfile::TempDir,
 }
 
@@ -24,7 +25,7 @@ pub(crate) fn rig() -> Rig {
     let (docker, journal) = (Arc::<FakeDocker>::default(), Arc::<FakeJournal>::default());
     let (shells, machine, system) =
         (Arc::<FakeShell>::default(), Arc::<FakeMachine>::default(), Arc::<FakeSystem>::default());
-    let apps = Arc::<FakeApps>::default();
+    let (apps, browsers) = (Arc::<FakeApps>::default(), Arc::<FakeBrowsers>::default());
     let backends = Backends {
         docker: docker.clone(),
         journal: journal.clone(),
@@ -32,10 +33,21 @@ pub(crate) fn rig() -> Rig {
         machine: machine.clone(),
         system: system.clone(),
         apps: apps.clone(),
+        browsers: browsers.clone(),
     };
 
     let auth = Arc::new(Authenticator::new(Box::new(FakePam), root.clone()));
-    Rig { service: Arc::new(Service::new(auth, root, backends)), docker, journal, shells, machine, system, apps, dir }
+    Rig {
+        service: Arc::new(Service::new(auth, root, backends)),
+        docker,
+        journal,
+        shells,
+        machine,
+        system,
+        apps,
+        browsers,
+        dir,
+    }
 }
 
 impl Rig {

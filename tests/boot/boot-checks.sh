@@ -258,6 +258,21 @@ splash_in_initrd() {
     ssh_run 'lsinitramfs "/boot/initrd.img-$(uname -r)" | grep -q "themes/kura/kura.script"'
 }
 
+# root_owns_system: root owns / and the folders and files Kura's overlays
+# put there (an image up to 0.7.1 left the build's ID 1001 on them, and
+# migration 004 gives them back), and no file on / has an owner or group
+# without an account. What is found goes to the report.
+root_owns_system() {
+    local owners unowned
+    owners=$(sudo_run "stat -c '%u:%g %n' / /etc /usr /usr/share /etc/${BRAND} /etc/plymouth/plymouthd.conf \
+        /usr/share/plymouth/themes/${BRAND} /usr/share/grub/themes/kura")
+    unowned=$(sudo_run "find / -xdev \\( -nouser -o -nogroup \\) -print")
+    [ -z "$(grep -v '^0:0 ' <<< "${owners}")" ] && [ -z "${unowned}" ] && [ "$(wc -l <<< "${owners}")" -eq 8 ] && return 0
+    report "  not root's: $(grep -v '^0:0 ' <<< "${owners}" | tr '\n' ' ')"
+    report "  no account: $(head -n 20 <<< "${unowned}" | tr '\n' ' ')"
+    return 1
+}
+
 # console_font: the first boot cached the Terminus 16x32 font setup
 console_font() { ssh_run 'grep -q "Terminus32x16" /etc/console-setup/cached_setup_font.sh'; }
 

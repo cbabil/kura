@@ -6,12 +6,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box } from '@mui/material'
 import type { Api, PowerKind, Prefs, User } from '../api'
-import { APP_BY_ID, appText, launcherEntries } from '../apps/registry'
+import { APP_BY_ID, appText, dockable, launcherEntries } from '../apps/registry'
 import type { AppMenu, MenuCtx, MenuItem } from '../apps/types'
 import { useI18n } from '../i18n'
 import type { Mode } from '../theme'
 import { Dock } from './Dock'
-import { normalizeDock } from './dockOrder'
+import { keepHidden, normalizeDock } from './dockOrder'
 import { LanguageDialog } from './LanguageDialog'
 import { Launcher } from './Launcher'
 import { MenuBar } from './MenuBar'
@@ -31,6 +31,7 @@ interface Props {
 }
 
 const FIRST_APP = 'activity'
+
 
 function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api'>) {
   const d = useDesktop(prefs, onPrefs)
@@ -56,7 +57,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
       { label: 'menu.signOut', vars: { name: user.name }, run: onSignOut },
     ],
   }), [user.name, user.admin, onSignOut])
-  const entries = useMemo(() => launcherEntries(t), [t])
+  const entries = useMemo(() => launcherEntries(t, system), [t, system])
   const run = (item: MenuItem) => {
     const app = d.focused?.app ?? ''
     const ctx: MenuCtx = {
@@ -65,10 +66,11 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
       zoom: () => actions.zoom(app),
       setView: (v) => actions.setView(app, v),
       about: () => setAbout(true),
+      command: (name) => actions.command(app, name),
     }
     item.run(ctx)
   }
-  const pinned = useMemo(() => normalizeDock(prefs.dock), [prefs.dock])
+  const pinned = useMemo(() => normalizeDock(prefs.dock, dockable(system)), [prefs.dock, system])
   const minimized = state.order.filter((a) => state.windows[a].minimized)
 
   return (
@@ -84,11 +86,11 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
         const def = APP_BY_ID[app]
         return (
           <Window key={app} win={state.windows[app]} def={def} focused={isFocused} bounds={bounds} z={10 + i}
-            view={d.views[app] ?? def.views?.[0]?.id ?? ''} actions={actions} />
+            view={d.views[app] ?? def.views?.[0]?.id ?? ''} command={d.commands[app] ?? null} actions={actions} />
         )
       })}
       <Dock pinned={pinned} running={state.order} minimized={minimized} compact={bounds.compact}
-        onOpen={actions.open} onPinnedChange={(dock) => onPrefs({ dock })} />
+        onOpen={actions.open} onQuit={actions.close} onPinnedChange={(dock) => onPrefs({ dock: keepHidden(dock, prefs.dock, pinned) })} />
       {d.launcher && (
         <Launcher entries={entries} onClose={() => d.setLauncher(false)}
           onChoose={(entry) => {

@@ -82,6 +82,45 @@ usr/lib/systemd/system/${b}-supervisor.service
 EOF
 }
 
+# rootfs_unowned_paths <rootfs>: "<uid>:<gid> /<path>" for each path on the
+# rootfs's filesystem whose owner has no account in its /etc/passwd or whose
+# group has no entry in its /etc/group: the image's `find / -xdev \( -nouser
+# -o -nogroup \)`, judged by the image's accounts, not the build host's. A
+# file left with the build user's ID (1001 on CI) would belong to whichever
+# account later gets that ID.
+rootfs_unowned_paths() {
+    local root="${1%/}" # "" for "/" itself
+    # perl's lstat reads owners the same way on Linux and macOS (stat's
+    # options differ); find -print0 keeps names with spaces or newlines whole
+    find "${root:-/}" -xdev -print0 | perl -0ne '
+        BEGIN {
+            ($root) = @ARGV; @ARGV = ();
+            for (["passwd", \%uid], ["group", \%gid]) {
+                my ($file, $ids) = @$_;
+                open(my $fh, "<", "$root/etc/$file") or next;
+                local $/ = "\n";
+                while (<$fh>) { my @f = split /:/; $ids->{$f[2]} = 1 if defined $f[2] }
+            }
+        }
+        chomp;
+        my @st = lstat($_) or next;
+        next if $uid{$st[4]} && $gid{$st[5]};
+        my $path = substr($_, length $root);
+        print "$st[4]:$st[5] ", ($path eq "" ? "/" : $path), "\n";
+    ' "${root}"
+}
+
+# verify_owners <rootfs>: prints the paths rootfs_unowned_paths finds (the
+# first 20) and returns 1 if there is any
+verify_owners() {
+    local unowned
+    unowned=$(rootfs_unowned_paths "$1")
+    [ -n "${unowned}" ] || return 0
+    echo "  $(wc -l <<< "${unowned}" | tr -d ' ') paths have an owner or group with no account (uid:gid path):" >&2
+    head -n 20 <<< "${unowned}" | sed 's/^/    /' >&2
+    return 1
+}
+
 # verify_rootfs <rootfs> <brand>
 # Prints every problem found and returns 1 if there is any.
 verify_rootfs() {
@@ -120,6 +159,8 @@ verify_rootfs() {
         echo "  an APT source skips signature checks (trusted=yes)" >&2
         status=1
     fi
+    # Every file belongs to an account of the image (root, mostly)
+    verify_owners "${rootfs}" || status=1
     if ! login_user_has_sudo "${rootfs}"; then
         echo "  the login user is not in the sudo group (no way to root)" >&2
         status=1

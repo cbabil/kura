@@ -75,7 +75,7 @@ export function StatusArea() {
   return (
     <>
       {tempC !== null && (
-        <Tooltip title={t('status.temp')}>
+        <Tooltip title={t('status.temp', { degrees: tempC })}>
           <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: '4px' }}><Glyph name="temp" size={15} />{tempC}°</Box>
         </Tooltip>
       )}

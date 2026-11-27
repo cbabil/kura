@@ -5,7 +5,7 @@ SHELL := /bin/bash
 LINT_FILES := packages/os-security/src/os-security packages/os-security/src/lib/*.sh \
 	packages/os-config/src/os-config \
 	packages/os-desktop/src/os-settings packages/os-desktop/src/os-settings-screens packages/os-desktop/src/os-apps \
-	packages/os-desktop/src/os-kiosk packages/os-desktop/src/os-rdp-session \
+	packages/os-desktop/src/os-kiosk packages/os-desktop/src/os-rdp-session packages/os-desktop/src/os-browser \
 	scripts/common/*.sh scripts/common/kura-issue scripts/common/migrations/*.sh \
 	scripts/packaging/*.sh scripts/release/*.sh \
 	scripts/pc-installer/*.sh scripts/pc-installer/init scripts/pc-installer/udhcpc.script \

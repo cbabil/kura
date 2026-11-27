@@ -124,6 +124,8 @@ async fn a_changed_password_or_a_removal_ends_that_persons_other_sign_ins() {
     rig.service.ask(&anna, "change-setting", r#"{"what":"user-remove","name":"bob"}"#).await.unwrap();
     assert_eq!(rig.service.keep_alive(&last), Err(Refusal::SignedOut));
     assert!(rig.service.keep_alive(&anna).is_ok());
+    // their own change keeps their browser; anna's reset and the removal stop it
+    assert_eq!(rig.browsers.calls.lock().unwrap().as_slice(), ["stop bob", "stop bob"]);
 }
 
 #[tokio::test]

@@ -104,7 +104,7 @@ upgrade() {
 # The terminal: systemd starts the shell as the signed-in user, in a unit of
 # its own, and the unit goes when the browser does.
 # terminal_units: the names of the terminals' units, one a line
-terminal_units() { systemctl list-units --no-legend --plain 'kura-terminal-*.service' | awk '{print $1}'; }
+terminal_units() { systemctl list-units --no-legend --plain 'terminal-*.service' | awk '{print $1}'; }
 
 # until_units <empty|open> <what>: waits up to 15 s for that state
 until_units() {
@@ -112,7 +112,7 @@ until_units() {
     while [ "$([ -n "$(terminal_units)" ] && echo open || echo empty)" != "${want}" ]; do
         if [ "${SECONDS}" -ge "${deadline}" ]; then
             # what systemd knows of them, for whoever reads this failure
-            systemctl status --no-pager --lines=5 'kura-terminal-*.service' >&2 || true
+            systemctl status --no-pager --lines=5 'terminal-*.service' >&2 || true
             fail "$2"
         fi
         sleep 1
@@ -121,7 +121,7 @@ until_units() {
 
 upgrade 8 '/api/terminal?cols=100&rows=30' > "${out}/terminal.out" &
 terminal=$!
-until_units open "no kura-terminal unit while a terminal is open"
+until_units open "no terminal unit while a terminal is open"
 unit="$(terminal_units | head -1)"
 [ "$(systemctl show -p User --value "${unit}")" = "${user}" ] || fail "${unit} does not run as ${user}"
 shell_pid="$(systemctl show -p MainPID --value "${unit}")"
@@ -244,7 +244,7 @@ echo '{"op":"read","path":"/etc/shadow","offset":0}' | files_op 400
 echo '{"op":"write","path":"/tmp/x","id":"a","offset":0,"last":true}' | files_op 400
 status 403 -b "${jar}" "${base}/api/files/content?path=/etc/shadow"
 status 403 -b "${jar}" -X PUT --data-binary x "${base}/api/files/content?path=${home}/kura-e2e-forged"
-[ -n "$(systemctl list-units --no-legend 'kura-files-*')" ] || fail "no file agent runs as a unit of its own"
+[ -n "$(systemctl list-units --no-legend 'files-*')" ] || fail "no file agent runs as a unit of its own"
 
 # The App Catalog (ADR-032): what Kura ships is listed, and only that, on a
 # port of the administrator's choosing, can be asked for. Nothing is
@@ -282,10 +282,10 @@ fi
 status 204 -b "${jar}" "${DESKTOP_CHANGE[@]}" -X POST "${base}/api/logout"
 status 401 -b "${jar}" "${base}/api/containers"
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-    [ -n "$(systemctl list-units --no-legend 'kura-files-*')" ] || break
+    [ -n "$(systemctl list-units --no-legend 'files-*')" ] || break
     sleep 0.5
 done
-[ -z "$(systemctl list-units --no-legend 'kura-files-*')" ] || fail "a file agent outlived its session"
+[ -z "$(systemctl list-units --no-legend 'files-*')" ] || fail "a file agent outlived its session"
 
 rss_kb="$(ps -o rss= -p "${desktopd}" | tr -d ' ')"
 echo "kura-desktopd RSS: ${rss_kb} kB"

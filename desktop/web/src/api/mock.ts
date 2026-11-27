@@ -6,6 +6,7 @@
  */
 import { DAY_POINTS, DAY_STEP_MS, HOUR_POINTS } from './types'
 import { createMockApps } from './mockApps'
+import { MockVncChannel } from './mockBrowser'
 import { createMockCatalog } from './mockCatalog'
 import { createMockFiles } from './mockFiles'
 import { createMockSettings } from './mockSettings'
@@ -23,6 +24,7 @@ const system: SystemInfo = {
   cores: 4,
   memTotal: 16 * GB,
   uptime: 3 * 86400 + 4 * 3600,
+  browser: true,
 }
 
 /** A smooth pseudo-random wave so charts look alive but tests stay stable. */
@@ -105,5 +107,7 @@ export function createMockApi(): Api {
     ...createMockSettings(() => user, system.hostname, MOCK_PASSWORD),
     ...createMockFiles(),
     ...createMockCatalog(() => user),
+    browser: () => new MockVncChannel(),
+    async browserStop() {},
   }
 }

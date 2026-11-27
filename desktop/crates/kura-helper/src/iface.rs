@@ -123,6 +123,18 @@ impl HelperIface {
         Ok((id, socket.into()))
     }
 
+    /// A connection to the ticket's user's own Browser (ADR-036): the VNC
+    /// server desktopd relays to the page.
+    async fn open_browser(
+        &self,
+        #[zbus(header)] hdr: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        ticket: String,
+    ) -> Result<OwnedFd> {
+        self.admit(conn, &hdr).await?;
+        Ok(self.service.open_browser(&ticket).await?.into())
+    }
+
     /// Stops a terminal or a file agent the ticket opened.
     async fn close_terminal(
         &self,

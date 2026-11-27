@@ -2,6 +2,7 @@
 
 mod api;
 mod auth;
+mod browser;
 mod catalog;
 mod containers;
 mod files;
@@ -32,8 +33,9 @@ pub(super) const HOST: &str = "kura.local";
 pub(super) const ORIGIN: &str = "https://kura.local";
 
 /// Answers like the helper would: the development helper, except that for
-/// the user "down" the bus is gone and "ghost" has no local account.
-pub(super) struct Scripted(pub DevHelper);
+/// the user "down" the bus is gone and "ghost" has no local account, and
+/// that its Browser does not start while the flag is set.
+pub(super) struct Scripted(pub DevHelper, pub std::sync::atomic::AtomicBool);
 impl Helper for Scripted {
     fn authenticate<'a>(&'a self, user: &'a str, password: &'a str) -> Fut<'a, (AuthOutcome, String)> {
         let result = match user {
@@ -58,6 +60,12 @@ impl Helper for Scripted {
     fn close_terminal<'a>(&'a self, ticket: &'a str, id: &'a str) -> Fut<'a, ()> {
         self.0.close_terminal(ticket, id)
     }
+    fn open_browser<'a>(&'a self, ticket: &'a str) -> Fut<'a, std::os::fd::OwnedFd> {
+        if self.1.load(std::sync::atomic::Ordering::Relaxed) {
+            return Box::pin(async { Err(HelperError::Unavailable("it did not start".into())) });
+        }
+        self.0.open_browser(ticket)
+    }
     fn ask<'a>(&'a self, ticket: &'a str, action: Action, args: String) -> Fut<'a, String> {
         self.0.ask(ticket, action, args)
     }
@@ -75,7 +83,7 @@ impl TestApp {
         let fixture = Fixture::full();
         let state_dir = tempfile::tempdir().unwrap();
         // /bin/sh whatever the developer's own shell, so terminals behave alike everywhere.
-        let helper = Arc::new(Scripted(DevHelper::with_shell("/bin/sh")));
+        let helper = Arc::new(Scripted(DevHelper::with_shell("/bin/sh"), Default::default()));
         let mut state = AppState::new(helper.clone(), StatsHub::new(), fixture.root(), state_dir.path());
         state.fail_delay = std::time::Duration::ZERO;
         Self { state: Arc::new(state), helper, fixture, state_dir }

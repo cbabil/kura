@@ -139,6 +139,7 @@ else
 fi
 check "Kura registered as a package" kura_package
 check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
+check "root owns /, /etc and Kura's files; every owner has an account" root_owns_system
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
 check "core services active" services_active
 # This VM has a serial port, so the kernel has a serial console and systemd
@@ -164,7 +165,8 @@ else
     check "desktop: a setting is changed by the root command" desktop_setting_changes
     check "desktop: files are the user's own, through their agent" desktop_files
     if [ "${KURA_TEST_SCREENSHOTS:-}" = 1 ]; then
-        check "desktop: sign-in, desktop, terminal, containers and console screenshots" desktop_screens
+        check "desktop: sign-in, desktop, terminal, containers, console and browser screenshots" desktop_screens
+        check "desktop: the Browser runs as the login user, listens on no port, and stops" desktop_browser_private
         check "desktop: no terminal's shell outlives its window" wait_for "terminals closed" desktop_terminals_closed
     fi
 fi

@@ -41,11 +41,15 @@ pub enum Action {
     ReadCatalog,
     /// Install, update or remove one of them: `catalog::AppChange`.
     ChangeApp,
+    /// Start the shared Browser (ADR-036), if it is not running yet.
+    Browser,
+    /// Quit the shared Browser.
+    BrowserStop,
 }
 
 impl Action {
     /// Every action.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::Terminal,
         Self::Files,
         Self::ListContainers,
@@ -60,6 +64,8 @@ impl Action {
         Self::ChangeOwnPassword,
         Self::ReadCatalog,
         Self::ChangeApp,
+        Self::Browser,
+        Self::BrowserStop,
     ];
 
     /// The action's name on the wire and in the journal.
@@ -79,6 +85,8 @@ impl Action {
             Self::ChangeOwnPassword => "change-own-password",
             Self::ReadCatalog => "read-catalog",
             Self::ChangeApp => "change-app",
+            Self::Browser => "browser",
+            Self::BrowserStop => "browser-stop",
         }
     }
 
@@ -88,12 +96,18 @@ impl Action {
     }
 
     /// True for what only members of `sudo` may do. A person's own shell,
-    /// files and password, the list of containers and whether an update waits are
-    /// open to every signed-in user.
+    /// files and password, the list of containers, whether an update waits
+    /// and the shared Browser are open to every signed-in user.
     pub fn needs_admin(self) -> bool {
         !matches!(
             self,
-            Self::Terminal | Self::Files | Self::ListContainers | Self::UpdateStatus | Self::ChangeOwnPassword
+            Self::Terminal
+                | Self::Files
+                | Self::ListContainers
+                | Self::UpdateStatus
+                | Self::ChangeOwnPassword
+                | Self::Browser
+                | Self::BrowserStop
         )
     }
 }

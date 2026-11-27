@@ -106,7 +106,7 @@ desktop_files() {
 }
 
 # No shell started for a terminal is left running once its window is closed
-desktop_terminals_closed() { [ -z "$(ssh_run "systemctl list-units --no-legend 'kura-terminal-*'")" ]; }
+desktop_terminals_closed() { [ -z "$(ssh_run "systemctl list-units --no-legend 'terminal-*'")" ]; }
 
 # signin.png and desktop.png through a real browser (Playwright's Chromium),
 # then a terminal (its shell must be the login user's), the containers and
@@ -116,5 +116,25 @@ desktop_screens() {
         KURA_DEVICE_URL="${DESKTOP_URL}" KURA_DEVICE_USER="${LOGIN_USER}" KURA_DEVICE_PASS="${LOGIN_PASS}" \
         KURA_DEVICE_SHOTS="${OUT}" bunx playwright test -c playwright.device.config.ts) > "${OUT}/desktop-screens.log" 2>&1 &&
         [ -s "${OUT}/signin.png" ] && [ -s "${OUT}/desktop.png" ] &&
-        [ -s "${OUT}/terminal.png" ] && [ -s "${OUT}/containers.png" ] && [ -s "${OUT}/console.png" ]
+        [ -s "${OUT}/terminal.png" ] && [ -s "${OUT}/containers.png" ] && [ -s "${OUT}/console.png" ] &&
+        [ -s "${OUT}/browser.png" ]
+}
+
+# The Browser (ADR-036), left open by the screenshots: the login user's own
+# unit runs Chromium as them; its socket is in a folder of theirs alone;
+# nothing of it listens on a network port; the X server holds its own
+# abstract socket (numbered by their uid). Then it stops when asked.
+desktop_browser_private() {
+    local unit="browser-${LOGIN_USER}" uid ok=0
+    uid=$(ssh_run "id -u") || return 1
+    report_facts "$(sudo_run "stat -c '%U %a' /run/${unit} /run/${unit}/vnc.sock" | tr '\n' ' ')"
+    if [ "$(ssh_run "systemctl is-active ${unit}" || true)" = active ] &&
+        [ "$(sudo_run "stat -c '%U %a' /run/${unit}")" = "${LOGIN_USER} 700" ] &&
+        ! sudo_run "ss -ltnupH" | grep -q 'Xtigervnc\|chromium' &&
+        sudo_run "ss -xlpH" | grep "@/tmp/.X11-unix/X${uid} " | grep -q Xtigervnc &&
+        [ "$(ssh_run "ps -o user= -C chromium | sort -u")" = "${LOGIN_USER}" ]; then
+        ok=1
+    fi
+    sudo_run "systemctl stop ${unit}"
+    [ "${ok}" = 1 ] && [ "$(ssh_run "systemctl is-active ${unit}" || true)" != active ]
 }

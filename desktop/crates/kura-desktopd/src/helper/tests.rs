@@ -34,6 +34,7 @@ async fn peer() -> (DbusHelper, zbus::Connection, Fixture) {
         machine: Arc::<FakeMachine>::default(),
         system: Arc::<FakeSystem>::default(),
         apps: Arc::<kura_helper::fakes::FakeApps>::default(),
+        browsers: Arc::<kura_helper::fakes::FakeBrowsers>::default(),
     };
     let service = Arc::new(Service::new(auth, dir.root(), backends));
     let (a, b) = std::os::unix::net::UnixStream::pair().unwrap();

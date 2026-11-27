@@ -115,11 +115,13 @@ qemu-system-x86_64 -machine q35,smm=on -m 2048 -smp 2 "${ACCEL[@]}" \
 
 # ---- on the device ----
 
-# owner_state: what an upgrade must leave as the owner set it
+# owner_state: what an upgrade must leave as the owner set it. Permissions,
+# not owners: migration 004 gives /, /etc and /usr back to root on purpose,
+# and root_owns_system checks that on its own.
 owner_state() {
     sudo_run "sh -c 'hostname; sha256sum /etc/${BRAND}/config.json /etc/ssh/sshd_config.d/10-${BRAND}.conf \
         /etc/${BRAND}/brand.env /etc/fstab; systemctl is-enabled ${BRAND}-desktopd ssh;
-        stat -c \"%u:%g %a %n\" / /etc /etc/apt /etc/apt/sources.list.d /etc/apt/preferences.d /usr /usr/share \
+        stat -c \"%a %n\" / /etc /etc/apt /etc/apt/sources.list.d /etc/apt/preferences.d /usr /usr/share \
             /usr/share/keyrings'" 2>&1
 }
 
@@ -182,6 +184,7 @@ report_facts "${BEFORE}"
 check "upgrade runs" upgrade
 check "package installed, new version, no restart by itself, apt satisfied" upgraded
 check "the owner's settings and choices are unchanged" owner_state_kept
+check "root owns /, /etc and Kura's files again (migration 004)" root_owns_system
 check "login screen shows the new version" wait_for "kura-issue" version_shown
 check "back after a restart" restart_device
 check "still upgraded after the restart" upgraded
