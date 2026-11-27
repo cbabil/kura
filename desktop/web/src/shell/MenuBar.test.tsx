@@ -28,7 +28,7 @@ describe('MenuBar', () => {
     setup()
     expect(screen.getByText('Activity Monitor')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'File' })).toBeInTheDocument()
-    expect(screen.getByText(/^\d+°$/)).toBeInTheDocument()
+    expect(screen.getByText(/^CPU \d+(\.\d)?°$/)).toBeInTheDocument()
     expect(screen.getByLabelText('Online')).toBeInTheDocument()
   })
 
