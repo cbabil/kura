@@ -28,7 +28,8 @@ describe('MenuBar', () => {
     setup()
     expect(screen.getByText('Activity Monitor')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'File' })).toBeInTheDocument()
-    expect(screen.getByText(/^CPU \d+(\.\d)?°$/)).toBeInTheDocument()
+    // a thermometer and the reading; what it is shows on hover
+    expect(screen.getByText(/^\d+(\.\d)?°$/).querySelector('svg')).not.toBeNull()
     expect(screen.getByLabelText('Online')).toBeInTheDocument()
   })
 

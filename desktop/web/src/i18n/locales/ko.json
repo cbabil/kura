@@ -31,7 +31,6 @@
   "menu.zoom": "확대/축소",
   "menu.desktopHelp": "Kura Desktop 도움말",
   "status.temp": "CPU 온도",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "서버에 연결됨",
   "status.disconnected": "연결되지 않음",
   "status.online": "온라인",

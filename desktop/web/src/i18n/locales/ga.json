@@ -31,7 +31,6 @@
   "menu.zoom": "Méadaigh",
   "menu.desktopHelp": "Cabhair Kura Desktop",
   "status.temp": "Teocht an phróiseálaí",
-  "status.tempShort": "LAP {degrees}°",
   "status.connected": "Ceangailte leis an bhfreastalaí",
   "status.disconnected": "Gan cheangal",
   "status.online": "Ar líne",

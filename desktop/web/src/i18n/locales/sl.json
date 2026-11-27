@@ -31,7 +31,6 @@
   "menu.zoom": "Povečaj",
   "menu.desktopHelp": "Pomoč za Kura Desktop",
   "status.temp": "Temperatura procesorja",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "Povezano s strežnikom",
   "status.disconnected": "Ni povezave",
   "status.online": "Povezano",

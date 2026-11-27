@@ -31,7 +31,6 @@
   "menu.zoom": "გადიდება",
   "menu.desktopHelp": "Kura Desktop-ის დახმარება",
   "status.temp": "პროცესორის ტემპერატურა",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "დაკავშირებულია სერვერთან",
   "status.disconnected": "არ არის დაკავშირებული",
   "status.online": "ხაზზეა",

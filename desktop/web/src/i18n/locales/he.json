@@ -31,7 +31,6 @@
   "menu.zoom": "הגדלה",
   "menu.desktopHelp": "העזרה של Kura Desktop",
   "status.temp": "טמפרטורת המעבד",
-  "status.tempShort": "מעבד {degrees}°",
   "status.connected": "מחובר לשרת",
   "status.disconnected": "לא מחובר",
   "status.online": "מקוון",

@@ -31,7 +31,6 @@
   "menu.zoom": "Büyüt",
   "menu.desktopHelp": "Kura Desktop Yardımı",
   "status.temp": "İşlemci sıcaklığı",
-  "status.tempShort": "CPU {degrees}°",
   "status.connected": "Sunucuya bağlı",
   "status.disconnected": "Bağlı değil",
   "status.online": "Çevrimiçi",

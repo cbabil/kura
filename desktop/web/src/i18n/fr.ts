@@ -41,7 +41,6 @@ export const fr: Messages = {
   'menu.zoom': 'Agrandir',
   'menu.desktopHelp': 'Aide de Kura Desktop',
   'status.temp': 'Température du processeur',
-  'status.tempShort': 'CPU {degrees}°',
   'status.connected': 'Connecté au serveur',
   'status.disconnected': 'Non connecté',
   'status.online': 'En ligne',

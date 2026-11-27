@@ -48,7 +48,6 @@ export const en = {
   'menu.zoom': 'Zoom',
   'menu.desktopHelp': 'Kura Desktop Help',
   'status.temp': 'CPU temperature',
-  'status.tempShort': 'CPU {degrees}°',
   'status.connected': 'Connected to the server',
   'status.disconnected': 'Not connected',
   'status.online': 'Online',
