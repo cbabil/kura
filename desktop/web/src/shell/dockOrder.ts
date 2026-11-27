@@ -4,22 +4,27 @@ import { DOCKABLE } from '../apps/registry'
 
 export const DEFAULT_DOCK = DOCKABLE
 
-/** Moves `item` before `before`, or to the end when `before` is null. */
-export function moveItem(list: string[], item: string, before: string | null): string[] {
-  if (!list.includes(item) || item === before) return list
-  const rest = list.filter((x) => x !== item)
-  const at = before === null ? rest.length : rest.indexOf(before)
-  return at < 0 ? list : [...rest.slice(0, at), item, ...rest.slice(at)]
+/** The slot under the pointer at `x`: how many of the other icons' centres lie before it. */
+export function slotAt(centres: readonly number[], x: number): number {
+  return centres.filter((c) => c < x).length
+}
+
+/** Puts `item` at `slot` of the list without it: a move when it was pinned, a new pin when not. */
+export function placeAt(list: string[], item: string, slot: number): string[] {
+  const rest = unpin(list, item)
+  return [...rest.slice(0, slot), item, ...rest.slice(slot)]
 }
 
 export function unpin(list: string[], item: string): string[] {
   return list.filter((x) => x !== item)
 }
 
+/** The saved order, or the default when nothing is saved. */
+const savedOrDefault = (saved: string[] | undefined): string[] => (saved && saved.length > 0 ? saved : DEFAULT_DOCK)
+
 /** Drops unknown and repeated ids; saved prefs may predate an app's removal. */
 export function normalizeDock(saved: string[] | undefined, known: readonly string[] = DOCKABLE): string[] {
-  const source = saved && saved.length > 0 ? saved : DEFAULT_DOCK
-  return [...new Set(source)].filter((id) => known.includes(id))
+  return [...new Set(savedOrDefault(saved))].filter((id) => known.includes(id))
 }
 
 /**
@@ -27,6 +32,5 @@ export function normalizeDock(saved: string[] | undefined, known: readonly strin
  * this server does not offer, or not yet known to (its facts still loading).
  */
 export function keepHidden(dock: string[], saved: string[] | undefined, shown: readonly string[]): string[] {
-  const before = saved && saved.length > 0 ? saved : DEFAULT_DOCK
-  return [...dock, ...before.filter((id) => !shown.includes(id) && !dock.includes(id))]
+  return [...dock, ...savedOrDefault(saved).filter((id) => !shown.includes(id) && !dock.includes(id))]
 }

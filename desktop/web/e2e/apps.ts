@@ -9,6 +9,16 @@ export async function openApp(page: Page, name: string): Promise<Locator> {
   return win
 }
 
+/** Opens an app from the launcher (⌘K / Ctrl K), for one the dock does not show, and returns its window. */
+export async function launchApp(page: Page, name: string): Promise<Locator> {
+  await page.keyboard.press('Control+k')
+  await page.getByRole('combobox', { name: 'Search' }).fill(name)
+  await page.keyboard.press('Enter')
+  const win = page.getByRole('dialog', { name })
+  await expect(win).toBeVisible()
+  return win
+}
+
 /** Types a command into an open Terminal window once its shell shows a prompt. */
 export async function runInTerminal(terminal: Locator, command: string) {
   const screen = terminal.locator('.xterm-rows')

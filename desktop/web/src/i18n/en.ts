@@ -81,6 +81,8 @@ export const en = {
   'dock.open': 'Open',
   'dock.remove': 'Remove from Dock',
   'dock.keep': 'Keep in Dock',
+  'dock.options': 'Options',
+  'dock.quit': 'Quit',
   'comingSoon': 'Arrives in a coming update of Kura.',
   'layout.notSaved': 'Your desktop layout could not be saved. It will be tried again on the next change.',
 
@@ -119,10 +121,10 @@ export const en = {
   'app.settings.blurb': 'Network, users, time, storage and updates',
   'app.catalog.name': 'App Catalog',
   'app.catalog.blurb': 'Install apps in one click',
-  'app.trash.name': 'Trash',
-  'app.trash.blurb': 'Deleted files, kept until you empty it',
   'app.browser.name': 'Browser',
   'app.browser.blurb': 'A web browser on this server, shared by everyone signed in',
+  'app.trash.name': 'Trash',
+  'app.trash.blurb': 'Deleted files, kept until you empty it',
 
   // Activity Monitor
   'activity.view.Summary': 'Summary',

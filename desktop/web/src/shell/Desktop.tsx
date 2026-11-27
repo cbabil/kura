@@ -90,7 +90,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
         )
       })}
       <Dock pinned={pinned} running={state.order} minimized={minimized} compact={bounds.compact}
-        onOpen={actions.open} onPinnedChange={(dock) => onPrefs({ dock: keepHidden(dock, prefs.dock, pinned) })} />
+        onOpen={actions.open} onQuit={actions.close} onPinnedChange={(dock) => onPrefs({ dock: keepHidden(dock, prefs.dock, pinned) })} />
       {d.launcher && (
         <Launcher entries={entries} onClose={() => d.setLauncher(false)}
           onChoose={(entry) => {

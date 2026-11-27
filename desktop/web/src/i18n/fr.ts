@@ -71,6 +71,8 @@ export const fr: Messages = {
   'dock.open': 'Ouvrir',
   'dock.remove': 'Retirer du Dock',
   'dock.keep': 'Garder dans le Dock',
+  'dock.options': 'Options',
+  'dock.quit': 'Quitter',
   'comingSoon': 'Arrive dans une prochaine mise à jour de Kura.',
   'layout.notSaved': "La disposition du bureau n'a pas pu être enregistrée. Nouvel essai à la prochaine modification.",
 
@@ -106,10 +108,10 @@ export const fr: Messages = {
   'app.settings.blurb': 'Réseau, utilisateurs, heure, stockage et mises à jour',
   'app.catalog.name': 'Catalogue d’apps',
   'app.catalog.blurb': 'Installer des apps en un clic',
-  'app.trash.name': 'Corbeille',
-  'app.trash.blurb': "Fichiers supprimés, gardés jusqu'à ce que vous la vidiez",
   'app.browser.name': 'Navigateur',
   'app.browser.blurb': 'Un navigateur web sur ce serveur, partagé par toutes les personnes connectées',
+  'app.trash.name': 'Corbeille',
+  'app.trash.blurb': "Fichiers supprimés, gardés jusqu'à ce que vous la vidiez",
 
   'activity.view.Summary': 'Résumé',
   'activity.view.CPU': 'Processeur',
