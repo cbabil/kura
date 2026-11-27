@@ -171,19 +171,29 @@ orphan() {
     fi
 }
 
+# Every path of the test's tree is unowned then, more than the 20 shown: the
+# list is sorted by path, so /etc (after / itself) is always among them,
+# whatever order the disk keeps the files in.
 @test "verify_rootfs: fails and names a path whose owner has no account" {
     orphan passwd
     run verify_rootfs "${ROOTFS}" kura
     [ "$status" -eq 1 ]
     output_has "owner or group with no account"
-    output_has "/usr/bin/docker"
+    output_has " /etc"$'\n'
 }
 
 @test "verify_rootfs: fails and names a path whose group has no entry" {
     orphan group
     run verify_rootfs "${ROOTFS}" kura
     [ "$status" -eq 1 ]
-    output_has "/usr/bin/docker"
+    output_has " /etc"$'\n'
+}
+
+@test "verify_owners: shows the first 20 by path, whatever order the disk lists them in" {
+    rootfs_unowned_paths() { printf '1:1 /zz\n1:1 /b\n1:1 /a\n'; }
+    run verify_owners "${ROOTFS}"
+    [ "$status" -eq 1 ]
+    [ "$(grep -o '/[a-z]*$' <<< "${output}" | tr '\n' ' ')" = "/a /b /zz " ]
 }
 
 @test "rootfs_unowned_paths: checks the rootfs's own directory too (/)" {
