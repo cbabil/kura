@@ -139,6 +139,7 @@ else
 fi
 check "Kura registered as a package" kura_package
 check "first boot finished" ssh_run "test -f /var/lib/${BRAND}/.firstboot-done"
+check "root owns /, /etc and Kura's files; every owner has an account" root_owns_system
 check "root partition grown and writable" root_grown "${IMAGE_BYTES}"
 check "core services active" services_active
 # This VM has a serial port, so the kernel has a serial console and systemd

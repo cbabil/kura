@@ -182,6 +182,7 @@ report_facts "${BEFORE}"
 check "upgrade runs" upgrade
 check "package installed, new version, no restart by itself, apt satisfied" upgraded
 check "the owner's settings and choices are unchanged" owner_state_kept
+check "root owns /, /etc and Kura's files again (migration 004)" root_owns_system
 check "login screen shows the new version" wait_for "kura-issue" version_shown
 check "back after a restart" restart_device
 check "still upgraded after the restart" upgraded

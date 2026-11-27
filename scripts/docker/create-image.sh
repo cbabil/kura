@@ -51,6 +51,14 @@ rm -rf "${DOCKER_ROOTFS}/var/log"/*
 find "${DOCKER_ROOTFS}/usr/share/locale" -mindepth 1 -maxdepth 1 \
     ! -name 'C' ! -name 'en_US' -exec rm -rf {} + 2>/dev/null || true
 
+# ---- Every file belongs to an account of the image ----
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/common/verify-rootfs.sh"
+if ! verify_owners "${DOCKER_ROOTFS}"; then
+    echo "ERROR: Docker rootfs has files owned by IDs with no account" >&2
+    exit 1
+fi
+
 # ---- Create tarball ----
 VARIANT="x86_64"
 [ "${ARCH}" = "arm64" ] && VARIANT="rpi5"

@@ -25,7 +25,9 @@ make_complete_rootfs() {
     done
     mkdir -p "${ROOTFS}/etc/ssh"
     : > "${ROOTFS}/etc/machine-id"
-    printf 'root:x:0:\nsudo:x:27:admin\n' > "${ROOTFS}/etc/group"
+    printf 'root:x:0:\nsudo:x:27:admin\nowner:x:%s:\n' "$(id -g)" > "${ROOTFS}/etc/group"
+    printf 'root:x:0:0:root:/root:/bin/bash\nadmin:x:%s:%s::/home/admin:/bin/bash\n' \
+        "$(id -u)" "$(id -g)" > "${ROOTFS}/etc/passwd"
     printf 'root:!*:20000:0:99999:7:::\nadmin:$y$hash:0:0:99999:7:::\n' > "${ROOTFS}/etc/shadow"
 }
 
@@ -155,4 +157,63 @@ make_complete_rootfs() {
     rootfs_required_files kura | grep -qx "usr/lib/systemd/systemd-timesyncd"
     rootfs_required_links kura | grep -qx "etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer"
     rootfs_required_links kura | grep -qx "etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service"
+}
+
+# orphan <passwd|group>: every test file (they are the tester's) owned by
+# an ID with no account in the rootfs: the tester's own user or group is
+# dropped from it. The tests run as a user, here and on CI; as root, no file
+# would be orphaned and these tests would fail, not pass.
+orphan() {
+    if [ "$1" = passwd ]; then
+        sed -i.bak '/^admin:/d' "${ROOTFS}/etc/passwd"
+    else
+        sed -i.bak '/^owner:/d' "${ROOTFS}/etc/group"
+    fi
+}
+
+@test "verify_rootfs: fails and names a path whose owner has no account" {
+    orphan passwd
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -eq 1 ]
+    output_has "owner or group with no account"
+    output_has "/usr/bin/docker"
+}
+
+@test "verify_rootfs: fails and names a path whose group has no entry" {
+    orphan group
+    run verify_rootfs "${ROOTFS}" kura
+    [ "$status" -eq 1 ]
+    output_has "/usr/bin/docker"
+}
+
+@test "rootfs_unowned_paths: checks the rootfs's own directory too (/)" {
+    orphan passwd
+    run rootfs_unowned_paths "${ROOTFS}"
+    [ "$status" -eq 0 ]
+    grep -qE '^[0-9]+:[0-9]+ /$' <<< "${output}"
+}
+
+@test "rootfs_unowned_paths: prints nothing when every owner has an account" {
+    run rootfs_unowned_paths "${ROOTFS}"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "rootfs_unowned_paths: a dangling link and a name with a space are checked too" {
+    ln -s /nowhere "${ROOTFS}/dangling"
+    touch "${ROOTFS}/a name"
+    orphan passwd
+    run rootfs_unowned_paths "${ROOTFS}/"
+    output_has " /dangling"
+    output_has " /a name"
+}
+
+@test "verify_owners: names at most 20 paths, after how many there are" {
+    local i
+    for i in $(seq 1 30); do touch "${ROOTFS}/f${i}"; done
+    orphan passwd
+    run verify_owners "${ROOTFS}"
+    [ "$status" -eq 1 ]
+    output_has "paths have an owner or group with no account"
+    [ "$(grep -c '^    [0-9]' <<< "${output}")" -eq 20 ]
 }

@@ -125,3 +125,49 @@ serial_link() {
     [ "$status" -eq 0 ]
     [ -z "$(find "${ROOT}/etc" -name 'serial-getty*')" ]
 }
+
+# chown as a list of its calls (tests do not run as root)
+fake_chown() {
+    printf '#!/bin/sh\necho "$*" >> "%s"\n' "${BATS_TEST_TMPDIR}/chown.calls" > "${BATS_TEST_TMPDIR}/bin/chown"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/chown"
+    : > "${BATS_TEST_TMPDIR}/chown.calls"
+}
+chowned() { grep -qxF -- "-h 0:0 ${ROOT}$1" "${BATS_TEST_TMPDIR}/chown.calls"; }
+
+@test "004: the overlay's paths and every folder above them, / included, go back to root" {
+    fake_chown
+    mkdir -p "${ROOT}/usr/share/plymouth/themes/kura" "${ROOT}/etc/plymouth" "${ROOT}/etc/kura"
+    touch "${ROOT}/usr/share/plymouth/themes/kura/kura.script" "${ROOT}/etc/plymouth/plymouthd.conf"
+    run "${MIG}/004-root-owners.sh"
+    [ "$status" -eq 0 ]
+    local p
+    for p in / /etc /usr /usr/share /usr/share/plymouth /usr/share/plymouth/themes \
+             /usr/share/plymouth/themes/kura /usr/share/plymouth/themes/kura/kura.script \
+             /etc/plymouth /etc/plymouth/plymouthd.conf /etc/kura; do
+        chowned "${p}"
+    done
+}
+
+@test "004: a path the device does not have (the Pi has no splash) is skipped" {
+    fake_chown
+    run "${MIG}/004-root-owners.sh"
+    [ "$status" -eq 0 ]
+    ! grep -q plymouth "${BATS_TEST_TMPDIR}/chown.calls"
+}
+
+@test "004: a failed chown fails the migration (it is tried again at the next upgrade)" {
+    printf '#!/bin/sh\nexit 1\n' > "${BATS_TEST_TMPDIR}/bin/chown"
+    chmod +x "${BATS_TEST_TMPDIR}/bin/chown"
+    run "${MIG}/004-root-owners.sh"
+    [ "$status" -ne 0 ]
+}
+
+# Every path any overlay installs (git's, which is what CI builds) is in the
+# list, so a new overlay file cannot be left out
+@test "004: covers every path the overlays install" {
+    local f
+    while IFS= read -r f; do
+        f="/${f#overlay/*/}"
+        grep -qxF -- "    ${f}" "${MIG}/004-root-owners.sh" || { echo "not in 004: ${f}"; return 1; }
+    done < <(git -C "${REPO_ROOT}" ls-files overlay)
+}
