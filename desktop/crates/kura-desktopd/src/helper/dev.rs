@@ -97,6 +97,11 @@ impl DevHelper {
         std::fs::write(units.join("xrdp.service"), "").expect("Remote Desktop's unit");
         std::fs::create_dir_all(dir.path().join("usr/sbin")).expect("the system programs folder");
         std::fs::write(dir.path().join("usr/sbin/xrdp"), "").expect("Remote Desktop's program");
+        // ...and the shared Browser's unit and programs (ADR-036); nothing
+        // listens on its socket, so opening it answers "unavailable".
+        for file in kura_desktop_core::browser::files() {
+            std::fs::write(dir.path().join(file.trim_start_matches('/')), "").expect("a Browser file");
+        }
         let root = SysRoot::new(dir.path());
         let auth = Arc::new(Authenticator::new(Box::new(backends::DevPam), root.clone()));
         let backends = Backends {

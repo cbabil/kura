@@ -110,6 +110,9 @@ jobs:
           echo "OS_TMP=\"${RUNNER_TEMP}/kura\"" >> .env
           # Kura Desktop's binaries from desktop-dist.yml; build.sh fails if they are missing
           echo "OS_DESKTOP_DIST=\"${GITHUB_WORKSPACE}/desktop-dist\"" >> .env
+          # The shared Browser's packages (ADR-036), PC image only, so the
+          # boot test opens a real Chromium in Kura Desktop
+          echo 'OS_BROWSER="true"' >> .env
           if [ -n "${VERSION}" ]; then
             echo "OS_VERSION=\"${VERSION#v}\"" >> .env   # tag v0.1.0 -> 0.1.0
           fi

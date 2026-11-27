@@ -1,0 +1,59 @@
+# The shared Browser (ADR-036): Debian's Chromium in TigerVNC's X server, as
+# its own account, shown in __BRAND_NAME__ Desktop's Browser app. Never started at
+# boot: the helper starts it when someone opens the app, and it ends when
+# Chromium is closed or nobody has watched for 15 minutes. Nothing starts on a
+# PC without the packages (an image built without OS_BROWSER has this unit
+# and not the programs).
+[Unit]
+Description=__BRAND_NAME__ Browser, shown in __BRAND_NAME__ Desktop
+Documentation=https://github.com/cbabil/kura
+After=network.target
+ConditionPathExists=/usr/bin/Xtigervnc
+ConditionPathExists=/usr/bin/chromium
+ConditionPathExists=/usr/bin/matchbox-window-manager
+ConditionPathExists=/usr/bin/xauth
+
+[Service]
+User=__BRAND__-browser
+Group=__BRAND__-browser
+ExecStart=/usr/lib/__BRAND__/__BRAND__-browser run
+Restart=no
+# A stop signals the script alone, which closes Chromium first (it saves its
+# session); whatever is left after 20 s is killed
+KillMode=mixed
+TimeoutStopSec=20
+# The profile (sites signed in to, history, downloads) is kept across restarts
+StateDirectory=__BRAND__-browser
+StateDirectoryMode=0700
+# The VNC socket and the X cookie: the group (__BRAND__-desktop) may open the socket
+RuntimeDirectory=__BRAND__-browser
+RuntimeDirectoryMode=0750
+Environment=HOME=/var/lib/__BRAND__-browser
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+# The X server's path socket is in this /tmp, out of other accounts' reach
+# (its abstract socket is not: the command's -nopn and cookie see to that)
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# A page cannot reach what listens on this machine's loopback only (an
+# agent's tools, a database). What listens on its other addresses is
+# reachable, as from any machine on the network, and so is the internet.
+IPAddressDeny=localhost
+# Not RestrictNamespaces: Chromium's sandbox makes user, PID and network
+# namespaces. Not MemoryDenyWriteExecute: V8 compiles JavaScript.
+MemoryMax=2G
+# Chromium runs some 20-30 threads a tab
+TasksMax=2048

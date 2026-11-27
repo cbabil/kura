@@ -40,6 +40,8 @@ export interface SystemInfo {
   memTotal: number
   /** Seconds since boot, when the response was made. */
   uptime: number
+  /** Whether the shared Browser (ADR-036) can run on this server. */
+  browser: boolean
 }
 
 export interface DiskUsage {
@@ -156,4 +158,24 @@ export interface Api {
   upload(path: string, data: Blob): Promise<void>
   /** Opens a shell of `size` for the signed-in user. */
   terminal(size: { cols: number; rows: number }, handlers: TerminalHandlers): TerminalSession
+  /** Opens the shared Browser's screen (ADR-036): the channel noVNC speaks RFB over. */
+  browser(): BrowserChannel
+  /** Quits the shared Browser, for everyone watching it. */
+  browserStop(): Promise<void>
+}
+
+/**
+ * What noVNC needs of a connection: a WebSocket has all of it. The mock
+ * build hands it a stand-in server of its own instead.
+ */
+export interface BrowserChannel {
+  binaryType: string
+  readonly protocol: string
+  readonly readyState: number
+  send(data: ArrayBuffer | ArrayBufferView): void
+  close(): void
+  onopen: ((event: Event) => void) | null
+  onmessage: ((event: MessageEvent) => void) | null
+  onclose: ((event: CloseEvent) => void) | null
+  onerror: ((event: Event) => void) | null
 }

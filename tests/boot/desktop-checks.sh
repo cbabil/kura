@@ -116,5 +116,25 @@ desktop_screens() {
         KURA_DEVICE_URL="${DESKTOP_URL}" KURA_DEVICE_USER="${LOGIN_USER}" KURA_DEVICE_PASS="${LOGIN_PASS}" \
         KURA_DEVICE_SHOTS="${OUT}" bunx playwright test -c playwright.device.config.ts) > "${OUT}/desktop-screens.log" 2>&1 &&
         [ -s "${OUT}/signin.png" ] && [ -s "${OUT}/desktop.png" ] &&
-        [ -s "${OUT}/terminal.png" ] && [ -s "${OUT}/containers.png" ] && [ -s "${OUT}/console.png" ]
+        [ -s "${OUT}/terminal.png" ] && [ -s "${OUT}/containers.png" ] && [ -s "${OUT}/console.png" ] &&
+        [ -s "${OUT}/browser.png" ]
+}
+
+# The shared Browser (ADR-036), started here as the helper starts it: while
+# it runs, nothing of it listens on a network port (its VNC server has a
+# unix socket only, the group's), the X server holds its abstract socket
+# itself, and it is not running as anyone else; then it stops when asked
+desktop_browser_private() {
+    local unit="${BRAND}-browser" socket="/run/${BRAND}-browser/vnc.sock" tries=30 ok=0
+    sudo_run "systemctl start ${unit}" &&
+        until sudo_run "test -S ${socket}" || [ "${tries}" -eq 0 ]; do sleep 1; tries=$((tries - 1)); done
+    report_facts "$(sudo_run "stat -c '%U:%G %a' ${socket}" || echo 'no socket')"
+    if [ "$(sudo_run "stat -c '%U:%G %a' ${socket}")" = "${BRAND}-browser:${BRAND}-browser 660" ] &&
+        ! sudo_run "ss -ltnupH" | grep -q 'Xtigervnc\|chromium' &&
+        sudo_run "ss -xlpH" | grep '@/tmp/.X11-unix/X1' | grep -q Xtigervnc &&
+        [ "$(ssh_run "ps -o user= -C chromium | sort -u")" = "${BRAND}-browser" ]; then
+        ok=1
+    fi
+    sudo_run "systemctl stop ${unit}"
+    [ "${ok}" = 1 ] && [ "$(ssh_run "systemctl is-active ${unit}" || true)" != active ]
 }

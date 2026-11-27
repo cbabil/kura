@@ -7,6 +7,16 @@ export const apps = {
   'terminal.ended.refused': "Le shell n'a pas pu démarrer. Votre compte n'a peut-être pas de shell de connexion, ou trop de terminaux sont ouverts.",
   'terminal.new': 'Nouveau shell',
 
+  // Navigateur
+  'browser.label': 'Le navigateur du serveur',
+  'browser.loading': 'Démarrage du navigateur…',
+  'browser.ended.closed': 'Le navigateur a été fermé, ou personne ne l’a regardé depuis un moment.',
+  'browser.ended.refused': 'Le navigateur n’a pas pu démarrer. Trop de personnes le regardent peut-être, ou il n’est pas installé sur ce serveur.',
+  'browser.open': 'Ouvrir le navigateur',
+  'browser.paste.title': 'Coller du texte',
+  'browser.paste.text': 'Texte pour le presse-papiers du navigateur',
+  'browser.paste.send': 'Coller',
+
   'containers.list': 'Conteneurs',
   'containers.search': 'Rechercher des conteneurs',
   'containers.loading': 'Recherche des conteneurs…',

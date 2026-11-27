@@ -40,7 +40,10 @@ export const en = {
   'menu.view': 'View',
   'menu.window': 'Window',
   'menu.help': 'Help',
+  'menu.edit': 'Edit',
   'menu.closeWindow': 'Close Window',
+  'menu.quitBrowser': 'Quit Browser',
+  'menu.pasteText': 'Paste Text…',
   'menu.minimize': 'Minimize',
   'menu.zoom': 'Zoom',
   'menu.desktopHelp': 'Kura Desktop Help',
@@ -118,6 +121,8 @@ export const en = {
   'app.catalog.blurb': 'Install apps in one click',
   'app.trash.name': 'Trash',
   'app.trash.blurb': 'Deleted files, kept until you empty it',
+  'app.browser.name': 'Browser',
+  'app.browser.blurb': 'A web browser on this server, shared by everyone signed in',
 
   // Activity Monitor
   'activity.view.Summary': 'Summary',

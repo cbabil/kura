@@ -343,6 +343,13 @@ install_packages() {
         PACKAGES="${PACKAGES} ${KIOSK_PKGS}"
     fi
 
+    # The shared Browser (ADR-036): Chromium and its X server, PC image only
+    if [ "${OS_BROWSER:-false}" = "true" ] && [ "${TARGET}" = "x86_64" ]; then
+        local BROWSER_PKGS
+        BROWSER_PKGS=$(grep -v '^#' "${CONFIG_DIR}/packages-browser.list" | grep -v '^$' | tr '\n' ' ')
+        PACKAGES="${PACKAGES} ${BROWSER_PKGS}"
+    fi
+
     # Suppress debconf dialog warnings inside chroot
     export DEBIAN_FRONTEND=noninteractive
 

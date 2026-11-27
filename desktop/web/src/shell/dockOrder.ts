@@ -21,3 +21,12 @@ export function normalizeDock(saved: string[] | undefined, known: readonly strin
   const source = saved && saved.length > 0 ? saved : DEFAULT_DOCK
   return [...new Set(source)].filter((id) => known.includes(id))
 }
+
+/**
+ * A new dock order, with the pins it could not show kept at its end: an app
+ * this server does not offer, or not yet known to (its facts still loading).
+ */
+export function keepHidden(dock: string[], saved: string[] | undefined, shown: readonly string[]): string[] {
+  const before = saved && saved.length > 0 ? saved : DEFAULT_DOCK
+  return [...dock, ...before.filter((id) => !shown.includes(id) && !dock.includes(id))]
+}

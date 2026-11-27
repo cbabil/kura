@@ -151,3 +151,34 @@ async fn the_journal_is_for_administrators() {
     rig.journal.down.store(true, Ordering::Relaxed);
     assert!(matches!(rig.service.read_journal(&anna, 10, "", -1, "").await, Err(Refusal::Unavailable(_))));
 }
+
+/// Gives the fake root the Browser's unit and programs (ADR-036).
+fn with_browser(dir: &std::path::Path) {
+    for file in kura_desktop_core::browser::files() {
+        let path = dir.join(file.trim_start_matches('/'));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, "").unwrap();
+    }
+}
+
+#[tokio::test]
+async fn everyone_signed_in_starts_and_quits_the_shared_browser() {
+    let rig = rig();
+    let (anna, bob) = (rig.sign_in("anna").await, rig.sign_in("bob").await);
+    assert!(matches!(rig.service.ask(&bob, "browser", "").await, Err(Refusal::Unavailable(_))), "no packages");
+    assert!(rig.machine.asked.lock().unwrap().is_empty());
+
+    with_browser(rig.dir.path());
+    assert_eq!(rig.service.ask(&bob, "browser", "").await.unwrap(), "", "not an administrator, and still");
+    assert_eq!(rig.service.ask(&anna, "browser", "null").await.unwrap(), "");
+    assert_eq!(rig.service.ask(&anna, "browser-stop", "").await.unwrap(), "");
+    assert_eq!(rig.machine.asked.lock().unwrap().as_slice(), ["browser on", "browser on", "browser off"]);
+
+    for (action, args) in [("browser", "{}"), ("browser-stop", r#"{"unit":"ssh.service"}"#)] {
+        assert!(matches!(rig.service.ask(&anna, action, args).await, Err(Refusal::Invalid(_))), "{action} {args}");
+    }
+    assert_eq!(rig.service.ask("forged", "browser", "").await, Err(Refusal::SignedOut));
+    rig.machine.fail.store(true, Ordering::Relaxed);
+    assert!(matches!(rig.service.ask(&anna, "browser", "").await, Err(Refusal::Unavailable(_))));
+    assert_eq!(rig.machine.asked.lock().unwrap().len(), 3, "nothing else reached systemd");
+}

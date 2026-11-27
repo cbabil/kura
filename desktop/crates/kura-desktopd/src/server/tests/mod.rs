@@ -2,6 +2,7 @@
 
 mod api;
 mod auth;
+mod browser;
 mod catalog;
 mod containers;
 mod files;

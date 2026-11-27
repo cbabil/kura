@@ -15,6 +15,14 @@ export interface AppProps {
   compact: boolean
   /** The window is in the dock: nothing shows, so nothing need be refreshed. */
   minimized: boolean
+  /** The last command one of the app's own menus sent it (MenuCtx.command), if any. */
+  command?: AppCommand | null
+}
+
+/** A command from an app's menu to its window; `seq` tells two of the same name apart. */
+export interface AppCommand {
+  name: string
+  seq: number
 }
 
 /** Actions a menu item can take on the focused window. */
@@ -24,6 +32,8 @@ export interface MenuCtx {
   zoom(): void
   setView(view: string): void
   about(): void
+  /** Sends the focused window's body a command of its own (the Browser's Quit, Paste Text…). */
+  command(name: string): void
 }
 
 /** Labels are catalogue keys, so menus follow the user's language. */
@@ -56,6 +66,8 @@ export interface AppDef {
   menus: AppMenu[]
   /** Sections; the first is the default. */
   views?: readonly AppView[]
+  /** A fact of SystemInfo the app needs to be offered (the Browser: its packages). */
+  needs?: 'browser'
   /** The window body; apps without one show what is coming. */
   Body?: ComponentType<AppProps>
 }

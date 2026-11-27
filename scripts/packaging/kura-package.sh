@@ -25,7 +25,7 @@ kura_owned() {
         "usr/lib/systemd/system/avahi-daemon.service.d/10-${b}.conf" \
         usr/share/dbus-1/system.d/io.kura.Helper.conf \
         "usr/lib/sysusers.d/${b}-desktop.conf" "usr/lib/tmpfiles.d/${b}-desktop.conf" \
-        "usr/lib/sysusers.d/${b}-kiosk.conf" \
+        "usr/lib/sysusers.d/${b}-kiosk.conf" "usr/lib/sysusers.d/${b}-browser.conf" \
         "etc/avahi/services/${b}-desktop.service" \
         etc/update-motd.d "etc/NetworkManager/conf.d/00-${b}-network.conf" "etc/profile.d/${b}.sh" \
         "etc/apt/apt.conf.d/52${b}-upgrades" \

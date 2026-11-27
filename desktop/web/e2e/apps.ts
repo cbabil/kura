@@ -19,3 +19,23 @@ export async function runInTerminal(terminal: Locator, command: string) {
   await terminal.page().keyboard.press('Enter')
   return screen
 }
+
+/**
+ * Waits until the Browser window's screen (noVNC's canvas) shows a drawn
+ * page: more than one colour. Returns a function reading one pixel of it.
+ */
+export async function browserScreen(win: Locator) {
+  const canvas = win.getByRole('application', { name: 'The server’s browser' }).locator('canvas')
+  await expect(canvas).toBeVisible({ timeout: 30_000 })
+  const pixel = (x: number, y: number) =>
+    canvas.evaluate((c: HTMLCanvasElement, [px, py]) => [...c.getContext('2d')!.getImageData(px, py, 1, 1).data.slice(0, 3)], [x, y])
+  const colours = () =>
+    canvas.evaluate((c: HTMLCanvasElement) => {
+      const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height)
+      const seen = new Set<number>()
+      for (let i = 0; i < data.length && seen.size < 3; i += 4 * 97) seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2])
+      return seen.size
+    })
+  await expect.poll(colours, { timeout: 30_000 }).toBeGreaterThan(1)
+  return pixel
+}

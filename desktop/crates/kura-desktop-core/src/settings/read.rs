@@ -93,7 +93,7 @@ pub fn parse_time(timedatectl: &str) -> Time {
 /// for it: the unit may be in every PC image, the `program` it needs only in
 /// one built for it (`OS_KIOSK`).
 fn switch(root: &crate::root::SysRoot, unit: &str, program: &str) -> Option<bool> {
-    let has = root.path(format!("/usr/lib/systemd/system/{unit}")).exists() && root.path(program).exists();
+    let has = root.has_unit(unit, &[program]);
     // A link to a unit that is elsewhere on this machine still means "on".
     let on = format!("/etc/systemd/system/multi-user.target.wants/{unit}");
     has.then(|| root.path(&on).symlink_metadata().is_ok())

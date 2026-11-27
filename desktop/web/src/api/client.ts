@@ -5,7 +5,7 @@
  * a CORS preflight, so another site cannot forge them; kura-desktopd refuses
  * POST and PUT without it (CSRF defence, alongside SameSite=Strict and Origin).
  */
-import { API_ERROR_CODES, ApiError, type Api, type Container, type AppChange, type Catalog, type FileChange, type Folder, type JournalFilter, type JournalPage, type LogLine, type LoginError, type LoginResult, type Prefs, type StatsMessage, type SystemInfo, type TerminalHandlers, type Settings, type TerminalSession, type Trashed, type UpdateStatus, type User } from './types'
+import { API_ERROR_CODES, ApiError, type Api, type BrowserChannel, type Container, type AppChange, type Catalog, type FileChange, type Folder, type JournalFilter, type JournalPage, type LogLine, type LoginError, type LoginResult, type Prefs, type StatsMessage, type SystemInfo, type TerminalHandlers, type Settings, type TerminalSession, type Trashed, type UpdateStatus, type User } from './types'
 
 const CHANGE = { 'x-kura-request': '1' }
 const JSON_HEADERS = { ...CHANGE, 'content-type': 'application/json' }
@@ -158,4 +158,6 @@ export const httpApi: Api = {
   fileText,
   upload: (path, data) => call<void>(`/api/files/content?path=${encodeURIComponent(path)}`, { method: 'PUT', headers: CHANGE, body: data }),
   terminal,
+  browser: (): BrowserChannel => new WebSocket(wsUrl('/api/browser')),
+  browserStop: () => call<void>('/api/browser/stop', { method: 'POST', headers: CHANGE }),
 }

@@ -1,4 +1,4 @@
-import { moveItem, normalizeDock, unpin, DEFAULT_DOCK } from './dockOrder'
+import { keepHidden, moveItem, normalizeDock, unpin, DEFAULT_DOCK } from './dockOrder'
 
 describe('dock order', () => {
   it('moves an item before another', () => {
@@ -21,5 +21,14 @@ describe('dock order', () => {
     expect(normalizeDock(['files', 'nope', 'files', 'activity'], known)).toEqual(['files', 'activity'])
     expect(normalizeDock(undefined, known)).toEqual(DEFAULT_DOCK.filter((a) => known.includes(a)))
     expect(normalizeDock(['trash', 'files'])).toEqual(['files'])
+  })
+
+  it('keeps the pins the dock could not show when it is reordered', () => {
+    // the Browser is pinned but hidden (the server's facts not known yet)
+    expect(keepHidden(['b', 'a'], ['a', 'browser', 'b'], ['a', 'b'])).toEqual(['b', 'a', 'browser'])
+    // an app unpinned while shown stays unpinned
+    expect(keepHidden(['a'], ['a', 'b'], ['a', 'b'])).toEqual(['a'])
+    // nothing saved yet: the default dock's hidden apps are kept
+    expect(keepHidden(['files'], undefined, ['files'])).toEqual(['files', ...DEFAULT_DOCK.filter((id) => id !== 'files')])
   })
 })

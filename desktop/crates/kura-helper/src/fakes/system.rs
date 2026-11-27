@@ -18,7 +18,7 @@ use crate::system::System;
 #[derive(Default)]
 pub struct FakeMachine {
     pub fail: AtomicBool,
-    /// "restart", "shutdown", "check", "install".
+    /// "restart", "shutdown", "check", "install", "browser on", "browser off".
     pub asked: Mutex<Vec<&'static str>>,
     /// How often the job's output was read.
     pub outputs: AtomicUsize,
@@ -57,6 +57,11 @@ impl Machine for FakeMachine {
     fn job_output(&self) -> Fut<'_, Vec<String>> {
         self.outputs.fetch_add(1, Ordering::Relaxed);
         Box::pin(async { vec!["Get:1 kura 0.6.2".into()] })
+    }
+
+    fn browser(&self, on: bool) -> Fut<'_, Result<(), String>> {
+        let done = self.ask(if on { "browser on" } else { "browser off" });
+        Box::pin(async move { done })
     }
 }
 

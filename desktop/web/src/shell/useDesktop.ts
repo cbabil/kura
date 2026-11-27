@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { Prefs } from '../api'
 import { APP_BY_ID } from '../apps/registry'
+import type { AppCommand } from '../apps/types'
 import { boundsFor, type Bounds } from './layout'
 import { focusedWindow, initialWindows, windowsReducer } from './windows'
 
@@ -31,12 +32,14 @@ export interface WindowActions {
   /** A drag or resize ended: save the window's geometry. */
   settle(app: string): void
   setView(app: string, view: string): void
+  command(app: string, name: string): void
 }
 
 export function useDesktop(prefs: Prefs, onPrefs: (p: Partial<Prefs>) => void) {
   const bounds = useBounds()
   const [state, dispatch] = useReducer(windowsReducer, initialWindows)
   const [views, setViews] = useState<Record<string, string>>({})
+  const [commands, setCommands] = useState<Record<string, AppCommand>>({})
   const [launcher, setLauncher] = useState(false)
 
   // The actions read the latest values through a ref, so the object itself never changes.
@@ -73,6 +76,7 @@ export function useDesktop(prefs: Prefs, onPrefs: (p: Partial<Prefs>) => void) {
       resize: (app, w, h) => dispatch({ type: 'resize', app, w, h }),
       settle,
       setView,
+      command: (app, name) => setCommands((c) => ({ ...c, [app]: { name, seq: (c[app]?.seq ?? 0) + 1 } })),
     }
   }, [])
 
@@ -90,5 +94,5 @@ export function useDesktop(prefs: Prefs, onPrefs: (p: Partial<Prefs>) => void) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  return { bounds, state, focused: focusedWindow(state), views, actions, launcher, setLauncher }
+  return { bounds, state, focused: focusedWindow(state), views, commands, actions, launcher, setLauncher }
 }

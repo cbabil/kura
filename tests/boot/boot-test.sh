@@ -165,7 +165,8 @@ else
     check "desktop: a setting is changed by the root command" desktop_setting_changes
     check "desktop: files are the user's own, through their agent" desktop_files
     if [ "${KURA_TEST_SCREENSHOTS:-}" = 1 ]; then
-        check "desktop: sign-in, desktop, terminal, containers and console screenshots" desktop_screens
+        check "desktop: sign-in, desktop, terminal, containers, console and browser screenshots" desktop_screens
+        check "desktop: the Browser runs as its own account, listens on no port, and stops" desktop_browser_private
         check "desktop: no terminal's shell outlives its window" wait_for "terminals closed" desktop_terminals_closed
     fi
 fi

@@ -3,6 +3,7 @@
 
 mod api;
 mod auth;
+mod browser;
 mod catalog;
 mod containers;
 mod files;
@@ -61,6 +62,12 @@ pub struct AppState {
     pub terminal_slots: Arc<tokio::sync::Semaphore>,
     /// The file agents of the sessions that use Files.
     pub files: crate::files::Links,
+    /// Where the shared Browser's VNC server listens (ADR-036).
+    pub browser_socket: std::path::PathBuf,
+    /// How long a starting Browser is waited for.
+    pub browser_wait: std::time::Duration,
+    /// Browser views open at most, over all users; more are refused with 429.
+    pub browser_slots: Arc<tokio::sync::Semaphore>,
 }
 
 /// Password checks that may wait on the helper at once.
@@ -74,6 +81,10 @@ pub const DEFAULT_LINES: u32 = 200;
 pub const MAX_SESSIONS_PER_USER: usize = 8;
 /// Terminals that may be open at once (the helper also counts per user).
 pub const MAX_TERMINALS: usize = 16;
+/// Browser views that may be open at once: each is the whole screen's stream.
+pub const MAX_BROWSER_VIEWS: usize = 4;
+/// How long a Browser that was just started is given to listen.
+pub const BROWSER_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 
 impl AppState {
     /// State with empty sessions and limits, preferences under `state_dir`.
@@ -92,6 +103,9 @@ impl AppState {
             fail_delay: FAIL_DELAY,
             terminal_slots: Arc::new(tokio::sync::Semaphore::new(MAX_TERMINALS)),
             files: crate::files::Links::default(),
+            browser_socket: kura_desktop_core::browser::SOCKET.into(),
+            browser_wait: BROWSER_WAIT,
+            browser_slots: Arc::new(tokio::sync::Semaphore::new(MAX_BROWSER_VIEWS)),
         }
     }
 }
@@ -107,6 +121,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/prefs", get(api::get_prefs).put(api::put_prefs))
         .route("/api/stats", get(stats::stats))
         .route("/api/terminal", get(terminal::terminal))
+        .route("/api/browser", get(browser::browser))
+        .route("/api/browser/stop", post(browser::stop))
         .route("/api/containers", get(containers::list))
         .route("/api/containers/{id}/logs", get(containers::logs))
         .route("/api/containers/{id}/{action}", post(containers::act))

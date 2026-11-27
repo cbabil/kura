@@ -111,4 +111,9 @@ impl Machine for DevMachine {
         };
         Box::pin(async move { lines.iter().map(|l| (*l).to_owned()).collect() })
     }
+
+    fn browser(&self, on: bool) -> Fut<'_, Result<(), String>> {
+        tracing::warn!(on, "development build: there is no browser to start");
+        Box::pin(async { Ok(()) })
+    }
 }

@@ -1,0 +1,14 @@
+# The shared Browser (ADR-036): Debian's Chromium, shown in Kura Desktop.
+# Only in a PC image built with OS_BROWSER="true"; never on the Raspberry Pi.
+# TigerVNC's X server is also the VNC server; xauth makes the display's
+# cookie; the window manager keeps Chromium at the window's size.
+chromium
+tigervnc-standalone-server
+xauth
+matchbox-window-manager
+# The X server's keymap: xkbcomp and its data (a missing keymap stops Xvnc)
+x11-xkb-utils
+xkb-data
+# Fonts for the pages it shows
+fonts-liberation
+fonts-dejavu-core

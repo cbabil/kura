@@ -52,6 +52,8 @@ pub trait Machine: Send + Sync {
     fn job_state(&self) -> Fut<'_, Option<JobState>>;
     /// The last lines the last update job wrote, cleaned for showing.
     fn job_output(&self) -> Fut<'_, Vec<String>>;
+    /// Starts the shared Browser's unit (ADR-036), or stops it.
+    fn browser(&self, on: bool) -> Fut<'_, Result<(), String>>;
 }
 
 #[cfg(test)]

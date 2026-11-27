@@ -22,6 +22,7 @@ pub trait Manager {
         properties: &[Property<'_>],
         aux: &[(&str, &[Property<'_>])],
     ) -> zbus::Result<OwnedObjectPath>;
+    fn start_unit(&self, name: &str, mode: &str) -> zbus::Result<OwnedObjectPath>;
     fn stop_unit(&self, name: &str, mode: &str) -> zbus::Result<OwnedObjectPath>;
     fn reset_failed_unit(&self, name: &str) -> zbus::Result<()>;
     fn list_units_by_patterns(&self, states: &[&str], patterns: &[&str]) -> zbus::Result<Vec<ListedUnit>>;
