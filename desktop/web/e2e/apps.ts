@@ -32,7 +32,9 @@ export async function runInTerminal(terminal: Locator, command: string) {
 
 /**
  * Waits until the Browser window's screen (noVNC's canvas) shows a drawn
- * page: more than one colour. Returns a function reading one pixel of it.
+ * page: at least four colours (the mock page has four; Chromium's own pages
+ * many more), not a blank fill with a pointer on it. Returns a function
+ * reading one pixel of it.
  */
 export async function browserScreen(win: Locator) {
   const canvas = win.getByRole('application', { name: 'The server’s browser' }).locator('canvas')
@@ -43,9 +45,9 @@ export async function browserScreen(win: Locator) {
     canvas.evaluate((c: HTMLCanvasElement) => {
       const { data } = c.getContext('2d')!.getImageData(0, 0, c.width, c.height)
       const seen = new Set<number>()
-      for (let i = 0; i < data.length && seen.size < 3; i += 4 * 97) seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2])
+      for (let i = 0; i < data.length && seen.size < 4; i += 4 * 7) seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2])
       return seen.size
     })
-  await expect.poll(colours, { timeout: 30_000 }).toBeGreaterThan(1)
+  await expect.poll(colours, { timeout: 45_000 }).toBeGreaterThanOrEqual(4)
   return pixel
 }
