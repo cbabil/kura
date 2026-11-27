@@ -111,13 +111,14 @@ rootfs_unowned_paths() {
 }
 
 # verify_owners <rootfs>: prints the paths rootfs_unowned_paths finds (the
-# first 20) and returns 1 if there is any
+# first 20 by path, so the same build gives the same list whatever order the
+# disk keeps them in) and returns 1 if there is any
 verify_owners() {
     local unowned
     unowned=$(rootfs_unowned_paths "$1")
     [ -n "${unowned}" ] || return 0
     echo "  $(wc -l <<< "${unowned}" | tr -d ' ') paths have an owner or group with no account (uid:gid path):" >&2
-    head -n 20 <<< "${unowned}" | sed 's/^/    /' >&2
+    sort -t ' ' -k 2 <<< "${unowned}" | head -n 20 | sed 's/^/    /' >&2
     return 1
 }
 

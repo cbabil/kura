@@ -18,8 +18,12 @@ pub struct SystemInfo {
     pub mem_total: u64,
     /// Seconds since boot.
     pub uptime: u64,
-    /// Whether the shared Browser can run here (ADR-036).
+    /// Whether the Browser can run here (ADR-036).
     pub browser: bool,
+    /// The installed Kura version ("0.8.1"), from the kura package's own
+    /// release file, so it follows upgrades (`/etc/os-release` is the
+    /// image's); "" when unknown.
+    pub version: String,
 }
 
 /// Reads the system facts.
@@ -39,6 +43,7 @@ pub fn read(root: &SysRoot) -> Result<SystemInfo, StatsError> {
         mem_total: mem::read(root)?.total,
         uptime: uptime.uptime as u64,
         browser: crate::browser::available(root),
+        version: crate::updates::installed_version(root),
     })
 }
 
@@ -71,8 +76,12 @@ mod tests {
             mem_total: 16_000_000 * 1024,
             uptime: 273_600,
             browser: false,
+            version: String::new(),
         };
         assert_eq!(s, want);
+        // the kura package's own release file, which every upgrade replaces
+        f.write("usr/lib/kura/release", "BRAND_NAME=\"Kura\"\nBRAND_VERSION=\"0.8.1\"\n");
+        assert_eq!(read(&f.root()).unwrap().version, "0.8.1");
         for file in crate::browser::files() {
             f.write(file.trim_start_matches('/'), "");
         }

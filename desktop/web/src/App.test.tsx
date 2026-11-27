@@ -105,7 +105,8 @@ describe('App', () => {
     await signIn(createMockApi())
     await userEvent.click(screen.getByRole('button', { name: 'Kura menu' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'About Kura' }))
-    expect(await screen.findByText('Kura 0.6.0')).toBeInTheDocument()
+    // the installed version (the mock's 0.6.1), not the image's os-release name
+    expect(within(await screen.findByRole('dialog', { name: 'Kura' })).getByText('Kura 0.6.1')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     await userEvent.click(await screen.findByRole('button', { name: 'View' }))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Network' }))

@@ -75,7 +75,7 @@ function DesktopView({ user, prefs, mode, onPrefs, onSignOut }: Omit<Props, 'api
 
   return (
     <Box sx={{ position: 'fixed', inset: 0, overflow: 'hidden', color: 'text.primary' }}>
-      <Wallpaper hostname={system?.hostname ?? 'kura'} />
+      <Wallpaper hostname={system?.hostname ?? 'kura'} version={system?.version ?? ''} />
       <MenuBar appName={focused ? appText(t, focused.id, 'name') : 'Kura'} kuraMenu={kuraMenu} menus={focused?.menus ?? []} compact={bounds.compact}
         mode={mode} onRun={run} onToggleTheme={() => onPrefs({ theme: mode === 'dark' ? 'light' : 'dark' })}
         onLauncher={() => d.setLauncher(true)} onUpdates={() => actions.open('settings', 'Updates')} />

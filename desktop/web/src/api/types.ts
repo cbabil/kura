@@ -40,8 +40,10 @@ export interface SystemInfo {
   memTotal: number
   /** Seconds since boot, when the response was made. */
   uptime: number
-  /** Whether the shared Browser (ADR-036) can run on this server. */
+  /** Whether the Browser (ADR-036) can run on this server. */
   browser: boolean
+  /** The installed Kura version ("0.8.1"), following upgrades; "" when unknown. */
+  version: string
 }
 
 export interface DiskUsage {
